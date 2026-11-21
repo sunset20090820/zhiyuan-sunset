@@ -28,6 +28,13 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
+// ---- 可选模块：狼人杀（server/game/ 不存在时聊天照常工作） ----
+let wwGame = null;
+try { wwGame = require('./game/werewolf'); } catch (e) { wwGame = null; }
+function wwApi() {
+  return { clients, send, now, uid, clean, accounts, accountByUid };
+}
+
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const HIST_MAX = 300;
@@ -499,6 +506,7 @@ function onConnection(socket) {
   socket.on('error', () => { socket.destroy(); });
   socket.on('close', () => {
     const wasRoom = c.room;
+    if (wwGame) { try { wwGame.onDisconnect(wwApi(), c); } catch (e) {} }
     clients.delete(c);
     if (wasRoom) pressPresence(wasRoom);
     pressPeople();
@@ -518,6 +526,12 @@ function handleMessage(c, buf, opcode) {
     c.hits = c.hits.filter(x => t - x < 1000);
     if (c.hits.length > 8) { send(c, { t: 'error', message: '慢一点，消息太密了' }); return; }
     c.hits.push(t);
+  }
+
+  if (typeof d.t === 'string' && d.t.indexOf('ww_') === 0) {
+    if (!wwGame) { send(c, { t: 'ww_error', message: '这个服务器没有安装游戏模块' }); return; }
+    wwGame.handle(c, d, wwApi());
+    return;
   }
 
   if (d.t === 'join') {
@@ -1319,6 +1333,12 @@ server.on('upgrade', (req, socket) => {
   socket.setNoDelay(true);
   onConnection(socket);
 });
+
+// 游戏阶段推进：每秒检查一次超时
+setInterval(() => {
+  if (!wwGame) return;
+  try { wwGame.tick(wwApi()); } catch (e) { }
+}, 1000).unref();
 
 // 心跳：30 秒 ping 一次，回不来就断开
 setInterval(() => {

@@ -320,6 +320,8 @@
     retry = Math.min(retry + 1, 5);
     retryTimer = setTimeout(connect, Math.min(15000, 800 * Math.pow(2, retry - 1)));
   }
+  // 给游戏模块用的发送通道
+  window.__zySend = function (obj) { return wsSend(obj); };
   function wsSend(obj) {
     if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
     return false;
@@ -426,6 +428,10 @@
       save();
       renderMeAvatar();
       toast('头像已更新');
+      return;
+    }
+    if (typeof d.t === 'string' && d.t.indexOf('ww_') === 0) {
+      if (window.WW) { try { window.WW.onMessage(d); } catch (e) {} }
       return;
     }
     if (d.t === 'version_info') {
@@ -2979,6 +2985,10 @@
       if (e.target === $('.action-scrim') || e.target === $('#roomCancel')) closeRoomSheet();
     });
     on('#fabNew', 'click', openDmSheet);
+    on('#dmGame', 'click', function () {
+      closeDmSheet();
+      if (window.WW) window.WW.open(); else toast('游戏模块没加载');
+    });
     Array.prototype.forEach.call(document.querySelectorAll('#tabbar .tab-item'), function (b) {
       b.addEventListener('click', function () { showTab(b.getAttribute('data-tab')); });
     });
