@@ -1525,3 +1525,12 @@ body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #c
 .ww-wc-send input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px;
   border: 1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.28); color: #fff; font-size: 13px; }
 .ww-wc-send .ww-btn { flex: 0 0 auto; min-width: 64px; }
+
+/* 个人标记栏（所有人可用） */
+.ww-markbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  margin-top: 8px; padding: 7px 9px; border-radius: 11px; background: rgba(255,255,255,.05); }
+.ww-mk-title { font-size: 11.5px; color: #8fa6b8; }
+.ww-mk-tag { font-size: 11px; padding: 3px 7px; border-radius: 8px;
+  background: rgba(255,255,255,.09); color: #dbe8f2; border: 1px solid transparent; }
+.ww-mk-tag.on { background: linear-gradient(160deg, #4aa3e8, #2b7fc4); color: #fff; }
+.ww-mk-tag.clear { opacity: .7; }

@@ -32,6 +32,7 @@ function sendKey(api, key, obj) {
 function toGame(game, api, obj, exceptKey) {
   for (const p of game.players) {
     if (exceptKey && p.key === exceptKey) continue;
+    if (p.left) continue;                 // 已退出的玩家不再收游戏进程
     sendKey(api, p.key, obj);
   }
 }
@@ -388,11 +389,25 @@ function sendNightState(game, api, p, withInfo) {
     t: 'ww_night', round: game.round, deadline: game.deadline,
     you: { seat: p.seat, role: p.role, alive: p.alive },
     targets: targets,
-    marks: isWolf(p.role) ? (game.night.marks || {}) : undefined,
+    marks: marksFor(game, p),
     history: isWolf(p.role) ? (game.night.wolfChat || []).slice(-20) : undefined,
   });
   if (!withInfo) return;
 }
+
+/* 夜间行动顺序（标准狼人杀）：丘比特(首夜) → 守卫 → 狼人 → 女巫 → 预言家 */
+function buildNightQueue(game) {
+  const alive = r => game.players.some(p => p.alive && p.role === r);
+  const q = [];
+  if (game.round === 1 && alive('cupid')) q.push('cupid');
+  if (alive('guard')) q.push('guard');
+  if (aliveWolves(game).length) q.push('wolf');
+  if (alive('witch')) q.push('witch');
+  if (alive('seer')) q.push('seer');
+  return q;
+}
+
+const STAGE_TIME = { cupid: 20, guard: 25, wolf: 25, witch: 25, seer: 20 };
 
 function startNight(game, api) {
   game.state = 'night';
@@ -401,8 +416,11 @@ function startNight(game, api) {
     witchSave: false, witchPoison: null, witchDone: false,
     guardTarget: null, guardDone: false, cupidDone: game.round > 1,
     charmTarget: null, charmDone: false, acted: {},
-    marks: {}, wolfChat: [],          // 狼队标记与夜间文字记录
+    wolfChat: [],                     // 狼队夜间文字记录
   };
+  game.nightQueue = buildNightQueue(game);
+  game.nightIndex = -1;
+  game.stageDone = {};
   game.deadline = api.now() + 60 * 1000;
   for (const p of game.players) {
     if (!p.alive) continue;
@@ -419,6 +437,7 @@ function startNight(game, api) {
   }
   toGame(game, api, { t: 'ww_night_start', round: game.round, deadline: game.deadline });
   pushMicRule(game, api);
+  advanceNightStage(game, api);
   scheduleBots(game, api);
 }
 
@@ -455,6 +474,14 @@ function handleAction(api, c, d) {
   if (!p || !p.alive) throw new Error('你已出局');
   const n = game.night;
   const kind = String(d.kind || '');
+  const needStage = (kind === 'kill' || kind === 'charm') ? 'wolf'
+    : (kind === 'check' ? 'seer' : (kind === 'save' || kind === 'poison' || kind === 'witch_none' ? 'witch'
+    : (kind === 'guard' ? 'guard' : (kind === 'link' ? 'cupid' : null))));
+  if (!needStage) throw new Error('未知操作');
+  if (game.nightStage !== needStage) {
+    const order = { cupid: '丘比特', guard: '守卫', wolf: '狼人', witch: '女巫', seer: '预言家' };
+    throw new Error('还不到你的回合（当前：' + (order[game.nightStage] || '等待') + '）');
+  }
   const targetSeat = Number(d.target) || 0;
 
   const role = p.role;
@@ -593,31 +620,77 @@ function recomputeWolfTarget(game) {
 }
 
 /** 所有夜间行动者都动了 → 提前结算 */
-function maybeAdvance(game, api) {
+/** 当前阶段的行动者 */
+function stageActors(game, stage) {
+  const alive = game.players.filter(p => p.alive && p.connected);
+  if (stage === 'wolf') return alive.filter(p => isWolf(p.role));
+  return alive.filter(p => p.role === stage || (stage === 'wolf' && p.role === 'wolfbeauty'));
+}
+
+/** 当前阶段是否已完成 */
+function stageComplete(game, stage) {
   const n = game.night;
-  const need = game.players.filter(p => p.alive && [
-    'seer', 'witch', 'guard', 'cupid', 'wolfbeauty',
-  ].includes(p.role)).map(p => p.key);
-  const wolves = aliveWolves(game).filter(p => p.connected).map(p => p.key);
-  const allWolvesActed = wolves.length === 0 || wolves.every(k => n.acted[k]);
-  const othersActed = need.every(k => {
-    const p = game.players.find(x => x.key === k);
-    if (!p || !p.connected) return true;
-    if (p.role === 'witch') return n.witchDone || n.witchSave || n.witchPoison;
-    if (p.role === 'guard') return n.guardDone;
-    if (p.role === 'cupid') return n.cupidDone || game.round > 1;
-    return n.acted[k];
-  });
-  if (allWolvesActed && othersActed) { finishNight(game, api); return; }
-  if (allWolvesActed && !game._wolfStepDone) {
-    game._wolfStepDone = true;
-    // 狼人已经选定目标：立刻告诉全场，狼人不必再等读秒
-    const targetSeat = n.wolfTarget ? seatOf(game, n.wolfTarget) : 0;
-    toGame(game, api, { t: 'ww_night_step', done: 'wolf', target: targetSeat, round: game.round });
-    // 剩余夜间角色还有事做时，也不让狼人干等满 60 秒
-    const short = api.now() + 18000;
-    if (game.deadline > short) game.deadline = short;
+  if (stage === 'wolf') {
+    const wolves = stageActors(game, 'wolf');
+    if (!wolves.length) return true;
+    return wolves.every(w => n.wolfVotes[w.key]);
   }
+  if (stage === 'seer') {
+    const p = game.players.find(x => x.alive && x.role === 'seer');
+    return !p || !!n.acted[p.key];
+  }
+  if (stage === 'witch') {
+    const p = game.players.find(x => x.alive && x.role === 'witch');
+    return !p || n.witchDone || n.witchSave || n.witchPoison;
+  }
+  if (stage === 'guard') {
+    const p = game.players.find(x => x.alive && x.role === 'guard');
+    return !p || n.guardDone;
+  }
+  if (stage === 'cupid') {
+    const p = game.players.find(x => x.alive && x.role === 'cupid');
+    return !p || n.cupidDone || game.round > 1;
+  }
+  return true;
+}
+
+/** 进入下一个夜间阶段；队列走完就结算夜晚 */
+function advanceNightStage(game, api) {
+  if (game.state !== 'night') return;
+  for (;;) {
+    game.nightIndex++;
+    if (game.nightIndex >= game.nightQueue.length) { finishNight(game, api); return; }
+    const stage = game.nightQueue[game.nightIndex];
+    if (!stageComplete(game, stage)) {
+      game.nightStage = stage;
+      game.deadline = api.now() + (STAGE_TIME[stage] || 20) * 1000;
+      const actors = stageActors(game, stage);
+      // 只给本阶段的人发“可以行动”，其他人只看到等待
+      for (const p of game.players) {
+        if (!p.alive) continue;
+        if (actors.indexOf(p) >= 0) {
+          sendKey(api, p.key, {
+            t: 'ww_night_stage', stage, deadline: game.deadline,
+            round: game.round, yourTurn: true,
+            marks: marksFor(game, p),
+            history: isWolf(p.role) ? (game.night.wolfChat || []).slice(-20) : undefined,
+          });
+        } else {
+          sendKey(api, p.key, { t: 'ww_night_stage_wait', stage, deadline: game.deadline, round: game.round });
+        }
+      }
+      pushMicRule(game, api);
+      return;
+    }
+    game.stageDone[stage] = true;
+  }
+}
+
+/** 当前阶段的行动者已完成 → 立刻进入下一阶段（不读秒） */
+function maybeAdvance(game, api) {
+  if (game.state !== 'night') return;
+  const stage = game.nightStage;
+  if (stage && stageComplete(game, stage)) advanceNightStage(game, api);
 }
 
 function finishNight(game, api) {
@@ -811,7 +884,7 @@ function micRule(game, p) {
 
 function pushMicRule(game, api) {
   for (const p of game.players) {
-    if (p.bot) continue;
+    if (p.bot || p.left) continue;
     const rule = micRule(game, p);
     sendKey(api, p.key, { t: 'ww_mic_perm', ok: rule.ok, scope: rule.scope, reason: rule.reason });
   }
@@ -880,7 +953,7 @@ function handleSay(api, c, d) {
 
 /* ---------------- 狼人夜间频道 ---------------- */
 const WOLF_CHAT_MAX = 160;
-const WOLF_MARK_LABELS = ['预言家', '女巫', '守卫', '猎人', '平民', '金水', '查杀'];
+
 
 /** 只有活着的狼人、且处于夜晚阶段才能用 */
 function wolfChannelGame(api, c) {
@@ -908,23 +981,31 @@ function handleWolfChat(api, c, d) {
   }
 }
 
+/** 个人信息标记：任何存活玩家、任何阶段都能用，只有自己看得到 */
+const MARK_LABELS = ['预言家', '女巫', '守卫', '猎人', '平民', '金水', '查杀', '好人', '狼人', '第三方', '?'];
+
+function marksOf(game, p) {
+  if (!game.marksByOwner) game.marksByOwner = {};
+  if (!game.marksByOwner[p.key]) game.marksByOwner[p.key] = {};
+  return game.marksByOwner[p.key];
+}
+function marksFor(game, p) { return p && p.alive ? marksOf(game, p) : {}; }
+
 function handleMark(api, c, d) {
-  const { game, p } = wolfChannelGame(api, c);
+  const game = findGameOfPlayer(api, c);
+  if (!game) throw new Error('你不在任何游戏中');
+  const p = game.players.find(x => x.key === keyOf(api, c));
+  if (!p || !p.alive) throw new Error('你已出局');
   const seat = Number(d.target) || 0;
   const label = String(d.label || '').slice(0, 8);
   const target = playerAt(game, seat);
   if (!target) throw new Error('目标不合法');
-  if (label && WOLF_MARK_LABELS.indexOf(label) < 0) throw new Error('不支持的标记');
-  if (!game.night.marks) game.night.marks = {};
-  if (label) game.night.marks[seat] = { label, by: p.seat };
-  else delete game.night.marks[seat];
-  for (const w of game.players) {
-    if (!w.alive || !isWolf(w.role)) continue;
-    sendKey(api, w.key, {
-      t: 'ww_mark', round: game.round, seat,
-      label: label, by: p.seat, marks: game.night.marks,
-    });
-  }
+  if (label && MARK_LABELS.indexOf(label) < 0) throw new Error('不支持的标记');
+  const mine = marksOf(game, p);
+  if (label) mine[seat] = { label, by: p.seat, at: api.now() };
+  else delete mine[seat];
+  // 只回给本人：标记是个人笔记，队友也看不到
+  api.send(c, { t: 'ww_mark', round: game.round, seat, label, marks: mine });
 }
 
 /** 跳过当前发言（本人或房主） */
@@ -1113,7 +1194,7 @@ function tick(api) {
     if (!game.deadline) { game.deadline = t + 15000; continue; }
     if (t <= game.deadline) continue;
     switch (game.state) {
-      case 'night': finishNight(game, api); break;
+      case 'night': advanceNightStage(game, api); break;
       case 'dawn': beginSpeech(game, api); break;
       case 'speech':
         game.speechIndex++;

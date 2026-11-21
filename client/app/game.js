@@ -21,6 +21,9 @@
     wolfChat: [],        // 狼队夜间文字
     marks: {},           // seat -> {label, by}
     markLabel: '',       // 当前选中的标记标签
+    stage: null,         // 当前夜间行动阶段 wolf/witch/seer/guard/cupid
+    stageMine: false,    // 是否轮到我行动
+    renderSig: '',       // 防止无变化时重复重绘
     timer: null,
   };
 
@@ -456,7 +459,7 @@
         markTag = '<i class="ww-p-mark">' + esc(G.marks[p.seat].label) + '</i>';
       }
       var pickTag = '';
-      if (G.wolfPicks && G.wolfPicks.votes) {
+      if (G.wolfPicks && G.wolfPicks.votes && G.room && G.room.state === 'night') {
         var mine = G.wolfPicks.votes.filter(function (v) { return v.target === p.seat && v.picked; });
         if (mine.length) {
           pickTag = '<i class="ww-p-pick">' + mine.map(function (v) { return v.seat; }).join('/') + ' 刀</i>';
@@ -476,6 +479,21 @@
       '  <div class="ww-phase-text">' + phaseText() + '</div>' +
       '  <div class="ww-countdown" id="wwCountdown"></div>' +
       '</div>' + seats + '</div>';
+  }
+
+  /** 个人标记栏：任何玩家、任何阶段都能给其他人打标（只有自己看得到） */
+  function markBarHtml() {
+    if (!G.room || G.room.state === 'waiting' || G.room.state === 'settlement') return '';
+    if (!G.you || !G.you.alive) return '';
+    var labels = ['预言家', '女巫', '守卫', '猎人', '平民', '金水', '查杀', '好人', '狼人', '?'];
+    var n = Object.keys(G.marks || {}).length;
+    return '<div class="ww-markbar">' +
+      '<span class="ww-mk-title">标记' + (n ? '（' + n + '）' : '') + '：</span>' +
+      labels.map(function (L) {
+        return '<button class="ww-mk-tag' + (G.markLabel === L ? ' on' : '') + '" type="button" data-mark="' + L + '">' + L + '</button>';
+      }).join('') +
+      '<button class="ww-mk-tag clear" type="button" data-mark="">清除</button>' +
+      '</div>';
   }
 
   function phaseIcon() {
@@ -517,7 +535,8 @@
 
     if (st === 'night') {
       var wolfInfo = '';
-      if (G.wolfPicks && (role === 'wolf' || role === 'wolfking' || role === 'wolfbeauty')) {
+      var amWolf = (role === 'wolf' || role === 'wolfking' || role === 'wolfbeauty');
+      if (G.wolfPicks && amWolf) {
         var lines = (G.wolfPicks.votes || []).map(function (v) {
           return v.seat + '号' + (v.picked ? ('→' + v.target + '号') : '→ 未选');
         }).join('　');
@@ -526,29 +545,32 @@
         wolfInfo = '<div class="ww-wolfinfo"><div>' + lines + '</div><div class="' +
           (G.wolfPicks.agreed ? 'ok' : 'warn') + '">' + state + '</div></div>';
       }
-      // 狼队夜间频道（标记 + 文字）
-      if (role === 'wolf' || role === 'wolfking' || role === 'wolfbeauty') {
-        var labels = ['预言家', '女巫', '守卫', '猎人', '平民', '金水', '查杀'];
-        wolfInfo += '<div class="ww-wolfchat">' +
-          '<div class="ww-wc-marks">' + labels.map(function (L) {
-            return '<button class="ww-wc-tag' + (G.markLabel === L ? ' on' : '') + '" type="button" data-mark="' + L + '">' + L + '</button>';
-          }).join('') + '<button class="ww-wc-tag clear" type="button" data-mark="">清除</button></div>' +
-          '<div class="ww-wc-log">' + ((G.wolfChat || []).length
-            ? G.wolfChat.map(function (m) { return '<div><b>' + m.seat + '号</b>' + esc(m.text) + '</div>'; }).join('')
-            : '<div class="dim">狼队频道：队友都看得到，好人看不到</div>') + '</div>' +
-          '<div class="ww-wc-send"><input id="wwWolfInput" type="text" maxlength="160" placeholder="' +
-            (G.markLabel ? ('点座位打上「' + G.markLabel + '」') : '和队友说点什么…') + '">' +
-          '<button id="wwWolfSend" class="ww-btn small" type="button">发送</button></div>' +
-          '</div>';
-      }
-      if (role === 'witch' && G.witch) {
+      var stageName = { cupid: '丘比特', guard: '守卫', wolf: '狼人', witch: '女巫', seer: '预言家' };
+      var stageTip = G.stage
+        ? ('当前：' + (stageName[G.stage] || '') + '行动' + (G.stageMine ? '（轮到你）' : '…'))
+        : '天黑请闭眼';
+
+      if (!G.stageMine) {
+        // 不是自己的行动阶段：只显示等待，不给操作面板
+        panel = '<div class="ww-actions">' + wolfInfo + '<div class="ww-tip">' + stageTip + '</div></div>';
+      } else if (role === 'witch' && G.witch) {
         panel = '<div class="ww-actions">' +
           '<div class="ww-tip">' + (G.witch.killed ? ('今晚 ' + G.witch.killed + ' 号被刀') : '今晚没人被刀') + '</div>' +
           (G.witch.canSave ? '<button class="ww-btn main" data-act="save" type="button">用解药</button>' : '') +
           (G.witch.canPoison ? '<button class="ww-btn" data-act="poison" type="button">用毒药' + (G._poisonSeat ? ('（' + G._poisonSeat + ' 号）') : '') + '</button>' : '') +
           '<button class="ww-btn ghost" data-act="witch_none" type="button">不用药</button></div>';
       } else {
-        panel = '<div class="ww-actions">' + wolfInfo + '<div class="ww-tip">' + actionHint(role) + '</div></div>';
+        panel = '<div class="ww-actions">' + wolfInfo + '<div class="ww-tip on">' + actionHint(role) + '</div></div>';
+      }
+      // 狼队夜间频道（仅狼人）
+      if (amWolf) {
+        panel += '<div class="ww-wolfchat">' +
+          '<div class="ww-wc-log">' + ((G.wolfChat || []).length
+            ? G.wolfChat.map(function (m) { return '<div><b>' + m.seat + '号</b>' + esc(m.text) + '</div>'; }).join('')
+            : '<div class="dim">狼队频道：队友都看得到，好人看不到</div>') + '</div>' +
+          '<div class="ww-wc-send"><input id="wwWolfInput" type="text" maxlength="160" placeholder="和队友说点什么…">' +
+          '<button id="wwWolfSend" class="ww-btn small" type="button">发送</button></div>' +
+          '</div>';
       }
     } else if (st === 'speech') {
       var mine = G.speech && G.you && G.speech.seat === G.you.seat;
@@ -584,7 +606,7 @@
       panel = '<div class="ww-actions"><div class="ww-tip">' + phaseText() + '</div></div>';
     }
 
-    body.innerHTML = tableHtml() + roleBar() + voteDetailHtml() + panel;
+    body.innerHTML = tableHtml() + roleBar() + markBarHtml() + voteDetailHtml() + panel;
     bindTable();
   }
 
@@ -619,6 +641,7 @@
           if (G.markLabel) { send({ t: 'ww_mark', target: seat, label: G.markLabel }); return; }
           return nightClick(seat);
         }
+        if (st === 'vote' && G.markLabel) { send({ t: 'ww_mark', target: seat, label: G.markLabel }); return; }
         if (st === 'vote') {
           if (G.you && seat === G.you.seat) { toast('不能投自己'); return; }
           chosenSeat = seat;
@@ -628,6 +651,7 @@
           sfx('click');
           return;
         }
+        if (G.markLabel) { send({ t: 'ww_mark', target: seat, label: G.markLabel }); return; }
         if (st === 'shoot') { sfx('click'); return send({ t: 'ww_shoot', target: seat }); }
       });
     });
@@ -831,11 +855,15 @@
         render(); break;
       case 'ww_players':
         if (G.room) {
-          G.room.players = d.players || G.room.players;
+          var incoming = d.players || G.room.players;
+          var sig = JSON.stringify(incoming.map(function (p) {
+            return [p.seat, p.name, p.alive ? 1 : 0, p.connected ? 1 : 0, p.host ? 1 : 0, p.role || ''];
+          }));
+          G.room.players = incoming;
           G.room.state = d.state || G.room.state;
           var mine = (G.room.players || []).find(function (p) { return G.you && p.seat === G.you.seat; });
           if (mine) G.you = Object.assign({}, G.you, { alive: mine.alive, host: mine.host });
-          render();
+          if (sig !== G._playersSig) { G._playersSig = sig; render(); }   // 没变化就不刷界面
         }
         break;
       case 'ww_started':
@@ -853,6 +881,7 @@
         G.wolfChat = d.history || [];
         G.marks = d.marks || {};
         G.markLabel = '';
+        G.stage = null; G.stageMine = false;
         fx('night');
         if (G.room) { G.room.state = 'night'; G.room.round = d.round || G.room.round; G.room.deadline = d.deadline || 0; }
         sfx('night'); judge('天黑请闭眼，第 ' + (d.round || 1) + ' 天');
@@ -875,6 +904,7 @@
         }
         break;
       case 'ww_dawn':
+        G.wolfPicks = null; G.stage = null; G.stageMine = false;
         G.dawn = {
           deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }),
           detail: d.detail || [],
@@ -931,6 +961,19 @@
         render(); break;
       case 'ww_kicked': toast('你被房主请出了房间'); leaveRoom(); G.stage = ''; render(); break;
       case 'ww_left': G.room = null; G.stage = ''; render(); break;
+      case 'ww_night_stage':
+        G.stage = d.stage; G.stageMine = !!d.yourTurn;
+        G.marks = d.marks || G.marks || {};
+        if (d.history) G.wolfChat = d.history;
+        if (G.room) G.room.deadline = d.deadline || G.room.deadline;
+        if (d.yourTurn) { sfx('turn'); }
+        render();
+        break;
+      case 'ww_night_stage_wait':
+        G.stage = d.stage; G.stageMine = false;
+        if (G.room) G.room.deadline = d.deadline || G.room.deadline;
+        render();
+        break;
       case 'ww_wolf_chat':
         G.wolfChat = (G.wolfChat || []).concat([d.msg]).slice(-30);
         sfx('seat');
@@ -939,7 +982,7 @@
       case 'ww_mark':
         G.marks = d.marks || G.marks || {};
         sfx('click');
-        if (G.room && G.room.state === 'night') render();
+        render();
         break;
       case 'ww_wolf_pick':
         G.wolfPicks = d;
