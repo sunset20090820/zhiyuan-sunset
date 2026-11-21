@@ -1287,3 +1287,7 @@ body { height: var(--app-h, 100%); }
   font-size: 11.5px; line-height: 1.5; white-space: nowrap;
   animation: badge-pop .22s cubic-bezier(.2,.85,.3,1.3) both;
 }
+
+/* 会话列表里的免打扰标记 */
+.pin-ico, .mute-ico { margin-right: 3px; font-size: 12px; opacity: .85; }
+.room.muted .room-name { color: var(--sub); }

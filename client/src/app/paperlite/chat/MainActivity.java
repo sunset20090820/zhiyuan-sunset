@@ -31,7 +31,9 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC = 1001;
     private static final int REQ_NOTIF = 1002;
     private static final int REQ_FILE = 1003;
-    private static final String CH_ID = "chat";
+    private static final String CH_ID = "chat";        // 普通消息
+    private static final String CH_MENTION = "mention"; // 被 @
+    private static final String CH_FRIEND = "friend";   // 好友申请
     private static final String CH_ALIVE = "alive";
 
     private WebView web;
@@ -206,12 +208,38 @@ public class MainActivity extends Activity {
     private void createChannels() {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
         NotificationChannel chat = new NotificationChannel(CH_ID, "聊天消息", NotificationManager.IMPORTANCE_HIGH);
+        chat.setDescription("新消息提醒");
         chat.enableVibration(true);
+        chat.enableLights(true);
+        chat.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
         nm.createNotificationChannel(chat);
+
+        NotificationChannel mention = new NotificationChannel(CH_MENTION, "有人 @我", NotificationManager.IMPORTANCE_HIGH);
+        mention.setDescription("群里有人 @你");
+        mention.enableVibration(true);
+        mention.enableLights(true);
+        mention.setVibrationPattern(new long[] { 0, 180, 120, 180 });
+        mention.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+        nm.createNotificationChannel(mention);
+
+        NotificationChannel friend = new NotificationChannel(CH_FRIEND, "好友申请", NotificationManager.IMPORTANCE_DEFAULT);
+        friend.setDescription("新的好友申请");
+        friend.enableVibration(true);
+        friend.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
+        nm.createNotificationChannel(friend);
+
         NotificationChannel alive = new NotificationChannel(CH_ALIVE, "保持连接", NotificationManager.IMPORTANCE_MIN);
         alive.setShowBadge(false);
         nm.createNotificationChannel(alive);
+    }
+
+    private String channelFor(String kind) {
+        if ("mention".equals(kind)) return CH_MENTION;
+        if ("friend".equals(kind)) return CH_FRIEND;
+        return CH_ID;
     }
 
     private void startAlive() {
@@ -231,7 +259,19 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void notify(String title, String body, String tag, String jump) {
-            act.postNotification(title, body, tag, jump);
+            act.postNotification(title, body, tag, jump, "msg");
+        }
+
+        /** kind: msg / mention / friend */
+        @JavascriptInterface
+        public void notifyEx(String title, String body, String tag, String jump, String kind) {
+            act.postNotification(title, body, tag, jump, kind == null ? "msg" : kind);
+        }
+
+        /** 通知是否可用（系统权限 + 渠道未关闭） */
+        @JavascriptInterface
+        public boolean canNotify() {
+            return act.notificationsAllowed();
         }
 
         @JavascriptInterface
@@ -363,18 +403,44 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void postNotification(String title, String body, String tag, String jump) {
+    private boolean notificationsAllowed() {
         try {
+            if (Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return false;
+            if (Build.VERSION.SDK_INT >= 26) {
+                NotificationChannel ch = nm.getNotificationChannel(CH_ID);
+                if (ch == null) return true;
+                if (nm.areNotificationsEnabled() == false) return false;
+            } else {
+                return nm.areNotificationsEnabled();
+            }
+            return true;
+        } catch (Exception e) { return true; }
+    }
+
+    private void postNotification(String title, String body, String tag, String jump, String kind) {
+        try {
+            if (Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                return;   // 用户没给通知权限，安静跳过，不崩
+            }
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
             Intent open = new Intent(this, MainActivity.class);
             open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             if (jump != null && jump.length() > 0) open.putExtra("jump", jump);
             int flags = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                                                     : PendingIntent.FLAG_UPDATE_CURRENT;
-            PendingIntent pi = PendingIntent.getActivity(this, (int) (System.currentTimeMillis() & 0x7fffffff), open, flags);
+            // 用 tag 生成固定 requestCode，同一会话的通知复用同一个 PendingIntent，点击能带对 jump
+            int reqCode = (tag == null ? "msg" : tag).hashCode();
+            PendingIntent pi = PendingIntent.getActivity(this, reqCode, open, flags);
 
             Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                    ? new Notification.Builder(this, CH_ID)
+                    ? new Notification.Builder(this, channelFor(kind))
                     : new Notification.Builder(this);
             b.setContentTitle(title == null ? "纸鸢" : title)
              .setContentText(body == null ? "" : body)
@@ -384,7 +450,18 @@ public class MainActivity extends Activity {
              .setWhen(System.currentTimeMillis());
             if (Build.VERSION.SDK_INT >= 21) {
                 b.setStyle(new Notification.BigTextStyle().bigText(body == null ? "" : body));
+                b.setVisibility(Notification.VISIBILITY_PRIVATE);
             }
+            if (Build.VERSION.SDK_INT < 26) {
+                // 8.0 以下没有渠道，靠 priority + defaults 保证响铃/震动
+                b.setPriority("mention".equals(kind) || "msg".equals(kind)
+                        ? Notification.PRIORITY_HIGH : Notification.PRIORITY_DEFAULT);
+                b.setDefaults(Notification.DEFAULT_ALL);
+            } else if ("mention".equals(kind)) {
+                b.setDefaults(Notification.DEFAULT_ALL);
+            }
+            if ("friend".equals(kind)) b.setCategory(Notification.CATEGORY_SOCIAL);
+            else b.setCategory(Notification.CATEGORY_MESSAGE);
             int id = (tag == null ? "msg" : tag).hashCode();
             nm.notify(id, b.build());
         } catch (Exception e) {

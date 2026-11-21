@@ -62,7 +62,7 @@
     rooms: ROOMS_DEFAULT.slice(),
     online: {}, members: [], last: {}, unread: {},
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
-    uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats',
+    uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}
   };
   /* 备注：只改自己看到的称呼，存本地 */
@@ -185,7 +185,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -219,6 +219,7 @@
         S.avatars = o.avatars || {};
         S.myAvatar = o.myAvatar || '';
         S.pins = o.pins || {};
+        S.mutes = o.mutes || {};
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -546,6 +547,7 @@
       S.pendingIn = d.pendingIn || d.pending_in || [];
       S.pendingOut = d.pendingOut || d.pending_out || [];
       if (d.uid) S.uid = d.uid;
+      checkFriendRequests(S.pendingIn);
       renderContacts();
       return;
     }
@@ -668,7 +670,7 @@
       return '<li class="' + cls + '" data-room="' + esc(r.id) + '"' + (peerId ? ' data-peer="' + esc(peerId) + '"' : '') + '>' +
         '<div class="ava" style="background:' + esc(isDM ? '#6b7d8f' : r.color) + '">' + esc(isDM ? '👤' : r.emoji) + '</div>' +
         '<div class="room-main">' +
-          '<div class="room-line1"><div class="room-name">' + (S.pins[r.id] ? '<span class="pin-ico">📌</span>' : '') + esc(r.name) + '</div>' +
+          '<div class="room-line1"><div class="room-name">' + (S.pins[r.id] ? '<span class="pin-ico">📌</span>' : '') + (S.mutes[r.id] ? '<span class="mute-ico">🔕</span>' : '') + esc(r.name) + '</div>' +
             '<div class="room-time">' + (last ? esc(fmtTime(last.ts)) : '') + '</div></div>' +
           '<div class="room-line2"><div class="room-last">' + esc(preview) + '</div>' +
             (un ? '<div class="badge">' + (un > 99 ? '99+' : un) + '</div>' : '') +
@@ -2370,6 +2372,7 @@
     var fixed = (S.rooms || []).some(function (x) { return x && x.id === rid; });
     $('#roomSheetTitle').textContent = r.name || '会话';
     $('#roomPin').innerHTML = '<span>📌</span>' + (S.pins[rid] ? '取消置顶' : '置顶');
+    syncMuteBtn();
     var rm = $('#roomRemove'), bk = $('#roomBlock');
     if (rm) {
       rm.classList.toggle('hidden', fixed);
@@ -2616,15 +2619,54 @@
     if (isDM(rid)) return room(rid).name || '私信';
     return room(rid).name || '聊天';
   }
+  // 免打扰：这个会话被静音时，不弹通知、不响铃，但未读照常累计
+  function isMuted(rid) { return !!(S.mutes && S.mutes[rid]); }
+  function setMuted(rid, on) {
+    if (!rid) return;
+    if (on) S.mutes[rid] = Date.now(); else delete S.mutes[rid];
+    save(); renderRooms();
+    if (S.cur === rid) syncMuteBtn();
+  }
+  function syncMuteBtn() {
+    var b = $('#roomMute');
+    if (b) b.innerHTML = '<span>🔕</span>' + (S.mutes[roomTarget] ? '取消免打扰' : '免打扰');
+  }
+  // 好友申请通知
+  var seenPending = null;
+  function checkFriendRequests(pendingIn) {
+    var list = pendingIn || [];
+    if (seenPending === null) { seenPending = list.length; return; }   // 首次同步不提醒
+    var prev = seenPending;
+    seenPending = list.length;
+    if (list.length <= prev) return;
+    var newest = list[list.length - 1] || list[0];
+    var who = (newest && (newest.name || ('用户' + newest.uid))) || '有人';
+    if (appVisible()) { toast(who + ' 请求加你为好友'); return; }
+    if (!nativeOn()) return;
+    try {
+      if (window.PaperNative.notifyEx) window.PaperNative.notifyEx('好友申请', who + ' 请求加你为好友', 'friend', 'contacts', 'friend');
+      else window.PaperNative.notify('好友申请', who + ' 请求加你为好友', 'friend', 'contacts');
+    } catch (e) {}
+  }
   function notifyMessage(rid, m) {
     var at = isMentioned(m);
     var from = m.name || (m.deviceId ? '有人' : roomTitle(rid));
     var title = isDM(rid) ? from : roomTitle(rid);
     var body = (at ? from + ' @了你：' : (isDM(rid) ? '' : from + '：')) + (m.text || '[消息]');
     var jump = (at ? 'at:' : 'unread:') + rid + (m.id ? ('#' + m.id) : '');
+    var kind = at ? 'mention' : 'msg';
+
+    if (isMuted(rid)) {
+      // 免打扰：只累未读，不打扰
+      if (appVisible() && (S.cur !== rid || $('#chat').classList.contains('hidden'))) { /* 静默 */ }
+      return;
+    }
 
     if (!appVisible() && nativeOn()) {
-      try { window.PaperNative.notify(title, body, 'room-' + rid, jump); } catch (e) {}
+      try {
+        if (window.PaperNative.notifyEx) window.PaperNative.notifyEx(title, body, 'room-' + rid, jump, kind);
+        else window.PaperNative.notify(title, body, 'room-' + rid, jump);
+      } catch (e) {}
       if (at && window.PaperNative.vibrate) { try { window.PaperNative.vibrate(180); } catch (e) {} }
       return;
     }
@@ -2916,6 +2958,14 @@
     on('#blockedGroups', 'click', function (e) {
       var g = e.target.closest('[data-unblockg]');
       if (g) { wsSend({ t: 'group_unblock', id: g.getAttribute('data-unblockg') }); toast('已解除'); }
+    });
+    on('#roomMute', 'click', function () {
+      var rid = roomTarget;
+      if (!rid) return;
+      var on = !isMuted(rid);
+      setMuted(rid, on);
+      closeRoomSheet();
+      toast(on ? '已开启免打扰' : '已关闭免打扰');
     });
     on('#roomPin', 'click', function () {
       var rid = roomTarget;
