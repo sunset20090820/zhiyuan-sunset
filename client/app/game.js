@@ -16,6 +16,7 @@
     dawn: null, speech: null, voteStart: null, voteResult: null,
     shoot: null, result: null,
     toastMsg: '',
+    micPerm: { ok: false, scope: null, reason: '' },
     timer: null,
   };
 
@@ -264,9 +265,16 @@
   }
   function syncMicState() {
     var b = $('#wwMic');
-    if (!b) return;
-    b.classList.toggle('live', RT.on);
-    b.textContent = RT.on ? '🎙 正在开麦（点一下关麦）' : '🎤 点一下开麦（实时语音）';
+    if (b) {
+      var perm = G.micPerm || {};
+      b.classList.toggle('live', RT.on);
+      b.disabled = !perm.ok && !RT.on;
+      if (RT.on) b.textContent = '🎙 正在开麦（点一下关麦）';
+      else if (perm.ok) b.textContent = '🎤 可以开麦：' + (perm.scope === 'wolves' ? '狼队内部' : '全场可听');
+      else b.textContent = '🔇 现在不能开麦';
+    }
+    var hint = $('#wwMicHint');
+    if (hint) hint.textContent = (G.micPerm && G.micPerm.reason) || '';
   }
 
   /* ---------------- 页面骨架 ---------------- */
@@ -285,7 +293,8 @@
       '</header>',
       '<div id="wwBody" class="ww-body"></div>',
       '<div id="wwMicBar" class="ww-micbar hidden">' +
-      '  <button id="wwMic" class="ww-mic" type="button">🎤 点一下开麦（实时语音）</button>' +
+      '  <button id="wwMic" class="ww-mic" type="button">🎤 实时语音</button>' +
+      '  <span id="wwMicHint" class="ww-michint"></span>' +
       '</div>',
       '<div id="wwToast" class="ww-toast"></div>',
     ].join('');
@@ -294,8 +303,14 @@
     var micBtn = $('#wwMic');
     if (micBtn) {
       micBtn.addEventListener('click', function () {
-        if (RT.on) { rtStop(); toast('已关麦'); }
-        else { if (rtStart()) toast('已开麦，说话就能被听见'); }
+        if (RT.on) { rtStop(); toast('已关麦'); return; }
+        if (!G.micPerm || !G.micPerm.ok) {
+          var why = (G.micPerm && G.micPerm.reason) || '现在不能开麦';
+          toast(why);
+          send({ t: 'ww_mic_ask' });     // 顺手向服务端确认一次权限
+          return;
+        }
+        if (rtStart()) toast(G.micPerm.scope === 'wolves' ? '已开麦：只有狼队友能听到' : '已开麦：同局玩家都能听到');
       });
     }
     $('#wwSfx').addEventListener('click', function () {
@@ -347,6 +362,8 @@
     if (!bar) return;
     var inGame = !!(G.room && G.room.state && G.room.state !== 'waiting' && G.room.state !== 'settlement');
     bar.classList.toggle('hidden', !inGame);
+    if (inGame) { try { send({ t: 'ww_mic_ask' }); } catch (e) {} }
+    syncMicState();
   }
 
   /* ---------------- 渲染（网易式布局） ---------------- */
@@ -731,6 +748,12 @@
         render(); break;
       case 'ww_kicked': toast('你被房主请出了房间'); leaveRoom(); G.stage = ''; render(); break;
       case 'ww_left': G.room = null; G.stage = ''; render(); break;
+      case 'ww_mic_perm':
+        G.micPerm = { ok: !!d.ok, scope: d.scope || null, reason: d.reason || '' };
+        if (!G.micPerm.ok && RT.on) rtStop();
+        syncMicState();
+        render(); 
+        break;
       case 'ww_audio':
         rtPlay(d);
         break;

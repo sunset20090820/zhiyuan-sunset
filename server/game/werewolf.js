@@ -143,6 +143,8 @@ function joinGame(api, c, d) {
   if (existing) {
     existing.connected = true; existing.offlineAt = 0; existing.name = c.name || existing.name;
     api.send(c, { t: 'ww_room', game: publicGame(game), you: youOf(game, existing) });
+    const rule = micRule(game, existing);
+    sendKey(api, existing.key, { t: 'ww_mic_perm', ok: rule.ok, scope: rule.scope, reason: rule.reason });
     syncPlayers(game, api);
     return game;
   }
@@ -154,6 +156,8 @@ function joinGame(api, c, d) {
   game.players.push(newPlayer(api, c, seat, false));
   game.players.sort((a, b) => a.seat - b.seat);
   api.send(c, { t: 'ww_room', game: publicGame(game), you: { seat } });
+  const rule0 = micRule(game, game.players.find(x => x.key === key));
+  if (rule0) sendKey(api, key, { t: 'ww_mic_perm', ok: rule0.ok, scope: rule0.scope, reason: rule0.reason });
   syncPlayers(game, api);
   broadcastRooms(api);
   return game;
@@ -398,6 +402,7 @@ function startNight(game, api) {
     if (p.role === 'guard') sendKey(api, p.key, { t: 'ww_guard_info', lastGuard: game.lastGuardSeat || 0 });
   }
   toGame(game, api, { t: 'ww_night_start', round: game.round, deadline: game.deadline });
+  pushMicRule(game, api);
   scheduleBots(game, api);
 }
 
@@ -665,6 +670,7 @@ function handleShoot(api, c, d) {
 /* ---------------- 天亮 / 发言 ---------------- */
 function dawn(game, api) {
   game.state = 'dawn';
+  pushMicRule(game, api);
   const deaths = (game.lastNightDeaths || []).slice();
   game.deadline = api.now() + 12 * 1000;
   toGame(game, api, { t: 'ww_dawn', round: game.round, deaths, deadline: game.deadline });
@@ -690,6 +696,7 @@ function nextSpeaker(game, api) {
     if (p && p.alive) {
       game.deadline = api.now() + game.opts.speechTime * 1000;
       toGame(game, api, { t: 'ww_speech', seat: p.seat, name: p.name, deadline: game.deadline });
+      pushMicRule(game, api);
       if (p.bot) setTimeout(function () {
         try { if (games.get(game.id) === game && game.state === 'speech' && game.speechOrder[game.speechIndex] === p.key) botSpeak(game, api, p); } catch (e) { }
       }, 1200 + Math.random() * 1500);
@@ -700,6 +707,46 @@ function nextSpeaker(game, api) {
   startVote(game, api);
 }
 
+/* ---------------- 麦序（谁能开麦） ---------------- */
+/**
+ * 返回 { ok, scope, reason }
+ *  scope: 'all' 全体可听 / 'wolves' 只有狼队友可听 / null 不能开麦
+ */
+function micRule(game, p) {
+  if (!game || !p || !p.alive) return { ok: false, scope: null, reason: '你已出局' };
+  const st = game.state;
+  if (st === 'speech') {
+    const curKey = game.speechOrder[game.speechIndex];
+    const cur = game.players.find(x => x.key === curKey);
+    if (p.seat === game.hostSeat) {
+      return { ok: true, scope: 'all', reason: '发言阶段（房主可开麦）' };
+    }
+    if (p.key === curKey) return { ok: true, scope: 'all', reason: '轮到你发言' };
+    return { ok: false, scope: null, reason: '现在是 ' + (cur ? cur.seat : '') + ' 号发言，请等轮到你' };
+  }
+  if (st === 'night') {
+    if (isWolf(p.role)) return { ok: true, scope: 'wolves', reason: '狼人夜间内部交流' };
+    return { ok: false, scope: null, reason: '夜里只有狼人能说话，其他角色闭麦' };
+  }
+  if (st === 'sheriff') {          // 上警阶段（预留）
+    if (game.sheriffCandidates && game.sheriffCandidates.indexOf(p.key) >= 0) {
+      return { ok: true, scope: 'all', reason: '上警发言' };
+    }
+    return { ok: false, scope: null, reason: '只有上警玩家能发言' };
+  }
+  if (st === 'vote') return { ok: false, scope: null, reason: '投票阶段请闭麦' };
+  if (st === 'shoot') return { ok: false, scope: null, reason: '开枪阶段请闭麦' };
+  return { ok: false, scope: null, reason: '现在不能开麦' };
+}
+
+function pushMicRule(game, api) {
+  for (const p of game.players) {
+    if (p.bot) continue;
+    const rule = micRule(game, p);
+    sendKey(api, p.key, { t: 'ww_mic_perm', ok: rule.ok, scope: rule.scope, reason: rule.reason });
+  }
+}
+
 /* ---------------- 实时语音（连续 PCM/Opus 帧中继） ---------------- */
 const AUDIO_FRAME_MAX = 16 * 1024;    // 单帧 base64 上限（约 12KB 原始数据）
 const AUDIO_RATE_MS = 120;            // 单人最少间隔，防刷
@@ -708,6 +755,8 @@ function handleAudioFrame(api, c, d) {
   if (!game) throw new Error('你不在任何游戏中');
   const p = game.players.find(x => x.key === keyOf(api, c));
   if (!p || !p.alive) return;                       // 死人不推流，静默丢弃
+  const rule = micRule(game, p);
+  if (!rule.ok) return;                             // 当前阶段不允许开麦
   const data = String(d.data || '');
   if (!data || data.length > AUDIO_FRAME_MAX) return;
   const t = api.now();
@@ -717,6 +766,8 @@ function handleAudioFrame(api, c, d) {
   const payload = { t: 'ww_audio', seat: p.seat, seq: Number(d.seq) || 0, fmt: d.fmt || 'pcm8', data };
   for (const other of game.players) {
     if (other.key === p.key) continue;
+    // 狼人夜间交流只发给狼队友
+    if (rule.scope === 'wolves' && !isWolf(other.role)) continue;
     sendKey(api, other.key, payload);
   }
 }
@@ -776,6 +827,7 @@ function handleSkipSpeech(api, c, d) {
 function startVote(game, api) {
   game.state = 'vote';
   game.votes = {};
+  pushMicRule(game, api);
   game.deadline = api.now() + 30 * 1000;
   toGame(game, api, {
     t: 'ww_vote_start', round: game.round, deadline: game.deadline,
@@ -981,6 +1033,13 @@ function handle(c, d, api) {
       case 'ww_skip_speech': handleSkipSpeech(api, c, d); return true;
       case 'ww_voice': handleVoice(api, c, d); return true;
       case 'ww_audio': handleAudioFrame(api, c, d); return true;
+      case 'ww_mic_ask': {
+        const gm = findGameOfPlayer(api, c);
+        const pl = gm && gm.players.find(x => x.key === keyOf(api, c));
+        const rg = gm && pl ? micRule(gm, pl) : { ok: false, scope: null, reason: '你不在游戏中' };
+        api.send(c, { t: 'ww_mic_perm', ok: rg.ok, scope: rg.scope, reason: rg.reason });
+        return true;
+      }
       case 'ww_vote': handleVote(api, c, d); return true;
       default: return false;
     }

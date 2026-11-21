@@ -1300,7 +1300,8 @@ body { height: var(--app-h, 100%); }
 .game-top .brand { color: #fff; font-size: 17px; }
 .game-top .icon-btn { color: #cfe0ec; }
 .ww-state { margin-left: 6px; font-size: 11px; opacity: .75; font-weight: 400; }
-.ww-body { flex: 1; overflow-y: auto; padding: 10px 12px calc(var(--safe-bottom) + 96px); }
+.ww-body { flex: 1; overflow-y: auto; padding: 10px 12px calc(var(--safe-bottom) + 96px);
+  width: 100%; max-width: 720px; margin: 0 auto; }
 
 /* 房间列表首页 */
 .ww-list-head { display: flex; align-items: baseline; justify-content: space-between;
@@ -1320,7 +1321,8 @@ body { height: var(--app-h, 100%); }
 .ww-lobby-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 
 /* 圆桌 */
-.ww-table { position: relative; width: 100%; padding-top: 104%; margin: 4px auto 0; max-width: 460px; }
+.ww-table { position: relative; width: min(100%, 460px, 62dvh); aspect-ratio: 1 / 1;
+  margin: 4px auto 0; }
 .ww-table::before { content: ''; position: absolute; left: 12%; right: 12%; top: 12%; bottom: 12%;
   border-radius: 50%; background: radial-gradient(circle at 50% 40%, rgba(46,74,96,.55), rgba(16,26,36,.75) 70%);
   border: 1px solid rgba(120,190,240,.16); box-shadow: inset 0 0 40px rgba(0,0,0,.55); }
@@ -1411,3 +1413,11 @@ body { height: var(--app-h, 100%); }
 
 /* 打开游戏时隐藏聊天界面元素，避免遮挡点击 */
 body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #contacts, body.in-game #mePage { display: none !important; }
+
+/* 平板/横屏：桌子按可用高度收敛，避免竖向拉伸 */
+@media (min-aspect-ratio: 1/1) {
+  .ww-table { width: min(100%, 460px, 58dvh); }
+  .ww-seats-hint { display: none; }
+}
+.ww-michint { font-size: 11px; color: #8fa6b8; text-align: center; display: block; }
+.ww-mic[disabled] { opacity: .55; }
