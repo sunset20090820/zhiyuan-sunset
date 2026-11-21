@@ -29,19 +29,57 @@
 | 狼人 | 狼 | 夜晚集体选择一人击杀；知道彼此身份 |
 | 预言家 | 神 | 夜晚查验一人，得知「好人 / 狼人」 |
 | 女巫 | 神 | 解药一瓶（救当晚死者）、毒药一瓶（毒杀一人），同一晚只能用药一次 |
+| 猎人 | 神 | 被狼刀或投票出局时可开枪带走一人（被女巫毒死不能开枪，可配） |
+| 白痴 | 神 | 被投票出局时翻牌，不死但失去投票权，之后被刀/被毒才真正出局 |
+| 守卫 | 神 | 每晚可守护一人，不能连续两晚守同一人；与女巫解药同时作用于同一人时「同守同救」该人死亡 |
 | 平民 | 神 | 无技能，白天投票 |
 
-**默认配比**（按人数自动选板子）
+### 板子（模式）
 
-| 人数 | 狼 | 预言家 | 女巫 | 平民 |
-|---|---|---|---|---|
-| 6 | 2 | 1 | 1 | 2 |
-| 7 | 2 | 1 | 1 | 3 |
-| 8 | 2 | 1 | 1 | 4 |
-| 9 | 3 | 1 | 1 | 4 |
-| 10 | 3 | 1 | 1 | 5 |
-| 11 | 3 | 1 | 1 | 6 |
-| 12 | 4 | 1 | 1 | 6 |
+板子是「固定人数 + 固定角色组合」的配板表，开局前由房主选择。
+不做「按人数自动猜板子」——人数与板子必须严格匹配，否则角色数量会对不上。
+
+| 板子 | 人数 | 狼 | 预言家 | 女巫 | 猎人 | 白痴 | 平民 | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| 6 人标准局 | 6 | 2 | 1 | 1 | 0 | 0 | 2 | 新手板，无猎人 |
+| 8 人预女猎 | 8 | 2 | 1 | 1 | 1 | 0 | 3 | 最常见的入门板 |
+| 9 人预女猎白 | 9 | 3 | 1 | 1 | 1 | 1 | 2 | 经典 9 人板 |
+| 10 人预女猎白 | 10 | 3 | 1 | 1 | 1 | 1 | 3 | 抗推空间大 |
+| 12 人标准 4 狼 | 12 | 4 | 1 | 1 | 1 | 1 | 4 | 高配，节奏快 |
+| 12 人狼王守卫 | 12 | 4 | 1 | 1 | 1（猎人） | 1（白痴） | 4 | 含守卫，见下 |
+| 自定义 | 4–18 | 任意 | 任意 | 任意 | 任意 | 任意 | 任意 | 房主逐项调，需满足校验规则 |
+
+**板子校验规则**（服务端强制，客户端也提示）
+
+1. 狼人 ≥ 1，好人总数 ≥ 狼人数
+2. 神职数量 ≥ 1（否则首夜无人可验）
+3. 总人数 = 狼 + 神 + 民，且与所选的「人数」一致
+4. 任何板子下：预言家 ≤ 1、女巫 ≤ 1、猎人 ≤ 1、白痴 ≤ 1、守卫 ≤ 1
+5. 人数区间：4 ≤ 人数 ≤ 18（MVP 客户端只开放 6–12，超出走自定义）
+6. 女巫解药只允许首夜自救（板子可关掉这条，见「板子选项」）
+
+### 板子选项（可调开关）
+
+| 选项 | 默认 | 说明 |
+|---|---|---|
+| `witchSelfSave` | 仅首夜 | 女巫能否用解药救自己（`none` / `first` / `always`） |
+| `witchSameNight` | false | 女巫同一晚能否同时用解药和毒药 |
+| `sheriff` | false | 是否启用警长竞选 |
+| `hunterShoot` | true | 猎人被刀/被毒能否开枪（被毒默认不能） |
+| `speechTime` | 45 | 每人发言秒数，30–120 |
+| `voteMode` | 公开 | 投票是否公开（公开 / 匿名） |
+| `revealOnDeath` | false | 出局是否公开身份 |
+
+板子的配置在服务端只认一份白名单，客户端传来的板子名/配置必须能通过同一个校验函数，
+避免「客户端改板子 → 服务端按错误人数发牌」。
+
+### 阵营判定
+
+| 板子类型 | 胜负条件 |
+|---|---|
+| 屠边（默认） | 狼人杀光全部神职，或杀光全部平民 → 狼胜 |
+| 屠城（可选） | 狼人数 ≥ 存活人数的 1/3（或板子自定义比例）→ 狼胜 |
+| 好人 | 放逐全部狼人 → 好人胜 |
 
 **夜晚结算顺序**（关键，避免争议）
 
@@ -94,7 +132,10 @@ Game = {
   hostUid: 100001,           // 房主账号 uid
   state: 'waiting',          // waiting|night|dawn|speech|vote|settlement
   round: 1,
-  board: 'ww_8',             // 板子名，便于扩展
+  board: 'ww8',              // 板子 ID
+  boardName: '8 人预女猎',
+  size: 8,
+  opts: { witchSelfSave:'first', witchSameNight:false, sheriff:false, hunterShoot:true, speechTime:45, voteMode:'public', revealOnDeath:false },
   players: [{
     uid: 100001,             // 账号 uid（未登录游客用 deviceId 代替）
     key: 'uid:100001',       // 统一身份键
@@ -143,19 +184,21 @@ Game = {
 | 方向 | 消息 | 说明 |
 |---|---|---|
 | C→S | `{t:'ww_list'}` | 拉游戏列表 |
-| S→C | `{t:'ww_rooms', rooms:[{id,host,players,max,state}]}` | 列表 |
+| S→C | `{t:'ww_rooms', rooms:[{id,host,hostName,players,max,state,board,boardName,opts}]}` | 列表（带板子，方便筛选） |
 | S→C | `{t:'ww_rooms_changed'}` | 有房间增减/状态变化（触发客户端刷新） |
 
 ### 5.2 房间
 
 | 方向 | 消息 | 说明 |
 |---|---|---|
-| C→S | `{t:'ww_create', board:'auto'}` | 创建，创建者自动入座 1 号 |
+| C→S | `{t:'ww_create', board:'ww8', name?, opts?}` | 创建，`board` 为板子 ID 或 `custom`（需带 `size`/`roles`），创建者自动入座 1 号 |
+| C→S | `{t:'ww_boards'}` | 拉可取板子列表与默认选项 |
+| S→C | `{t:'ww_boards', boards:[{id,name,size,roles,opts,desc}]}` | 板子清单（客户端做「模式选择」用） |
 | C→S | `{t:'ww_join', id}` | 加入，分配最小空座 |
 | C→S | `{t:'ww_leave', id}` | 离开（游戏中视为死亡退出） |
 | C→S | `{t:'ww_kick', id, seat}` | 房主踢人（仅 waiting） |
 | C→S | `{t:'ww_start', id}` | 房主开局，校验人数与在线 |
-| S→C | `{t:'ww_room', game:{...公开字段}, you:{seat,role,alive}}` | 进房同步（`role` 只给自己） |
+| S→C | `{t:'ww_room', game:{id,board,boardName,size,opts,state,players}, you:{seat,role,alive}}` | 进房同步（`role` 只给自己） |
 | S→C | `{t:'ww_players', players:[...]}` | 座位/存活/在线变化 |
 
 **公开字段**：座位、昵称、是否存活、是否在线、房主。**绝不下发**他人角色。
@@ -168,7 +211,11 @@ Game = {
 | S→C | `{t:'ww_wolves', mates:[{seat,name}]}` | 仅狼人：队友名单 |
 | C→S | `{t:'ww_action', kind:'kill'|'check'|'save'|'poison'|'none', target}` | 夜晚行动 |
 | S→C | `{t:'ww_check_result', target, result:'wolf'|'good'}` | 仅预言家 |
-| S→C | `{t:'ww_witch_info', killed, canSave, canPoison}` | 仅女巫 |
+| S→C | `{t:'ww_witch_info', killed, canSave, canPoison, canSelfSave}` | 仅女巫 |
+| S→C | `{t:'ww_guard_info', lastGuard}` | 仅守卫：上一晚守了谁（不能连守） |
+| C→S | `{t:'ww_action', kind:'guard', target}` | 守卫守护 |
+| S→C | `{t:'ww_hunter', canShoot:true, deadline}` | 猎人出局，可开枪（超时视为放弃） |
+| C→S | `{t:'ww_shoot', target}` | 猎人开枪 |
 | S→C | `{t:'ww_action_ack', kind, target}` | 行动确认（回显，防误触） |
 | S→C | `{t:'ww_night_end'}` | 夜晚结束，进入天亮 |
 
@@ -202,7 +249,10 @@ Game = {
 
 | 界面 | 内容 |
 |---|---|
-| 大厅 | 房间列表（房主/人数/状态）、创建按钮、刷新 |
+| 游戏入口 | 「新建对话」面板里的「🎮 狼人杀」，进入大厅 |
+| 大厅 | 房间列表（房主、人数、**板子名**、状态）、「创建房间」「快速加入」、刷新 |
+| 创建房间 | **模式选择**：板子卡片列表（6人标准局 / 8人预女猎 / 9人预女猎白 / 10人 / 12人标准 / 12人狼王守卫 / 自定义），选中后显示角色配比预览 + 选项开关（女巫自救、同守同救、警长、发言时长、投票公开性）；自定义板子用加减按钮配角色 |
+| 加入房间 | 若房间板子人数已满则按钮置灰；板子不符时提示 |
 | 等待厅 | 座位九宫格、房主标记、邀请好友按钮（复用联系人列表）、开始按钮（仅房主） |
 | 夜晚 | 自己的角色卡、可点选的目标头像；狼人显示队友；预言家显示上次验人结果；女巫显示「今晚 X 号被刀」+ 解药/毒药按钮 |
 | 天亮 | 死讯动画、昨晚结果（不显示死因） |
@@ -270,14 +320,19 @@ Game = {
 
 | 阶段 | 内容 | 预估 |
 |---|---|---|
-| M1 | 引擎骨架 + 板子配比 + 等待厅 + 开局发牌 | 40 min |
+| M0 | 板子表 + 校验函数 + 客户端模式选择页 | 40 min |
+| M1 | 引擎骨架 + 发牌 + 等待厅（按板子显示座位数） | 40 min |
 | M2 | 夜晚行动（狼/预言家/女巫）+ 结算 + 天亮 | 50 min |
 | M3 | 发言轮转 + 投票 + 放逐 + 胜负 | 40 min |
 | M4 | 客户端四类界面 + 视角差异 | 60 min |
 | M5 | 掉线/超时/房主转移等边界 | 30 min |
 | M6 | 联调 + 无头测试 + 打包上线 | 30 min |
 
-**合计约 3.5–4 小时**，可分两次交付：M1–M3（可跑通）→ M4–M6（可玩）。
+| M7 | 猎人开枪 / 白痴翻牌 / 守卫（含同守同救） | 60 min |
+| M8 | 自定义板子编辑器 + 板子校验联调 | 40 min |
+
+**合计约 5–5.5 小时**，可分三次交付：
+M0–M3（6/8 人板跑通）→ M4–M6（可玩）→ M7–M8（扩展角色 + 自定义板子）。
 
 ---
 
@@ -295,6 +350,84 @@ Game = {
 
 ## 12. 需要你拍板的三件事
 
-1. **人数下限**：6 人起（推荐）还是 4 人就能玩？
-2. **发言方式**：纯文字（推荐，第一版）还是要接语音？
-3. **是否需要「人机陪练」**：没有真人时用简单 AI 填充（工作量 +1 小时）
+1. **首批板子**：先只做 6 人标准局 + 8 人预女猎（推荐，最快能玩），还是一次把 6/8/9/10/12 全做出来？
+2. **扩展角色**：猎人/白痴/守卫放在第一版还是第二轮？（第一版做，工作量 +1 小时）
+3. **自定义板子**：第一版就开放，还是先固定板子、自定义放后面？
+
+---
+
+## 附录 A：板子配置结构（服务端白名单）
+
+板子表是服务端唯一权威来源，客户端只能选 ID，不能篡改角色数量。
+
+```js
+// server/game/boards.js
+const BOARDS = [
+  { id:'ww6',  name:'6 人标准局',   size:6,  roles:{wolf:2,seer:1,witch:1,villager:2}, desc:'新手板，节奏快' },
+  { id:'ww8',  name:'8 人预女猎',   size:8,  roles:{wolf:2,seer:1,witch:1,hunter:1,villager:3}, desc:'最常见的入门板' },
+  { id:'ww9',  name:'9 人预女猎白', size:9,  roles:{wolf:3,seer:1,witch:1,hunter:1,fool:1,villager:2} },
+  { id:'ww10', name:'10 人预女猎白',size:10, roles:{wolf:3,seer:1,witch:1,hunter:1,fool:1,villager:3} },
+  { id:'ww12', name:'12 人标准 4 狼',size:12,roles:{wolf:4,seer:1,witch:1,hunter:1,fool:1,villager:4} },
+  { id:'ww12g',name:'12 人狼王守卫',size:12,roles:{wolf:4,seer:1,witch:1,hunter:1,guard:1,fool:1,villager:3}, opts:{hunterShoot:'always'} },
+];
+
+const DEFAULT_OPTS = {
+  witchSelfSave: 'first',   // none | first | always
+  witchSameNight: false,    // 女巫同夜可否双药
+  sheriff: false,           // 警长竞选
+  hunterShoot: true,        // 猎人可开枪（被毒除外）
+  speechTime: 45,
+  voteMode: 'public',       // public | secret
+  revealOnDeath: false,
+};
+
+// 板子合法性校验：客户端自定义板子、以及内置板子入库前都走这里
+function validateBoard(size, roles, opts) {
+  const n = ['wolf','seer','witch','hunter','fool','guard','villager']
+    .reduce((a, k) => a + (roles[k] || 0), 0);
+  if (size < 4 || size > 18) return '人数需要 4–18';
+  if (n !== size) return `角色总数 ${n} 与人数 ${size} 不一致`;
+  if (!roles.wolf) return '至少要有一个狼人';
+  const good = size - (roles.wolf || 0);
+  if (good < roles.wolf) return '好人不能少于狼人';
+  if (!(roles.seer || roles.witch || roles.hunter || roles.fool || roles.guard)) return '至少要有一个神职';
+  for (const k of ['seer','witch','hunter','fool','guard']) if ((roles[k] || 0) > 1) return `${k} 最多一个`;
+  if (roles.guard && roles.guard > 1) return '守卫最多一个';
+  if (opts && opts.speechTime != null && (opts.speechTime < 15 || opts.speechTime > 180)) return '发言时长 15–180 秒';
+  return '';   // 空串 = 合法
+}
+```
+
+## 附录 B：配板发牌算法
+
+```js
+function deal(game) {
+  const pool = [];
+  for (const [k, v] of Object.entries(game.boardRoles)) for (let i = 0; i < v; i++) pool.push(k);
+  // Fisher–Yates 洗牌，避免座位与角色相关
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  game.players.forEach((p, i) => { p.role = pool[i]; });
+}
+```
+
+发牌后立刻给每位玩家单独下发 `ww_room`（含 `you.role`），狼人额外收 `ww_wolves`。
+广播里永不出现 `role` 字段。
+
+## 附录 C：模式选择界面的数据结构（客户端）
+
+```js
+// 大厅点「创建房间」后拉取
+{ t:'ww_boards', boards:[
+  { id:'ww8', name:'8 人预女猎', size:8,
+    roles:{wolf:2,seer:1,witch:1,hunter:1,villager:3},
+    opts:{...DEFAULT_OPTS},
+    desc:'最常见的入门板' }
+]}
+```
+
+客户端渲染成卡片：板子名 + 人数 + 角色图标行（🐺×2 🔮×1 🧪×1 🏹×1 👤×3）+ 一句话说明。
+选中后展开选项开关区；「自定义」卡片额外提供人数加减与角色加减，实时显示校验结果，
+不合法时「创建」按钮置灰并给出原因（与服务端 `validateBoard` 文案保持一致）。
