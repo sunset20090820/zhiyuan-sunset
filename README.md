@@ -98,6 +98,7 @@ docker compose up -d        # Docker
 ## 说明
 
 - 协议是自定义 JSON over WebSocket，细节见 [docs/protocol.md](docs/protocol.md)。
+- 内置游戏「狼人杀」的设计与协议草案见 [docs/werewolf.md](docs/werewolf.md)（尚未实现）。
 - 服务端默认明文 `ws://`，公网部署建议用 Nginx/Caddy 反代成 `wss://`（`CERT`/`KEY` 环境变量可直接开 TLS）。
 - 项目按现状提供，自行部署时请自行做好备份、防火墙和账号安全。
 
