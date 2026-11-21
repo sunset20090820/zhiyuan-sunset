@@ -1352,3 +1352,7 @@ body { height: var(--app-h, 100%); }
 .ww-reveal-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg-soft); margin-bottom: 6px; font-size: 13px; }
 .ww-reveal-row.dead { opacity: .5; }
 .ww-reveal-row em { margin-left: auto; font-style: normal; }
+/* 人机陪练 */
+.ww-bots { display: flex; gap: 8px; }
+.ww-bots .flat { flex: 1; }
+.ww-bot { color: var(--accent) !important; }

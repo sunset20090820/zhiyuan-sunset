@@ -181,7 +181,8 @@
       var cls = 'ww-seat' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (p.host ? ' host' : '') + (p.connected === false ? ' off' : '');
       var roleTag = p.role ? '<em>' + (ROLE_EMOJI[p.role] || '') + (ROLE_NAME[p.role] || p.role) + '</em>' : '';
       return '<button class="' + cls + '" type="button" data-seat="' + p.seat + '">' +
-        '<b>' + p.seat + ' 号</b><span>' + esc(p.name) + '</span>' + roleTag +
+        '<b>' + p.seat + ' 号</b><span>' + esc(p.name) + '</span>' +
+        (p.bot ? '<i class="ww-bot">人机</i>' : '') + roleTag +
         (p.host ? '<i>房主</i>' : '') + '</button>';
     }).join('') + '</div>';
   }
@@ -209,9 +210,16 @@
       host
         ? '<button id="wwStart" class="primary" type="button"' + (full ? '' : ' disabled') + '>' + (full ? '开始游戏' : '还差 ' + (need - G.room.players.length) + ' 人') + '</button>'
         : '<p class="ww-hint">等房主开始…</p>',
+      host ? '<div class="ww-bots">' +
+        '<button id="wwAddBot" class="flat" type="button"' + (full ? ' disabled' : '') + '>＋ 人机</button>' +
+        '<button id="wwDelBot" class="flat" type="button"' + (G.room.players.some(function (p) { return p.bot; }) ? '' : ' disabled') + '>－ 人机</button>' +
+        '</div>' +
+        '<p class="ww-hint">人不够可以先加人机陪练，等人齐了再踢掉人机</p>' : '',
       '<button id="wwLeave" class="flat" type="button">离开房间</button>',
     ].join('');
     if (host) $('#wwStart').addEventListener('click', function () { send({ t: 'ww_start', id: G.room.id }); });
+    if ($('#wwAddBot')) $('#wwAddBot').addEventListener('click', function () { send({ t: 'ww_addbot', id: G.room.id }); });
+    if ($('#wwDelBot')) $('#wwDelBot').addEventListener('click', function () { send({ t: 'ww_removebot', id: G.room.id }); });
     $('#wwLeave').addEventListener('click', function () { leaveRoom(); render(); });
   }
 

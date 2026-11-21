@@ -49,7 +49,7 @@ function aliveVillagers(game) { return game.players.filter(p => p.alive && p.rol
 
 function publicPlayer(p) {
   return {
-    seat: p.seat, name: p.name, alive: p.alive, connected: p.connected,
+    seat: p.seat, name: p.name, alive: p.alive, connected: p.connected, bot: !!p.bot,
     role: p.revealed ? p.role : undefined,   // 只在白痴翻牌/结算后出现
     host: !!p.host,
   };
@@ -175,6 +175,43 @@ function leaveGame(api, c, d) {
   syncPlayers(game, api);
 }
 
+const BOT_NAMES = ['小狼', '阿福', '老K', '豆豆', '阿飞', '圆圆', '大锤', '七七'];
+
+function addBot(api, c, d) {
+  const game = games.get(String(d.id || ''));
+  if (!game) throw new Error('房间不存在');
+  if (game.state !== 'waiting') throw new Error('游戏已经开始');
+  const me = game.players.find(p => p.key === keyOf(api, c));
+  if (!me || !me.host) throw new Error('只有房主能加人机');
+  if (game.players.length >= game.size) throw new Error('房间已满');
+  const used = new Set(game.players.map(p => p.seat));
+  let seat = 1;
+  while (used.has(seat)) seat++;
+  const botCount = game.players.filter(p => p.bot).length;
+  game.players.push({
+    key: 'bot:' + game.id + ':' + seat, seat,
+    name: BOT_NAMES[botCount % BOT_NAMES.length] + '(人机)',
+    role: null, alive: true, connected: true, offlineAt: 0, deadReason: '',
+    canVote: true, host: false, revealed: false, bot: true,
+  });
+  game.players.sort((a, b) => a.seat - b.seat);
+  syncPlayers(game, api);
+  broadcastRooms(api);
+}
+
+function removeBot(api, c, d) {
+  const game = games.get(String(d.id || ''));
+  if (!game || game.state !== 'waiting') throw new Error('只有等待中才能移除人机');
+  const me = game.players.find(p => p.key === keyOf(api, c));
+  if (!me || !me.host) throw new Error('只有房主能移除人机');
+  const bots = game.players.filter(p => p.bot);
+  if (!bots.length) throw new Error('房间里没有人机');
+  const last = bots[bots.length - 1];
+  game.players = game.players.filter(p => p !== last);
+  syncPlayers(game, api);
+  broadcastRooms(api);
+}
+
 function kick(api, c, d) {
   const game = games.get(String(d.id || ''));
   if (!game || game.state !== 'waiting') throw new Error('只有等待中才能踢人');
@@ -196,7 +233,7 @@ function startGame(api, c, d) {
   if (!me || !me.host) throw new Error('只有房主能开始');
   if (game.state !== 'waiting') throw new Error('已经开始了');
   if (game.players.length !== game.size) throw new Error(`需要 ${game.size} 人，现在 ${game.players.length} 人`);
-  const offline = game.players.filter(p => !p.connected);
+  const offline = game.players.filter(p => !p.connected && !p.bot);
   if (offline.length) throw new Error('有人掉线，等他回来再开始');
 
   deal(game);
@@ -215,6 +252,88 @@ function startGame(api, c, d) {
   }
   startNight(game, api);
   broadcastRooms(api);
+}
+
+/* ---------------- 人机行为 ---------------- */
+function pick(arr) { return arr && arr.length ? arr[Math.floor(Math.random() * arr.length)] : null; }
+
+function scheduleBots(game, api) {
+  if (!game.players.some(p => p.bot)) return;
+  // 夜晚：每个存活人机各自行动
+  for (const p of game.players) {
+    if (!p.bot || !p.alive) continue;
+    setTimeout(() => {
+      try { if (games.get(game.id) !== game || game.state !== 'night') return; botNight(game, api, p); }
+      catch (e) { }
+    }, 900 + Math.random() * 1600);
+  }
+}
+
+function botNight(game, api, p) {
+  const n = game.night;
+  if (!n) return;
+  const alive = game.players.filter(x => x.alive && x.key !== p.key);
+  if (isWolf(p.role) && !n.wolfVotes[p.key]) {
+    // 优先刀非狼，其次随机
+    const t = pick(alive.filter(x => !isWolf(x.role))) || pick(alive);
+    if (t) { n.wolfVotes[p.key] = t.key; n.acted[p.key] = true; recomputeWolfTarget(n); }
+  } else if (p.role === 'seer' && !n.acted[p.key]) {
+    const t = pick(alive);
+    if (t) { n.seerTarget = t.key; n.seerResult = isWolf(t.role) ? 'wolf' : 'good'; n.acted[p.key] = true; }
+  } else if (p.role === 'guard' && !n.guardDone) {
+    const t = pick(alive.filter(x => x.seat !== game.lastGuardSeat));
+    if (t) { n.guardTarget = t.key; n.guardDone = true; game.lastGuardSeat = t.seat; n.acted[p.key] = true; }
+  } else if (p.role === 'witch' && !n.witchDone) {
+    const victim = n.wolfTarget ? game.players.find(x => x.key === n.wolfTarget) : null;
+    const canSelf = game.opts.witchSelfSave === 'always' || (game.opts.witchSelfSave === 'first' && game.round === 1);
+    if (victim && !game.witchSaveUsed && (victim.key !== p.key || canSelf) && Math.random() < 0.7) {
+      game.witchSaveUsed = true; n.witchSave = true; n.witchDone = true; n.acted[p.key] = true;
+    } else if (!game.witchPoisonUsed && Math.random() < 0.35) {
+      const t = pick(alive);
+      if (t) { game.witchPoisonUsed = true; n.witchPoison = t.key; n.witchDone = true; n.acted[p.key] = true; }
+      else { n.witchDone = true; }
+    } else { n.witchDone = true; }
+  } else if (p.role === 'cupid' && game.round === 1 && !n.cupidDone) {
+    const a = pick(alive), b = pick(alive.filter(x => !a || x.key !== a.key));
+    if (a && b) { game.lovers = [a.key, b.key]; n.cupidDone = true; n.acted[p.key] = true; }
+  } else if (p.role === 'wolfbeauty' && !n.charmDone) {
+    const t = pick(alive.filter(x => !isWolf(x.role)));
+    if (t) { n.charmTarget = t.key; n.charmDone = true; n.acted[p.key] = true; }
+  }
+  maybeAdvance(game, api);
+}
+
+const BOT_LINES = [
+  '我是好人，过。', '我先过，听后面的人说。', '我觉得要谨慎一点。',
+  '昨晚的信息不多，先过。', '我怀疑前面发言的人。', '我是平民，没什么信息。',
+];
+
+/** 当前发言者是人机 → 自动说一句 */
+function botSpeak(game, api, p) {
+  const text = pick(BOT_LINES) || '过。';
+  toGame(game, api, { t: 'ww_said', seat: p.seat, name: p.name, text });
+  game.log.push({ type: 'speech', seat: p.seat, text, round: game.round, bot: true });
+  game.speechIndex++;
+  nextSpeaker(game, api);
+}
+
+/** 投票阶段的人机投票 */
+function scheduleBotVotes(game, api) {
+  for (const p of game.players) {
+    if (!p.bot || !p.alive || !p.canVote) continue;
+    setTimeout(() => {
+      try {
+        if (games.get(game.id) !== game || game.state !== 'vote') return;
+        const alive = game.players.filter(x => x.alive && x.key !== p.key);
+        let pool = alive;
+        if (isWolf(p.role)) pool = alive.filter(x => !isWolf(x.role));
+        const t = pick(pool) || pick(alive);
+        if (t) game.votes[p.key] = t.key; else game.votes[p.key] = 'skip';
+        const voters = alivePlayers(game).filter(x => x.canVote).map(x => x.key);
+        if (voters.every(k => game.votes[k] !== undefined)) resolveVote(game, api);
+      } catch (e) { }
+    }, 1200 + Math.random() * 2600);
+  }
 }
 
 function deal(game) {
@@ -256,6 +375,7 @@ function startNight(game, api) {
     if (p.role === 'guard') sendKey(api, p.key, { t: 'ww_guard_info', lastGuard: game.lastGuardSeat || 0 });
   }
   toGame(game, api, { t: 'ww_night_start', round: game.round, deadline: game.deadline });
+  scheduleBots(game, api);
 }
 
 function canSelfSave(game, p) {
@@ -301,15 +421,7 @@ function handleAction(api, c, d) {
     if (!targetSeat || !playerAt(game, targetSeat) || !playerAt(game, targetSeat).alive) throw new Error('目标不合法');
     n.wolfVotes[p.key] = playerAt(game, targetSeat).key;
     n.acted[p.key] = true;
-    // 狼刀按多数，平票随机
-    const tally = {};
-    Object.values(n.wolfVotes).forEach(k => { tally[k] = (tally[k] || 0) + 1; });
-    let best = null, bestN = 0, tie = [];
-    for (const [k, v] of Object.entries(tally)) {
-      if (v > bestN) { best = k; bestN = v; tie = [k]; }
-      else if (v === bestN) tie.push(k);
-    }
-    n.wolfTarget = tie.length > 1 ? tie[Math.floor(Math.random() * tie.length)] : best;
+    recomputeWolfTarget(n);
     // 注意：狼人全部行动后不能直接结算夜晚，还要等预言家/女巫/守卫
     maybeAdvance(game, api);
     api.send(c, { t: 'ww_action_ack', kind, target: targetSeat });
@@ -387,6 +499,19 @@ function handleAction(api, c, d) {
   }
 
   throw new Error('未知操作');
+}
+
+/** 狼刀按多数，平票随机取一票 */
+function recomputeWolfTarget(n) {
+  const tally = {};
+  Object.values(n.wolfVotes).forEach(k => { tally[k] = (tally[k] || 0) + 1; });
+  let best = null, bestN = 0, tie = [];
+  for (const [k, v] of Object.entries(tally)) {
+    if (v > bestN) { best = k; bestN = v; tie = [k]; }
+    else if (v === bestN) tie.push(k);
+  }
+  n.wolfTarget = tie.length > 1 ? tie[Math.floor(Math.random() * tie.length)] : best;
+  return n.wolfTarget;
 }
 
 /** 所有夜间行动者都动了 → 提前结算 */
@@ -471,6 +596,13 @@ function afterDeaths(game, api, deaths, resume) {
     toGame(game, api, { t: 'ww_deaths', deaths: all.map(publicDeath), round: game.round });
     sendKey(api, shooter.key, { t: 'ww_hunter', seat: shooter.seat, deadline: game.pending.deadline });
     syncPlayers(game, api);
+    if (shooter.bot) setTimeout(function () {
+      try {
+        if (games.get(game.id) !== game || game.state !== 'shoot' || !game.pending) return;
+        const t = pick(game.players.filter(x => x.alive && x.key !== shooter.key));
+        handleShoot(api, { deviceId: shooter.key, id: shooter.key, account: null }, { target: t ? t.seat : 0 });
+      } catch (e) { }
+    }, 1200);
     return;
   }
   syncPlayers(game, api);
@@ -535,6 +667,9 @@ function nextSpeaker(game, api) {
     if (p && p.alive) {
       game.deadline = api.now() + game.opts.speechTime * 1000;
       toGame(game, api, { t: 'ww_speech', seat: p.seat, name: p.name, deadline: game.deadline });
+      if (p.bot) setTimeout(function () {
+        try { if (games.get(game.id) === game && game.state === 'speech' && game.speechOrder[game.speechIndex] === p.key) botSpeak(game, api, p); } catch (e) { }
+      }, 1200 + Math.random() * 1500);
       return;
     }
     game.speechIndex++;
@@ -566,6 +701,7 @@ function startVote(game, api) {
     t: 'ww_vote_start', round: game.round, deadline: game.deadline,
     candidates: alivePlayers(game).map(p => ({ seat: p.seat, name: p.name })),
   });
+  scheduleBotVotes(game, api);
 }
 
 function handleVote(api, c, d) {
@@ -737,6 +873,8 @@ function handle(c, d, api) {
       case 'ww_join': joinGame(api, c, d); return true;
       case 'ww_leave': leaveGame(api, c, d); return true;
       case 'ww_kick': kick(api, c, d); return true;
+      case 'ww_addbot': addBot(api, c, d); return true;
+      case 'ww_removebot': removeBot(api, c, d); return true;
       case 'ww_start': startGame(api, c, d); return true;
       case 'ww_action': handleAction(api, c, d); return true;
       case 'ww_shoot': handleShoot(api, c, d); return true;
