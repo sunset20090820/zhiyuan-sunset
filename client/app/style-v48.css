@@ -1356,3 +1356,15 @@ body { height: var(--app-h, 100%); }
 .ww-bots { display: flex; gap: 8px; }
 .ww-bots .flat { flex: 1; }
 .ww-bot { color: var(--accent) !important; }
+/* 游戏内音频控件 */
+.ww-tog { font-size: 17px; }
+.ww-tog.off { opacity: .38; }
+.ww-micbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 46;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px var(--pad) calc(var(--safe-bottom) + 10px); background: var(--bg);
+  border-top: 1px solid var(--line); }
+.ww-mic { width: 100%; max-width: 420px; padding: 13px; border-radius: 26px;
+  background: var(--bg-soft); font-size: 15px; color: var(--text); }
+.ww-mic.on { background: var(--danger); color: #fff; transform: scale(.99); }
+.ww-michint { font-size: 11px; color: var(--sub); }
+.game .ww-body { padding-bottom: calc(var(--safe-bottom) + 96px); }

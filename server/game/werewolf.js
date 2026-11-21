@@ -120,7 +120,13 @@ function newPlayer(api, c, seat, host) {
 }
 
 function alreadyInGame(api, key) {
-  for (const g of games.values()) if (g.players.some(p => p.key === key)) return g;
+  for (const g of games.values()) {
+    const p = g.players.find(x => x.key === key);
+    if (!p) continue;
+    if (p.left) continue;                       // 已退出这一局，不阻挡开新局
+    if (g.state === 'settlement') continue;     // 已结束的局也不阻挡
+    return g;
+  }
   return null;
 }
 
@@ -128,7 +134,12 @@ function joinGame(api, c, d) {
   const game = games.get(String(d.id || ''));
   if (!game) throw new Error('房间不存在');
   const key = keyOf(api, c);
-  const existing = game.players.find(p => p.key === key);
+  let existing = game.players.find(p => p.key === key);
+  if (existing && existing.left) {
+    if (game.state !== 'waiting') throw new Error('你已退出这一局，等这局结束再开新局');
+    game.players = game.players.filter(p => p !== existing);
+    existing = null;
+  }
   if (existing) {
     existing.connected = true; existing.offlineAt = 0; existing.name = c.name || existing.name;
     api.send(c, { t: 'ww_room', game: publicGame(game), you: youOf(game, existing) });
@@ -167,12 +178,24 @@ function leaveGame(api, c, d) {
     api.send(c, { t: 'ww_left' });
     return;
   }
-  // 游戏中离开：视为死亡退出
+  // 游戏中离开：视为死亡退出，并记录「已离开」，之后可以重新建房/加入别的局
   p.connected = false;
-  p.alive = false;
-  p.deadReason = 'quit';
-  afterDeaths(game, api, [p], () => checkAndContinue(game, api));
+  p.left = true;
+  if (p.alive) {
+    p.alive = false;
+    p.deadReason = 'quit';
+    afterDeaths(game, api, [p], () => checkAndContinue(game, api));
+  }
+  // 没有任何真人在场了 → 直接销毁，别让空局占着
+  const humans = game.players.filter(x => !x.bot && !x.left);
+  if (!humans.length) {
+    games.delete(game.id);
+    broadcastRooms(api);
+    api.send(c, { t: 'ww_left' });
+    return;
+  }
   syncPlayers(game, api);
+  broadcastRooms(api);
 }
 
 const BOT_NAMES = ['小狼', '阿福', '老K', '豆豆', '阿飞', '圆圆', '大锤', '七七'];
@@ -677,6 +700,27 @@ function nextSpeaker(game, api) {
   startVote(game, api);
 }
 
+const VOICE_MAX = 700 * 1024;   // base64 后约 500KB，够 10 秒左右 opus
+function handleVoice(api, c, d) {
+  const game = findGameOfPlayer(api, c);
+  if (!game) throw new Error('你不在任何游戏中');
+  const p = game.players.find(x => x.key === keyOf(api, c));
+  if (!p || !p.alive) throw new Error('你已出局，不能发言');
+  const data = String(d.data || '');
+  if (data.indexOf('data:audio/') !== 0) throw new Error('语音格式不支持');
+  if (data.length > VOICE_MAX) throw new Error('语音太长，控制在 10 秒内');
+  const now2 = api.now();
+  p.lastVoiceAt = p.lastVoiceAt || 0;
+  if (now2 - p.lastVoiceAt < 800) throw new Error('慢一点，语音太频繁');
+  p.lastVoiceAt = now2;
+  toGame(game, api, {
+    t: 'ww_voice', seat: p.seat, name: p.name,
+    mime: String(d.mime || 'audio/webm').slice(0, 40),
+    duration: Number(d.duration) || 0, data: data,
+  }, p.key);
+  api.send(c, { t: 'ww_voice_ack' });
+}
+
 function handleSay(api, c, d) {
   const game = findGameOfPlayer(api, c);
   if (!game || game.state !== 'speech') throw new Error('现在不是发言阶段');
@@ -879,6 +923,7 @@ function handle(c, d, api) {
       case 'ww_action': handleAction(api, c, d); return true;
       case 'ww_shoot': handleShoot(api, c, d); return true;
       case 'ww_say': handleSay(api, c, d); return true;
+      case 'ww_voice': handleVoice(api, c, d); return true;
       case 'ww_vote': handleVote(api, c, d); return true;
       default: return false;
     }

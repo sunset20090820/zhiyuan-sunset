@@ -52,6 +52,123 @@
     G._tt = setTimeout(function () { el.classList.remove('show'); }, 2200);
   }
 
+  /* ---------------- 音效 / 法官语音 ---------------- */
+  var SFX = { on: true, judge: true };
+  var actx = null;
+  function ac() {
+    if (!actx) {
+      try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+    }
+    if (actx && actx.state === 'suspended') { try { actx.resume(); } catch (e) {} }
+    return actx;
+  }
+  /** 合成音效，不需要音频文件 */
+  function beep(freq, dur, type, vol) {
+    if (!SFX.on) return;
+    var ctx = ac();
+    if (!ctx) return;
+    try {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type || 'sine';
+      o.frequency.value = freq;
+      g.gain.value = vol == null ? 0.13 : vol;
+      o.connect(g); g.connect(ctx.destination);
+      var t0 = ctx.currentTime;
+      g.gain.setValueAtTime(g.gain.value, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
+  function sfx(name) {
+    switch (name) {
+      case 'night': beep(220, .5, 'sine', .12); setTimeout(function () { beep(165, .7, 'sine', .1); }, 240); break;
+      case 'dawn': beep(520, .22, 'triangle', .12); setTimeout(function () { beep(660, .3, 'triangle', .1); }, 180); break;
+      case 'click': beep(760, .07, 'square', .06); break;
+      case 'vote': beep(420, .12, 'square', .08); break;
+      case 'out': beep(180, .3, 'sawtooth', .1); setTimeout(function () { beep(120, .4, 'sawtooth', .09); }, 200); break;
+      case 'win': [523, 659, 784].forEach(function (f, i) { setTimeout(function () { beep(f, .28, 'triangle', .12); }, i * 140); }); break;
+      case 'lose': [392, 330, 262].forEach(function (f, i) { setTimeout(function () { beep(f, .34, 'sine', .12); }, i * 170); }); break;
+      default: beep(600, .1, 'sine', .08);
+    }
+  }
+  /** 法官语音播报（系统 TTS；不可用时静默跳过） */
+  function judge(text) {
+    if (!SFX.judge || !text) return;
+    try {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.0; u.volume = 1;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function judgeStop() { try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {} }
+
+  /* ---------------- 麦克风（按住说话，游戏内语音） ---------------- */
+  var mic = { rec: null, chunks: [], start: 0, stream: null, timer: null, held: false };
+  function micSupported() {
+    return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+  function micStart() {
+    if (!micSupported()) return toast('这个系统不支持录音');
+    if (mic.held) return;
+    mic.held = true;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      mic.stream = stream;
+      mic.chunks = [];
+      var mime = '';
+      try {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
+        else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm';
+        else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
+      } catch (e) {}
+      try { mic.rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
+      catch (e) { try { mic.rec = new MediaRecorder(stream); } catch (e2) { toast('这台设备不支持录音'); micCleanup(); return; } }
+      mic.rec.ondataavailable = function (e) { if (e.data && e.data.size) mic.chunks.push(e.data); };
+      mic.rec.onstop = function () {
+        var rec = mic.rec;
+        var secs = Math.max(1, Math.round((Date.now() - mic.start) / 1000));
+        var chunks = mic.chunks.slice();
+        micCleanup();
+        if (!chunks.length) return;
+        var blob = new Blob(chunks, { type: (rec && rec.mimeType) || 'audio/webm' });
+        var fr = new FileReader();
+        fr.onload = function () {
+          var data = String(fr.result || '');
+          if (data.length > 700 * 1024) return toast('语音太长，说短一点（≤10 秒）');
+          send({ t: 'ww_voice', data: data, mime: blob.type || 'audio/webm', duration: secs });
+        };
+        fr.readAsDataURL(blob);
+      };
+      mic.start = Date.now();
+      mic.rec.start();
+      sfx('click');
+      mic.timer = setTimeout(function () { if (mic.held) micStop(); }, 10000);   // 最长 10 秒
+    }).catch(function (err) {
+      mic.held = false;
+      var nm = err && err.name || '';
+      toast(nm === 'NotAllowedError' ? '麦克风被拒绝：去系统设置给纸鸢开麦克风权限' : '录音启动失败');
+    });
+  }
+  function micStop() {
+    mic.held = false;
+    clearTimeout(mic.timer);
+    try { if (mic.rec && mic.rec.state === 'recording') mic.rec.stop(); } catch (e) {}
+  }
+  function micCleanup() {
+    try { if (mic.stream) mic.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    mic.stream = null; mic.rec = null; mic.chunks = []; mic.held = false;
+  }
+  /** 播放别人发来的语音 */
+  var voicePlayer = null;
+  function playVoice(d) {
+    try {
+      if (!voicePlayer) { voicePlayer = new Audio(); document.body.appendChild(voicePlayer); }
+      voicePlayer.src = d.data;
+      voicePlayer.play().catch(function () {});
+    } catch (e) {}
+  }
+
   /* ---------------- 页面骨架 ---------------- */
   function ensurePage() {
     if ($('#gamePage')) return;
@@ -62,13 +179,38 @@
       '<header class="topbar game-top">',
       '  <button id="wwBack" class="icon-btn back" type="button" aria-label="返回">‹</button>',
       '  <div class="brand">狼人杀<span id="wwState" class="ww-state"></span></div>',
+      '  <button id="wwSfx" class="icon-btn ww-tog" type="button" aria-label="音效">🔊</button>',
+      '  <button id="wwJudge" class="icon-btn ww-tog" type="button" aria-label="法官语音">🗣️</button>',
       '  <button id="wwRefresh" class="icon-btn" type="button" aria-label="刷新">⟳</button>',
       '</header>',
       '<div id="wwBody" class="ww-body"></div>',
+      '<div id="wwMicBar" class="ww-micbar hidden">' +
+      '  <button id="wwMic" class="ww-mic" type="button">🎤 按住说话</button>' +
+      '  <span class="ww-michint">群聊语音，松开即发送（最长 10 秒）</span>' +
+      '</div>',
       '<div id="wwToast" class="ww-toast"></div>',
     ].join('');
     document.body.appendChild(page);
     $('#wwBack').addEventListener('click', function () { close(); });
+    var micBtn = $('#wwMic');
+    if (micBtn) {
+      micBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); micBtn.classList.add('on'); micStart(); });
+      micBtn.addEventListener('pointerup', function () { micBtn.classList.remove('on'); micStop(); });
+      micBtn.addEventListener('pointercancel', function () { micBtn.classList.remove('on'); micStop(); });
+      micBtn.addEventListener('pointerleave', function () { if (mic.held) { micBtn.classList.remove('on'); micStop(); } });
+    }
+    $('#wwSfx').addEventListener('click', function () {
+      SFX.on = !SFX.on;
+      $('#wwSfx').classList.toggle('off', !SFX.on);
+      $('#wwSfx').textContent = SFX.on ? '🔊' : '🔇';
+      if (SFX.on) sfx('click');
+    });
+    $('#wwJudge').addEventListener('click', function () {
+      SFX.judge = !SFX.judge;
+      $('#wwJudge').classList.toggle('off', !SFX.judge);
+      $('#wwJudge').textContent = SFX.judge ? '🗣️' : '🤐';
+      if (!SFX.judge) judgeStop(); else judge('法官已开启');
+    });
     $('#wwRefresh').addEventListener('click', function () {
       if (G.room) send({ t: 'ww_join', id: G.room.id }); else send({ t: 'ww_list' });
     });
@@ -85,6 +227,8 @@
   function close() {
     var p = $('#gamePage');
     if (p) p.classList.add('hidden');
+    judgeStop();
+    try { if (voicePlayer) voicePlayer.pause(); } catch (e) {}
     G.open = false;
     if (G.room) leaveRoom();
   }
@@ -97,8 +241,16 @@
   }
 
   /* ---------------- 渲染 ---------------- */
+  function syncMicBar() {
+    var bar = $('#wwMicBar');
+    if (!bar) return;
+    var inGame = !!(G.room && G.room.state && G.room.state !== 'waiting' && G.room.state !== 'settlement');
+    bar.classList.toggle('hidden', !inGame);
+  }
+
   function render() {
     if (!G.open) return;
+    syncMicBar();
     var body = $('#wwBody');
     if (!body) return;
     var st = G.room ? (G.room.state || 'waiting') : '';
@@ -368,6 +520,11 @@
     });
   }
 
+  function isWolfSide() {
+    var r = G.you && G.you.role;
+    return r === 'wolf' || r === 'wolfking' || r === 'wolfbeauty';
+  }
+
   /* ---------------- 消息 ---------------- */
   function onMessage(d) {
     switch (d.t) {
@@ -383,25 +540,45 @@
       case 'ww_started': G.room = d.game; G.stage = 'playing'; render(); break;
       case 'ww_wolves': G.mates = d.mates || []; render(); break;
       case 'ww_lover': G.lover = d; render(); break;
-      case 'ww_night': G.night = d; if (d.you && d.you.role) G.you = d.you; G.checkResult = null; render(); break;
+      case 'ww_night':
+        G.night = d; if (d.you && d.you.role) G.you = d.you; G.checkResult = null;
+        sfx('night'); judge('天黑请闭眼，第 ' + (d.round || 1) + ' 天');
+        render(); break;
       case 'ww_witch_info': G.witch = d; render(); break;
       case 'ww_guard_info': G.guard = d; break;
       case 'ww_check_result': G.checkResult = d; render(); break;
       case 'ww_action_ack': if (d.kind === 'poison') { G.witch = null; } if (d.kind === 'save') { G.witch = null; } render(); break;
       case 'ww_deaths': toast('昨晚：' + (d.deaths || []).map(function (x) { return x.seat + ' 号'; }).join('、') + ' 出局'); break;
-      case 'ww_dawn': G.dawn = { deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }) }; render(); break;
+      case 'ww_dawn':
+        G.dawn = { deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }) };
+        sfx('dawn');
+        judge(G.dawn.deaths.length ? ('天亮了，' + G.dawn.deaths.join('号、') + '号出局') : '天亮了，昨晚是平安夜');
+        if (G.dawn.deaths.length) setTimeout(function () { sfx('out'); }, 900);
+        render(); break;
       case 'ww_speech': G.speech = d; render(); break;
       case 'ww_said': toast(d.seat + ' 号：' + (d.text || '')); break;
-      case 'ww_vote_start': G.voteStart = d; render(); break;
+      case 'ww_vote_start':
+        G.voteStart = d; sfx('vote'); judge('请投票'); render(); break;
       case 'ww_vote_result':
         G.voteResult = d;
+        sfx('vote');
+        judge(d.out ? (d.out + '号被放逐') : '平票，本轮无人出局');
         toast(d.out ? (d.out + ' 号被放逐') : '平票，无人出局');
         break;
       case 'ww_flip': toast(d.seat + ' 号翻牌：' + (ROLE_NAME[d.role] || d.role) + '，失去投票权'); break;
       case 'ww_hunter': G.stage = 'shoot'; render(); break;
-      case 'ww_over': G.result = d; G.stage = 'result'; render(); break;
+      case 'ww_over':
+        G.result = d; G.stage = 'result';
+        var iWin = G.result.winner === (isWolfSide() ? 'wolf' : 'good');
+        sfx(iWin ? 'win' : 'lose');
+        judge(iWin ? '你所在的阵营胜利' : '游戏结束');
+        render(); break;
       case 'ww_kicked': toast('你被房主请出了房间'); leaveRoom(); G.stage = ''; render(); break;
       case 'ww_left': G.room = null; G.stage = ''; render(); break;
+      case 'ww_voice':
+        playVoice(d);
+        toast(d.seat + ' 号语音' + (d.duration ? (' ' + d.duration + '″') : ''));
+        break;
       case 'ww_error': toast(d.message || '操作失败'); break;
       default: break;
     }
