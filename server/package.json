@@ -1,0 +1,11 @@
+{
+  "name": "zhiyuan-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "纸鸢聊天服务端（零依赖）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=16" }
+}

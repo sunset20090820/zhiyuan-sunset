@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#517da2">
+<title>纸鸢</title>
+<link rel="stylesheet" href="style-v48.css">
+</head>
+<body>
+
+<!-- ===== 首次启动：注册 / 登录 ===== -->
+<div id="setup" class="setup">
+  <div class="setup-card">
+    <div class="plane">🪁</div>
+    <h1>纸鸢</h1>
+    <p class="setup-sub">轻量聊天，连上就能聊</p>
+
+    <div class="tabs">
+      <button id="tabLogin" class="tab on" type="button">登录</button>
+      <button id="tabRegister" class="tab" type="button">注册</button>
+    </div>
+
+    <!-- 登录 -->
+    <div id="paneLogin">
+      <label class="field"><span>服务器</span>
+        <input id="inServer" maxlength="120" placeholder="ws://114.55.230.190:8080" autocomplete="off" spellcheck="false"></label>
+      <label class="field"><span>用户名</span>
+        <input id="inUser" maxlength="16" placeholder="你的用户名" autocomplete="off"></label>
+      <label class="field"><span>密码</span>
+        <input id="inPass" type="password" maxlength="64" placeholder="密码" autocomplete="off"></label>
+      <p id="loginError" class="form-error hidden"></p>
+      <button id="btnLogin" class="primary" type="button">登录</button>
+      <button id="btnForgot" class="flat" type="button">忘记账号 / 密码？</button>
+    </div>
+
+    <!-- 注册 -->
+    <div id="paneRegister" class="hidden">
+      <label class="field"><span>服务器</span>
+        <input id="regServer" maxlength="120" placeholder="ws://114.55.230.190:8080" autocomplete="off" spellcheck="false"></label>
+      <label class="field"><span>用户名</span>
+        <input id="regUser" maxlength="16" placeholder="2–16 位，中文/字母/数字/下划线" autocomplete="off"></label>
+      <label class="field"><span>昵称</span>
+        <input id="regNick" maxlength="16" placeholder="聊天时显示的名字" autocomplete="off"></label>
+      <label class="field"><span>密码</span>
+        <input id="regPass" type="password" maxlength="64" placeholder="至少 4 位" autocomplete="off"></label>
+      <label class="field"><span>密保问题</span>
+        <input id="regQ" maxlength="40" placeholder="例如：我小学同桌叫什么" autocomplete="off"></label>
+      <label class="field"><span>密保答案</span>
+        <input id="regA" maxlength="40" placeholder="忘记账号时靠它找回" autocomplete="off"></label>
+      <p id="regError" class="form-error hidden"></p>
+      <button id="btnRegister" class="primary" type="button">注册并进入</button>
+      <p class="hint">用户名不能和别人重复；密保答案请记牢，它是找回账号的唯一凭据。</p>
+    </div>
+
+    <!-- 找回 -->
+    <div id="paneForgot" class="hidden">
+      <label class="field"><span>找回方式</span>
+        <select id="forgotMode" class="field-select">
+          <option value="device">我忘了用户名（用本机 + 密保答案）</option>
+          <option value="reset">我忘了密码（用用户名 + 密保答案）</option>
+        </select></label>
+      <div id="forgotUserWrap" class="hidden">
+        <label class="field"><span>用户名</span>
+          <input id="forgotUser" maxlength="16" placeholder="你的用户名" autocomplete="off"></label>
+      </div>
+      <label class="field"><span>密保答案</span>
+        <input id="forgotAnswer" maxlength="40" placeholder="注册时填的答案" autocomplete="off"></label>
+      <label id="forgotNewPassWrap" class="field hidden"><span>新密码</span>
+        <input id="forgotNewPass" type="password" maxlength="64" placeholder="新的密码" autocomplete="off"></label>
+      <button id="btnForgotGo" class="primary" type="button">验证并找回</button>
+      <button id="btnForgotBack" class="flat" type="button">返回登录</button>
+      <p id="forgotResult" class="hint"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 会话列表 ===== -->
+<main id="chats" class="screen">
+  <header class="topbar">
+    <div class="brand">纸鸢 <span id="connDot" class="dot"></span></div>
+    <button id="btnMe" class="icon-btn" aria-label="我">☰</button>
+  </header>
+  <div id="banner" class="banner hidden">未连接服务器 · 重试中…</div>
+  <ul id="roomList" class="list"></ul>
+  <button id="fabNew" class="fab" type="button" aria-label="新建对话">✎</button>
+  <div class="list-foot">长按消息：引用 · @ · 撤回 · 复制</div>
+</main>
+
+<!-- ===== 联系人 ===== -->
+<main id="contacts" class="screen hidden">
+  <header class="topbar">
+    <div class="brand">联系人</div>
+    <button id="btnAddFriend" class="icon-btn" aria-label="添加好友">＋</button>
+  </header>
+  <div class="contact-search">
+    <input id="searchUid" type="text" inputmode="numeric" maxlength="12" placeholder="输入对方的数字 ID 搜索" autocomplete="off">
+    <button id="btnSearchUid" type="button">搜索</button>
+  </div>
+  <div id="searchResult" class="search-result hidden"></div>
+  <div id="pendingBox" class="pending-box hidden"></div>
+  <ul id="friendList" class="list friend-list"></ul>
+  <p id="contactHint" class="hint contact-hint">好友功能需要服务端支持数字 ID 索引</p>
+</main>
+
+<!-- ===== 聊天页 ===== -->
+<section id="chat" class="chat hidden">
+  <header class="chat-top">
+    <button id="btnBack" class="icon-btn back" aria-label="返回">‹</button>
+    <div id="chatAva" class="ava">💬</div>
+    <div class="chat-meta">
+      <div id="chatName" class="chat-name">公共大厅</div>
+      <div id="chatSub" class="chat-sub">连接中…</div>
+    </div>
+    <button id="btnPinRoom" class="pin-btn" type="button" aria-label="置顶会话">📌</button>
+  </header>
+  <div id="msgs" class="msgs"></div>
+  <button id="jumpBtn" class="jump-btn hidden" type="button">↓ 新消息</button>
+  <div id="replyBar" class="reply-bar hidden">
+    <div class="reply-accent"></div>
+    <div class="reply-copy"><strong id="replyName"></strong><span id="replyText"></span></div>
+    <button id="btnCancelReply" class="reply-close" type="button" aria-label="取消引用">×</button>
+  </div>
+  <div id="mentionBox" class="mention-box hidden" role="listbox" aria-label="提及成员"></div>
+  <div id="stickerPanel" class="sticker-panel hidden">
+    <div class="sticker-tabs">
+      <button class="sticker-tab on" data-tab="emoji" type="button">表情</button>
+      <button class="sticker-tab" data-tab="mine" type="button">我的</button>
+      <button id="stickerAdd" class="sticker-tab add" type="button">＋ 添加</button>
+    </div>
+    <div id="stickerGrid" class="sticker-grid"></div>
+  </div>
+  <div id="recordingBar" class="recording-bar hidden">
+    <span class="rec-dot"></span>
+    <span id="recTime">录音中 00:00</span>
+    <span class="rec-tip">点 🎤 结束并发送</span>
+  </div>
+  <form id="composer" class="composer">
+    <button id="btnFile" class="mention-btn" type="button" aria-label="发送文件">📎</button>
+    <button id="btnImage" class="mention-btn" type="button" aria-label="发送图片">🖼</button>
+    <textarea id="text" rows="1" placeholder="消息" autocomplete="off"></textarea>
+    <button id="btnMention" class="mention-btn" type="button" aria-label="提及成员">@</button>
+    <button id="btnSticker" class="mention-btn" type="button" aria-label="表情">😊</button>
+    <button id="btnVoice" class="mention-btn voice-only" type="button" aria-label="发送语音">🎤</button>
+    <button id="btnSend" type="submit" class="send text-only" aria-label="发送">➤</button>
+  </form>
+  <input id="fileInput" type="file" accept="image/*" class="hidden">
+  <input id="docInput" type="file" class="hidden">
+  <input id="avatarInput" type="file" accept="image/*" class="hidden">
+</section>
+
+<!-- 会话长按菜单 -->
+<div id="roomSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true">
+    <div class="action-grip"></div>
+    <h3 class="remark-title" id="roomSheetTitle">会话</h3>
+    <button id="roomPin" class="action-item" type="button"><span>📌</span>置顶</button>
+    <button id="roomRemove" class="action-item" type="button"><span>🗑</span>删除会话</button>
+    <button id="roomBlock" class="action-item danger" type="button"><span>🚫</span>拉黑</button>
+    <button id="roomCancel" class="action-cancel" type="button">取消</button>
+  </div>
+</div>
+
+<!-- 黑名单 -->
+<div id="blockPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="blockBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">黑名单</div>
+    <span></span>
+  </header>
+  <div class="me-body">
+    <div class="me-group">
+      <div id="blockedUsers"></div>
+    </div>
+    <div class="me-group">
+      <div id="blockedGroups"></div>
+    </div>
+    <p class="hint">被拉黑的人不能加你、不能给你发消息；被拉黑的群不再向你推送。</p>
+  </div>
+</div>
+
+<!-- 新建对话 -->
+<div id="dmSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="新建对话">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">新建对话</h3>
+    <p class="remark-sub">选择一个人开始私聊</p>
+    <div id="dmList" class="pick-list"></div>
+    <button id="dmNewGroup" class="action-item" type="button"><span>👥</span>新建群聊</button>
+    <button id="dmCancel" class="action-cancel" type="button">取消</button>
+  </div>
+</div>
+
+<!-- 消息长按操作 -->
+<div id="msgActions" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭操作菜单"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="消息操作">
+    <div class="action-grip"></div>
+    <div id="actionPreview" class="action-preview"></div>
+    <button id="actionReply" class="action-item" type="button"><span>↩</span>引用回复</button>
+    <button id="actionMention" class="action-item" type="button"><span>@</span>提及此人</button>
+    <button id="actionRetract" class="action-item danger hidden" type="button"><span>↶</span>撤回消息</button>
+    <button id="actionSticker" class="action-item hidden" type="button"><span>☆</span>存为表情</button>
+    <button id="actionCopy" class="action-item" type="button"><span>▢</span>复制文字</button>
+    <button id="actionCancel" class="action-cancel" type="button">取消</button>
+  </div>
+</div>
+
+<!-- 点头像 / 点昵称的操作 -->
+<div id="peerActions" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true">
+    <div class="action-grip"></div>
+    <div class="peer-head">
+      <div id="peerAva" class="peer-ava"></div>
+      <div class="peer-meta">
+        <strong id="peerName"></strong>
+        <span id="peerSub"></span>
+      </div>
+    </div>
+    <button id="peerDm" class="action-item" type="button"><span>✉</span>发私信</button>
+    <button id="peerMention" class="action-item" type="button"><span>@</span>提及此人</button>
+    <button id="peerRemark" class="action-item" type="button"><span>✎</span>设置备注</button>
+    <button id="peerCancel" class="action-cancel" type="button">取消</button>
+  </div>
+</div>
+
+<!-- 群成员管理 -->
+<div id="groupPanel" class="me-page hidden">
+  <header class="topbar">
+    <button id="gpBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand" id="gpTitle">群成员</div>
+    <button id="gpInvite" class="logout-chip" type="button">＋ 拉人</button>
+  </header>
+  <div class="me-body">
+    <p class="hint" id="gpHint">只有群主能拉人和踢人</p>
+    <div id="gpList"></div>
+  </div>
+</div>
+
+<!-- 新建群聊 -->
+<div id="groupSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="新建群聊">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">新建群聊</h3>
+    <p class="remark-sub">起个名字，勾上要拉进群的人</p>
+    <input id="groupName" class="remark-input" maxlength="20" placeholder="群名称，例如：周末吃饭" autocomplete="off">
+    <div id="groupMembers" class="pick-list"></div>
+    <button id="groupCreate" class="primary" type="button">创建群聊</button>
+    <button id="groupCancel" class="action-cancel" type="button">取消</button>
+  </div>
+</div>
+
+<!-- 备注输入 -->
+<div id="remarkSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="设置备注">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">设置备注</h3>
+    <p class="remark-sub">只改你自己看到的称呼，不影响对方</p>
+    <input id="remarkInput" class="remark-input" maxlength="16" placeholder="例如：老王" autocomplete="off">
+    <button id="remarkSave" class="primary" type="button">保存</button>
+    <button id="remarkClear" class="flat" type="button">清除备注</button>
+    <button id="remarkCancel" class="action-cancel" type="button">取消</button>
+  </div>
+</div>
+
+<!-- 存储管理器 -->
+<div id="storagePage" class="storage-page hidden">
+  <header class="topbar">
+    <button id="storageBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">存储管理</div>
+    <button id="storageAll" class="icon-btn" type="button" aria-label="全部清空">🗑</button>
+  </header>
+  <div class="storage-body">
+    <div id="storageSummary" class="storage-summary"></div>
+    <div class="storage-group">
+      <h3>聊天记录</h3>
+      <div id="storageChats"></div>
+    </div>
+    <div class="storage-group">
+      <h3>其他数据</h3>
+      <div id="storageOthers"></div>
+    </div>
+    <p class="hint">清空只是删本机数据，服务器上的消息不受影响。</p>
+  </div>
+</div>
+
+<!-- ===== 我的（独立页面，不依赖浮层）===== -->
+<div id="mePage" class="me-page hidden">
+  <header class="topbar">
+    <button id="meBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">我的</div>
+    <button id="btnLogout" class="logout-chip" type="button">退出登录</button>
+  </header>
+  <div class="me-body">
+    <div class="me-card">
+      <div id="meAvatar" class="me-avatar">🪁</div>
+      <div class="me-meta"><strong id="meName">未登录</strong><span id="meUser"></span>
+        <span id="meUid" class="me-uid">我的 ID：--</span></div>
+    </div>
+
+    <div class="me-group">
+      <button id="btnNewGroup" class="me-row" type="button"><span class="me-ico">👥</span>新建群聊<span class="me-arrow">›</span></button>
+      <button id="btnTheme" class="me-row" type="button"><span class="me-ico">🌗</span>深色 / 浅色<span class="me-arrow">›</span></button>
+      <button id="btnAvatar" class="me-row" type="button"><span class="me-ico">🖼</span>更换头像<span class="me-arrow">›</span></button>
+      <button id="btnCheckUpdate" class="me-row" type="button"><span class="me-ico">🔄</span>检查更新<span class="me-arrow">›</span></button>
+      <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
+      <button id="btnStorage" class="me-row" type="button"><span class="me-ico">🗂</span>存储管理<span class="me-arrow">›</span></button>
+      <button id="btnNewChatRow" class="me-row" type="button"><span class="me-ico">✎</span>新建对话<span class="me-arrow">›</span></button>
+    </div>
+
+    <div class="me-group">
+      <label class="field"><span>昵称</span>
+        <input id="setNick" maxlength="16" autocomplete="off"></label>
+      <label class="field"><span>服务器</span>
+        <input id="setServer" maxlength="120" autocomplete="off" spellcheck="false"></label>
+      <button id="btnSave" class="primary" type="button">保存并重连</button>
+    </div>
+
+    <div class="me-group">
+      <div class="me-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+        <span style="font-size:14px">登录状态诊断</span>
+        <span id="meDiag" style="font-size:12px;color:var(--tg-sub);line-height:1.6">-</span>
+      </div>
+      <button id="btnFlush" class="me-row" type="button"><span class="me-ico">💾</span>立即保存登录状态<span class="me-arrow">›</span></button>
+    </div>
+
+    <p class="hint" id="verLine">纸鸢</p>
+  </div>
+</div>
+
+<!-- 图片查看器 -->
+<div id="imgViewer" class="img-viewer hidden">
+  <div class="viewer-head">
+    <button id="viewerClose" class="viewer-btn" type="button" aria-label="关闭">✕</button>
+    <span id="viewerHint" class="viewer-hint">双指缩放 · 双击放大</span>
+  </div>
+  <img id="viewerImg" class="viewer-img" alt="">
+</div>
+
+<nav id="tabbar" class="tabbar">
+  <button class="tab-item on" data-tab="chats" type="button"><span class="tab-ico">💬</span>对话</button>
+  <button class="tab-item" data-tab="contacts" type="button"><span class="tab-ico">👥</span>联系人</button>
+  <button class="tab-item" data-tab="me" type="button"><span class="tab-ico">☰</span>我的</button>
+</nav>
+
+<!-- 发现新版本 -->
+<div id="updateSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="发现新版本">
+    <div class="action-grip"></div>
+    <h3 class="remark-title" id="updTitle">发现新版本</h3>
+    <p class="remark-sub" id="updNotes">建议更新。</p>
+    <button id="updGo" class="primary" type="button">立即更新</button>
+    <button id="updLater" class="flat" type="button">以后再说</button>
+    <button id="updClose" class="action-cancel" type="button">关闭</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="version.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
