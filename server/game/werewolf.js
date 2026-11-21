@@ -757,6 +757,21 @@ function handleSay(api, c, d) {
   nextSpeaker(game, api);
 }
 
+/** 跳过当前发言（本人或房主） */
+function handleSkipSpeech(api, c, d) {
+  const game = findGameOfPlayer(api, c);
+  if (!game || game.state !== 'speech') throw new Error('现在不是发言阶段');
+  const p = game.players.find(x => x.key === keyOf(api, c));
+  if (!p) throw new Error('你不在这一局');
+  const curKey = game.speechOrder[game.speechIndex];
+  const isHost = p.seat === game.hostSeat;
+  if (p.key !== curKey && !isHost) throw new Error('只能跳过自己的发言');
+  const cur = game.players.find(x => x.key === curKey);
+  if (cur) toGame(game, api, { t: 'ww_said', seat: cur.seat, name: cur.name, text: '（跳过发言）', skipped: true });
+  game.speechIndex++;
+  nextSpeaker(game, api);
+}
+
 /* ---------------- 投票 ---------------- */
 function startVote(game, api) {
   game.state = 'vote';
@@ -791,6 +806,14 @@ function handleVote(api, c, d) {
 }
 
 function resolveVote(game, api) {
+  if (game.state !== 'vote' || game._resolvingVote) return;
+  game._resolvingVote = true;
+  try { doResolveVote(game, api); }
+  catch (e) { game._resolvingVote = false; throw e; }
+  game._resolvingVote = false;
+}
+
+function doResolveVote(game, api) {
   const tally = {};
   for (const [voter, target] of Object.entries(game.votes)) {
     if (target === 'skip') continue;
@@ -881,12 +904,23 @@ function tick(api) {
       continue;
     }
     if (game.pending && t > game.pending.deadline) { resumePending(game, api); continue; }
-    if (!game.deadline || t <= game.deadline) continue;
+    // 兜底：deadline 丢失（0 / 未设置）时补一个，避免整局卡死
+    if (!game.deadline) { game.deadline = t + 15000; continue; }
+    if (t <= game.deadline) continue;
     switch (game.state) {
       case 'night': finishNight(game, api); break;
       case 'dawn': beginSpeech(game, api); break;
-      case 'speech': game.speechIndex++; nextSpeaker(game, api); break;
-      case 'vote': resolveVote(game, api); break;
+      case 'speech':
+        game.speechIndex++;
+        nextSpeaker(game, api);
+        break;
+      case 'vote': {
+        const voters = alivePlayers(game).filter(x => x.canVote && !x.bot).map(x => x.key);
+        const everyoneVoted = voters.every(k => game.votes[k] !== undefined);
+        resolveVote(game, api);
+        if (everyoneVoted) break;
+        break;
+      }
       default: break;
     }
   }
@@ -944,6 +978,7 @@ function handle(c, d, api) {
       case 'ww_action': handleAction(api, c, d); return true;
       case 'ww_shoot': handleShoot(api, c, d); return true;
       case 'ww_say': handleSay(api, c, d); return true;
+      case 'ww_skip_speech': handleSkipSpeech(api, c, d); return true;
       case 'ww_voice': handleVoice(api, c, d); return true;
       case 'ww_audio': handleAudioFrame(api, c, d); return true;
       case 'ww_vote': handleVote(api, c, d); return true;

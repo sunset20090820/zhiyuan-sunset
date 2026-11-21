@@ -472,12 +472,14 @@
       }
     } else if (st === 'speech') {
       var mine = G.speech && G.you && G.speech.seat === G.you.seat;
+      var amHost = (G.room.players || []).some(function (p) { return G.you && p.seat === G.you.seat && p.host; });
       panel = '<div class="ww-actions">' +
-        (mine ? '<div class="ww-tip on">轮到你了，直接说话（实时语音已开）</div>' : '<div class="ww-tip">听 ' + (G.speech ? G.speech.seat + ' 号' : '') + ' 发言</div>') +
+        (mine ? '<div class="ww-tip on">轮到你了，直接说话（已开麦）</div>' : '<div class="ww-tip">听 ' + (G.speech ? G.speech.seat + ' 号' : '') + ' 发言</div>') +
+        ((mine || amHost) ? '<button id="wwSkipSay" class="ww-btn ghost" type="button">跳过发言</button>' : '') +
         '</div>';
     } else if (st === 'vote') {
       panel = '<div class="ww-actions">' +
-        '<div class="ww-tip">点头像选人，再按投票</div>' +
+        '<div class="ww-tip">点头像选人，再按投票（不能投自己）</div>' +
         '<button id="wwVoteBtn" class="ww-btn main" type="button" disabled>投票</button>' +
         '<button id="wwSkip" class="ww-btn ghost" type="button">弃票</button></div>';
     } else if (st === 'shoot') {
@@ -499,6 +501,7 @@
         var seat = Number(el.getAttribute('data-seat'));
         if (st === 'night') return nightClick(seat);
         if (st === 'vote') {
+          if (G.you && seat === G.you.seat) { toast('不能投自己'); return; }
           chosenSeat = seat;
           Array.prototype.forEach.call(document.querySelectorAll('#wwBody .ww-p.chosen'), function (x) { x.classList.remove('chosen'); });
           el.classList.add('chosen');
@@ -514,6 +517,7 @@
       if ($('#wwSkip')) $('#wwSkip').addEventListener('click', function () { send({ t: 'ww_vote', target: 'skip' }); });
     }
     if (st === 'shoot' && $('#wwGiveup')) $('#wwGiveup').addEventListener('click', function () { send({ t: 'ww_shoot', target: 0 }); });
+    if (st === 'speech' && $('#wwSkipSay')) $('#wwSkipSay').addEventListener('click', function () { send({ t: 'ww_skip_speech' }); });
     Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-act]'), function (b) {
       b.addEventListener('click', function () {
         var act = b.getAttribute('data-act');
@@ -527,6 +531,15 @@
     startCountdown();
   }
 
+  /* 投票/发言兜底提示：服务器到点会自动推进，避免误以为卡住 */
+  function voteHint() {
+    if (!G.room || !G.room.deadline) return;
+    var left = Math.round((G.room.deadline - Date.now()) / 1000);
+    if (G.room.state === 'vote' && left <= 0) {
+      toast('投票时间到，正在结算…');
+    }
+  }
+
   /* 倒计时 */
   var cdTimer = null;
   function startCountdown() {
@@ -536,7 +549,7 @@
     var tick = function () {
       var left = Math.max(0, Math.round((G.room.deadline - Date.now()) / 1000));
       el.textContent = left > 0 ? (left + '″') : '';
-      if (left <= 0) clearInterval(cdTimer);
+      if (left <= 0) { clearInterval(cdTimer); voteHint(); }
     };
     tick();
     cdTimer = setInterval(tick, 500);
@@ -691,7 +704,10 @@
         G.speech = d;
         if (G.room) { G.room.state = 'speech'; G.room.deadline = d.deadline || 0; }
         render(); break;
-      case 'ww_said': toast(d.seat + ' 号：' + (d.text || '')); break;
+      case 'ww_said':
+        toast(d.seat + ' 号：' + (d.text || ''));
+        if (d.skipped) { G._lastSaid = null; render(); }
+        break;
       case 'ww_vote_start':
         G.voteStart = d;
         if (G.room) { G.room.state = 'vote'; G.room.deadline = d.deadline || 0; }
