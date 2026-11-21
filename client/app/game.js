@@ -17,6 +17,7 @@
     shoot: null, result: null,
     toastMsg: '',
     micPerm: { ok: false, scope: null, reason: '' },
+    wolfPicks: null,     // { votes:[{seat,target,picked}], agreed, target }
     timer: null,
   };
 
@@ -447,11 +448,19 @@
       var cls = 'ww-p' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (speak ? ' speaking' : '') +
         (p.justDied ? ' dying' : '') +
         (p.connected === false ? ' off' : '') + (p.bot ? ' bot' : '');
+      var pickTag = '';
+      if (G.wolfPicks && G.wolfPicks.votes) {
+        var mine = G.wolfPicks.votes.filter(function (v) { return v.target === p.seat && v.picked; });
+        if (mine.length) {
+          pickTag = '<i class="ww-p-pick">' + mine.map(function (v) { return v.seat; }).join('/') + ' 刀</i>';
+        }
+      }
       return '<div class="' + cls + '" style="left:' + x.toFixed(2) + '%;top:' + y.toFixed(2) + '%;width:' + seatW + '%" data-seat="' + p.seat + '">' +
         '<div class="ww-p-ava">' + (p.seat) + '</div>' +
         '<div class="ww-p-name">' + esc(p.name) + '</div>' +
         (p.host ? '<i class="ww-p-badge">房主</i>' : '') +
         (speak ? '<i class="ww-p-mic">🎙</i>' : '') +
+        pickTag +
         '</div>';
     }).join('');
     return '<div class="ww-table">' +
@@ -500,6 +509,16 @@
     var panel = '';
 
     if (st === 'night') {
+      var wolfInfo = '';
+      if (G.wolfPicks && (role === 'wolf' || role === 'wolfking' || role === 'wolfbeauty')) {
+        var lines = (G.wolfPicks.votes || []).map(function (v) {
+          return v.seat + '号' + (v.picked ? ('→' + v.target + '号') : '→ 未选');
+        }).join('　');
+        var state = G.wolfPicks.agreed ? ('统一刀 ' + G.wolfPicks.target + ' 号')
+          : (G.wolfPicks.allPicked ? '意见不一致 → 空刀' : '等待队友选择…');
+        wolfInfo = '<div class="ww-wolfinfo"><div>' + lines + '</div><div class="' +
+          (G.wolfPicks.agreed ? 'ok' : 'warn') + '">' + state + '</div></div>';
+      }
       if (role === 'witch' && G.witch) {
         panel = '<div class="ww-actions">' +
           '<div class="ww-tip">' + (G.witch.killed ? ('今晚 ' + G.witch.killed + ' 号被刀') : '今晚没人被刀') + '</div>' +
@@ -507,7 +526,7 @@
           (G.witch.canPoison ? '<button class="ww-btn" data-act="poison" type="button">用毒药' + (G._poisonSeat ? ('（' + G._poisonSeat + ' 号）') : '') + '</button>' : '') +
           '<button class="ww-btn ghost" data-act="witch_none" type="button">不用药</button></div>';
       } else {
-        panel = '<div class="ww-actions"><div class="ww-tip">' + actionHint(role) + '</div></div>';
+        panel = '<div class="ww-actions">' + wolfInfo + '<div class="ww-tip">' + actionHint(role) + '</div></div>';
       }
     } else if (st === 'speech') {
       var mine = G.speech && G.you && G.speech.seat === G.you.seat;
@@ -787,6 +806,7 @@
       case 'ww_lover': G.lover = d; render(); break;
       case 'ww_night':
         G.night = d; if (d.you && d.you.role) G.you = d.you; G.checkResult = null;
+        G.wolfPicks = null;
         fx('night');
         if (G.room) { G.room.state = 'night'; G.room.round = d.round || G.room.round; G.room.deadline = d.deadline || 0; }
         sfx('night'); judge('天黑请闭眼，第 ' + (d.round || 1) + ' 天');
@@ -865,6 +885,11 @@
         render(); break;
       case 'ww_kicked': toast('你被房主请出了房间'); leaveRoom(); G.stage = ''; render(); break;
       case 'ww_left': G.room = null; G.stage = ''; render(); break;
+      case 'ww_wolf_pick':
+        G.wolfPicks = d;
+        sfx('seat');
+        render();
+        break;
       case 'ww_mic_perm':
         G.micPerm = { ok: !!d.ok, scope: d.scope || null, reason: d.reason || '' };
         if (!G.micPerm.ok && RT.on) rtStop();

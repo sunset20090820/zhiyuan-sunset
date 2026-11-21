@@ -304,9 +304,11 @@ function botNight(game, api, p) {
   if (!n) return;
   const alive = game.players.filter(x => x.alive && x.key !== p.key);
   if (isWolf(p.role) && !n.wolfVotes[p.key]) {
-    // 优先刀非狼，其次随机
-    const t = pick(alive.filter(x => !isWolf(x.role))) || pick(alive);
-    if (t) { n.wolfVotes[p.key] = t.key; n.acted[p.key] = true; recomputeWolfTarget(n); }
+    // 人机狼跟随队友已选的目标（多数一致，避免随机空刀），没有队友选择时随机
+    const picked = Object.values(n.wolfVotes).map(k => game.players.find(x => x.key === k)).filter(Boolean);
+    const t = pick(picked.filter(x => x.alive && !isWolf(x.role))) ||
+      pick(alive.filter(x => !isWolf(x.role))) || pick(alive);
+    if (t) { n.wolfVotes[p.key] = t.key; n.acted[p.key] = true; recomputeWolfTarget(game); }
   } else if (p.role === 'seer' && !n.acted[p.key]) {
     const t = pick(alive);
     if (t) { n.seerTarget = t.key; n.seerResult = isWolf(t.role) ? 'wolf' : 'good'; n.acted[p.key] = true; }
@@ -452,7 +454,15 @@ function handleAction(api, c, d) {
     if (!targetSeat || !playerAt(game, targetSeat) || !playerAt(game, targetSeat).alive) throw new Error('目标不合法');
     n.wolfVotes[p.key] = playerAt(game, targetSeat).key;
     n.acted[p.key] = true;
-    recomputeWolfTarget(n);
+    recomputeWolfTarget(game);
+    const dec = wolfDecision(game);
+    for (const w of game.players) {
+      if (!w.alive || !isWolf(w.role)) continue;
+      sendKey(api, w.key, {
+        t: 'ww_wolf_pick', round: game.round, seat: p.seat, target: targetSeat,
+        votes: dec.votes, agreed: dec.agreed, allPicked: dec.allPicked, target: dec.targetSeat,
+      });
+    }
     // 注意：狼人全部行动后不能直接结算夜晚，还要等预言家/女巫/守卫
     maybeAdvance(game, api);
     api.send(c, { t: 'ww_action_ack', kind, target: targetSeat });
@@ -532,17 +542,43 @@ function handleAction(api, c, d) {
   throw new Error('未知操作');
 }
 
-/** 狼刀按多数，平票随机取一票 */
-function recomputeWolfTarget(n) {
+/**
+ * 狼刀决议：少数服从多数。
+ *  - 全员选同一目标 → 刀他
+ *  - 出现分歧（含两狼各选一个）→ 空刀
+ * votes 供狼队友互相查看各自选了谁
+ */
+function wolfDecision(game) {
+  const n = game.night;
+  const wolves = game.players.filter(p => p.alive && p.connected && isWolf(p.role));
+  const picks = wolves.map(w => ({
+    seat: w.seat, name: w.name,
+    target: n.wolfVotes[w.key] ? seatOf(game, n.wolfVotes[w.key]) : 0,
+    picked: !!n.wolfVotes[w.key],
+  }));
+  const allPicked = picks.length > 0 && picks.every(x => x.picked);
   const tally = {};
   Object.values(n.wolfVotes).forEach(k => { tally[k] = (tally[k] || 0) + 1; });
-  let best = null, bestN = 0, tie = [];
-  for (const [k, v] of Object.entries(tally)) {
-    if (v > bestN) { best = k; bestN = v; tie = [k]; }
-    else if (v === bestN) tie.push(k);
+  const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  let targetKey = null, agreed = false;
+  if (allPicked && entries.length) {
+    const top = entries[0][1];
+    const topList = entries.filter(e => e[1] === top);
+    if (topList.length === 1) { targetKey = topList[0][0]; agreed = true; }   // 多数一致
   }
-  n.wolfTarget = tie.length > 1 ? tie[Math.floor(Math.random() * tie.length)] : best;
-  return n.wolfTarget;
+  return {
+    targetKey, agreed, allPicked,
+    targetSeat: targetKey ? seatOf(game, targetKey) : 0,
+    votes: picks,
+    tally: entries.map(e => ({ seat: seatOf(game, e[0]), votes: e[1] })),
+  };
+}
+
+function recomputeWolfTarget(game) {
+  const d = wolfDecision(game);
+  game.night.wolfTarget = d.targetKey;     // null = 空刀 / 还没定
+  game.night.wolfAgreed = d.agreed;
+  return d.targetKey;
 }
 
 /** 所有夜间行动者都动了 → 提前结算 */
