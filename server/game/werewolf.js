@@ -49,7 +49,10 @@ function aliveVillagers(game) { return game.players.filter(p => p.alive && p.rol
 
 function publicPlayer(p) {
   return {
-    seat: p.seat, name: p.name, alive: p.alive, connected: p.connected, bot: !!p.bot,
+    seat: p.seat, name: p.name,
+    // 夜里刚死的人对外仍显示存活，避免提前剧透（天亮时再公开）
+    alive: p.deathHidden ? true : p.alive,
+    connected: p.connected, bot: !!p.bot,
     role: p.revealed ? p.role : undefined,   // 只在白痴翻牌/结算后出现
     host: !!p.host,
   };
@@ -596,6 +599,8 @@ function finishNight(game, api) {
 
 function markDeath(game, p, reason, note) {
   p.alive = false; p.deadReason = reason; p.deadNote = note || '';
+  // 夜晚阶段死亡：对外隐藏，等天亮公开
+  if (game.state === 'night' && (reason === 'killed' || reason === 'poisoned')) p.deathHidden = true;
   // 情侣殉情
   if (game.lovers.includes(p.key)) {
     const otherKey = game.lovers.find(k => k !== p.key);
@@ -630,7 +635,7 @@ function afterDeaths(game, api, deaths, resume) {
       kind: 'shoot', seat: shooter.seat, key: shooter.key, role: shooter.role,
       deadline: api.now() + 20 * 1000, resume,
     };
-    toGame(game, api, { t: 'ww_deaths', deaths: all.map(publicDeath), round: game.round });
+    if (game.state !== 'night') toGame(game, api, { t: 'ww_deaths', deaths: all.map(publicDeath), round: game.round });
     sendKey(api, shooter.key, { t: 'ww_hunter', seat: shooter.seat, deadline: game.pending.deadline });
     syncPlayers(game, api);
     if (shooter.bot) setTimeout(function () {
@@ -643,7 +648,10 @@ function afterDeaths(game, api, deaths, resume) {
     return;
   }
   syncPlayers(game, api);
-  if (all.length) toGame(game, api, { t: 'ww_deaths', deaths: all.map(publicDeath), round: game.round });
+  // 夜晚死亡不单独广播，统一由天亮事件公布
+  if (all.length && game.state !== 'night') {
+    toGame(game, api, { t: 'ww_deaths', deaths: all.map(publicDeath), round: game.round });
+  }
   resume();
 }
 
@@ -679,10 +687,19 @@ function handleShoot(api, c, d) {
 /* ---------------- 天亮 / 发言 ---------------- */
 function dawn(game, api) {
   game.state = 'dawn';
+  // 天亮：解除死亡隐藏，这一刻才让所有人看到谁出局
+  for (const p of game.players) if (p.deathHidden) { p.deathHidden = false; p.justDied = true; }
   pushMicRule(game, api);
   const deaths = (game.lastNightDeaths || []).slice();
   game.deadline = api.now() + 12 * 1000;
-  toGame(game, api, { t: 'ww_dawn', round: game.round, deaths, deadline: game.deadline });
+  const deathInfo = game.players.filter(p => p.justDied).map(p => ({ seat: p.seat, name: p.name, reason: p.deadReason }));
+  for (const p of game.players) p.justDied = false;
+  toGame(game, api, {
+    t: 'ww_dawn', round: game.round,
+    deaths: deaths,
+    detail: deathInfo,
+    deadline: game.deadline,
+  });
   syncPlayers(game, api);
 }
 
@@ -727,9 +744,6 @@ function micRule(game, p) {
   if (st === 'speech') {
     const curKey = game.speechOrder[game.speechIndex];
     const cur = game.players.find(x => x.key === curKey);
-    if (p.seat === game.hostSeat) {
-      return { ok: true, scope: 'all', reason: '发言阶段（房主可开麦）' };
-    }
     if (p.key === curKey) return { ok: true, scope: 'all', reason: '轮到你发言' };
     return { ok: false, scope: null, reason: '现在是 ' + (cur ? cur.seat : '') + ' 号发言，请等轮到你' };
   }

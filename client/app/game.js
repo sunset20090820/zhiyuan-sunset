@@ -83,6 +83,12 @@
   function sfx(name) {
     switch (name) {
       case 'night': beep(220, .5, 'sine', .12); setTimeout(function () { beep(165, .7, 'sine', .1); }, 240); break;
+      case 'deal': [392, 523, 659, 784].forEach(function (f, i) { setTimeout(function () { beep(f, .16, 'triangle', .1); }, i * 90); }); break;
+      case 'seat': beep(880, .05, 'sine', .05); break;
+      case 'turn': beep(660, .12, 'sine', .12); setTimeout(function () { beep(880, .18, 'sine', .1); }, 120); break;
+      case 'death': beep(140, .5, 'sawtooth', .11); break;
+      case 'wolf': beep(110, .55, 'sawtooth', .09); setTimeout(function () { beep(98, .5, 'sawtooth', .07); }, 200); break;
+      case 'flip': beep(520, .1, 'square', .09); setTimeout(function () { beep(300, .16, 'square', .08); }, 100); break;
       case 'dawn': beep(520, .22, 'triangle', .12); setTimeout(function () { beep(660, .3, 'triangle', .1); }, 180); break;
       case 'click': beep(760, .07, 'square', .06); break;
       case 'vote': beep(420, .12, 'square', .08); break;
@@ -277,6 +283,17 @@
     if (hint) hint.textContent = (G.micPerm && G.micPerm.reason) || '';
   }
 
+  /** 全屏一次性动画：flash（白闪）/ night（天黑遮罩）/ wolf（狼人） */
+  function fx(kind) {
+    try {
+      var el = document.createElement('div');
+      el.className = 'ww-fx ww-fx-' + kind;
+      document.body.appendChild(el);
+      setTimeout(function () { el.classList.add('go'); }, 20);
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1100);
+    } catch (e) {}
+  }
+
   /* ---------------- 页面骨架 ---------------- */
   function ensurePage() {
     if ($('#gamePage')) return;
@@ -428,6 +445,7 @@
       var me = G.you && G.you.seat === p.seat;
       var speak = G.speech && G.speech.seat === p.seat;
       var cls = 'ww-p' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (speak ? ' speaking' : '') +
+        (p.justDied ? ' dying' : '') +
         (p.connected === false ? ' off' : '') + (p.bot ? ' bot' : '');
       return '<div class="' + cls + '" style="left:' + x.toFixed(2) + '%;top:' + y.toFixed(2) + '%;width:' + seatW + '%" data-seat="' + p.seat + '">' +
         '<div class="ww-p-ava">' + (p.seat) + '</div>' +
@@ -735,6 +753,11 @@
     }
   }
 
+  function isWolfSide() {
+    var r = G.you && G.you.role;
+    return r === 'wolf' || r === 'wolfking' || r === 'wolfbeauty';
+  }
+
   /* ---------------- 消息 ---------------- */
   function onMessage(d) {
     switch (d.t) {
@@ -753,11 +776,18 @@
           render();
         }
         break;
-      case 'ww_started': G.room = d.game; G.stage = 'playing'; render(); break;
-      case 'ww_wolves': G.mates = d.mates || []; render(); break;
+      case 'ww_started':
+        G.room = d.game; G.stage = 'playing';
+        sfx('deal'); fx('flash');
+        render(); break;
+      case 'ww_wolves':
+        G.mates = d.mates || [];
+        if (G.mates.length) { sfx('wolf'); fx('wolf'); }
+        render(); break;
       case 'ww_lover': G.lover = d; render(); break;
       case 'ww_night':
         G.night = d; if (d.you && d.you.role) G.you = d.you; G.checkResult = null;
+        fx('night');
         if (G.room) { G.room.state = 'night'; G.room.round = d.round || G.room.round; G.room.deadline = d.deadline || 0; }
         sfx('night'); judge('天黑请闭眼，第 ' + (d.round || 1) + ' 天');
         render(); break;
@@ -772,16 +802,34 @@
           render();
         }
         break;
-      case 'ww_deaths': toast('昨晚：' + (d.deaths || []).map(function (x) { return x.seat + ' 号'; }).join('、') + ' 出局'); break;
+      case 'ww_deaths':
+        sfx('death');
+        if (G.room && G.room.state === 'dawn') {
+          toast('昨晚：' + (d.deaths || []).map(function (x) { return x.seat + ' 号'; }).join('、') + ' 出局');
+        }
+        break;
       case 'ww_dawn':
-        G.dawn = { deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }) };
+        G.dawn = {
+          deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }),
+          detail: d.detail || [],
+        };
+        // 给本回合出局的人打上动画标记，播完再清
+        if (G.room && G.room.players) {
+          var died = {};
+          (d.detail || []).forEach(function (x) { died[x.seat] = true; });
+          G.room.players.forEach(function (pp) { pp.justDied = !!died[pp.seat]; });
+          setTimeout(function () {
+            if (G.room && G.room.players) G.room.players.forEach(function (pp) { pp.justDied = false; });
+          }, 1400);
+        }
         if (G.room) { G.room.state = 'dawn'; G.room.deadline = d.deadline || 0; }
-        sfx('dawn');
+        sfx('dawn'); fx('flash');
         judge(G.dawn.deaths.length ? ('天亮了，' + G.dawn.deaths.join('号、') + '号出局') : '天亮了，昨晚是平安夜');
         if (G.dawn.deaths.length) setTimeout(function () { sfx('out'); }, 900);
         render(); break;
       case 'ww_speech':
         G.speech = d;
+        if (G.you && d.seat === G.you.seat) { sfx('turn'); }
         if (G.room) { G.room.state = 'speech'; G.room.deadline = d.deadline || 0; }
         render(); break;
       case 'ww_said':
@@ -799,7 +847,10 @@
         toast(d.out ? (d.out + ' 号被放逐') : '平票，无人出局');
         render();
         break;
-      case 'ww_flip': toast(d.seat + ' 号翻牌：' + (ROLE_NAME[d.role] || d.role) + '，失去投票权'); break;
+      case 'ww_flip':
+        sfx('flip');
+        toast(d.seat + ' 号翻牌：' + (ROLE_NAME[d.role] || d.role) + '，失去投票权');
+        break;
       case 'ww_hunter':
         G.stage = 'shoot';
         G.shootSeat = d.seat;

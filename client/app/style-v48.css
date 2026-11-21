@@ -1440,3 +1440,57 @@ body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #c
 .ww-p.me .ww-p-ava { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,.22); }
 /* 座位多时名字更小，避免挤在一起 */
 .ww-p-name { line-height: 1.15; }
+
+/* ================= 狼人杀动画 ================= */
+/* 全屏一次性特效 */
+.ww-fx { position: fixed; inset: 0; z-index: 70; pointer-events: none; opacity: 0; transition: opacity .45s ease; }
+.ww-fx.go { opacity: 1; }
+.ww-fx-flash { background: radial-gradient(circle at 50% 42%, rgba(255,246,214,.85), rgba(255,246,214,0) 62%); }
+.ww-fx-night { background: radial-gradient(circle at 50% 30%, rgba(10,20,34,.9), rgba(4,8,14,.98)); }
+.ww-fx-wolf { background: radial-gradient(circle at 50% 50%, rgba(150,20,20,.42), rgba(60,0,0,.82)); }
+
+/* 座位：入场、发言脉冲、死亡淡出 */
+.ww-p { animation: ww-seat-in .34s cubic-bezier(.2,.8,.25,1) both; }
+@keyframes ww-seat-in { from { opacity: 0; transform: translate(-50%, -42%) scale(.86); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+.ww-p.speaking .ww-p-ava { animation: ww-pulse 1.5s ease-in-out infinite; }
+@keyframes ww-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(94,181,247,.3); }
+  50% { box-shadow: 0 0 0 9px rgba(94,181,247,.08); }
+}
+.ww-p.dying .ww-p-ava { animation: ww-die .9s ease both; }
+@keyframes ww-die {
+  0% { transform: scale(1); filter: none; }
+  35% { transform: scale(1.12) rotate(3deg); filter: brightness(1.4) saturate(.4); }
+  100% { transform: scale(.96); filter: grayscale(1); }
+}
+.ww-p.dead { transition: opacity .5s ease; }
+
+/* 座位点击反馈 */
+.ww-p:active .ww-p-ava { transform: scale(.94); }
+
+/* 阶段图标呼吸 */
+.ww-phase-icon { animation: ww-breathe 2.6s ease-in-out infinite; }
+@keyframes ww-breathe { 0%, 100% { transform: scale(1); opacity: .92; } 50% { transform: scale(1.08); opacity: 1; } }
+
+/* 投票明细出现动画 */
+.ww-votedetail { animation: ww-slide-up .3s cubic-bezier(.2,.8,.25,1) both; }
+@keyframes ww-slide-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.ww-vd-row { animation: ww-fade .32s ease both; }
+.ww-vd-row:nth-child(2) { animation-delay: .05s; }
+.ww-vd-row:nth-child(3) { animation-delay: .1s; }
+@keyframes ww-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 结果页放大进入 */
+.ww-result { animation: ww-zoom-in .4s cubic-bezier(.2,.8,.25,1) both; }
+@keyframes ww-zoom-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
+.ww-result-title { animation: ww-title-pop .6s cubic-bezier(.2,.9,.3,1.4) both; }
+@keyframes ww-title-pop { from { opacity: 0; transform: scale(.8) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+/* 按钮按下的微反馈 */
+.ww-btn:active { transform: scale(.97); }
+.ww-mic:active { transform: scale(.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ww-p, .ww-phase-icon, .ww-votedetail, .ww-result, .ww-result-title,
+  .ww-p.speaking .ww-p-ava, .ww-p.dying .ww-p-ava { animation: none !important; }
+}
