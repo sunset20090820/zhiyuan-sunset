@@ -18,6 +18,9 @@
     toastMsg: '',
     micPerm: { ok: false, scope: null, reason: '' },
     wolfPicks: null,     // { votes:[{seat,target,picked}], agreed, target }
+    wolfChat: [],        // 狼队夜间文字
+    marks: {},           // seat -> {label, by}
+    markLabel: '',       // 当前选中的标记标签
     timer: null,
   };
 
@@ -448,6 +451,10 @@
       var cls = 'ww-p' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (speak ? ' speaking' : '') +
         (p.justDied ? ' dying' : '') +
         (p.connected === false ? ' off' : '') + (p.bot ? ' bot' : '');
+      var markTag = '';
+      if (G.marks && G.marks[p.seat]) {
+        markTag = '<i class="ww-p-mark">' + esc(G.marks[p.seat].label) + '</i>';
+      }
       var pickTag = '';
       if (G.wolfPicks && G.wolfPicks.votes) {
         var mine = G.wolfPicks.votes.filter(function (v) { return v.target === p.seat && v.picked; });
@@ -460,7 +467,7 @@
         '<div class="ww-p-name">' + esc(p.name) + '</div>' +
         (p.host ? '<i class="ww-p-badge">房主</i>' : '') +
         (speak ? '<i class="ww-p-mic">🎙</i>' : '') +
-        pickTag +
+        markTag + pickTag +
         '</div>';
     }).join('');
     return '<div class="ww-table">' +
@@ -518,6 +525,21 @@
           : (G.wolfPicks.allPicked ? '意见不一致 → 空刀' : '等待队友选择…');
         wolfInfo = '<div class="ww-wolfinfo"><div>' + lines + '</div><div class="' +
           (G.wolfPicks.agreed ? 'ok' : 'warn') + '">' + state + '</div></div>';
+      }
+      // 狼队夜间频道（标记 + 文字）
+      if (role === 'wolf' || role === 'wolfking' || role === 'wolfbeauty') {
+        var labels = ['预言家', '女巫', '守卫', '猎人', '平民', '金水', '查杀'];
+        wolfInfo += '<div class="ww-wolfchat">' +
+          '<div class="ww-wc-marks">' + labels.map(function (L) {
+            return '<button class="ww-wc-tag' + (G.markLabel === L ? ' on' : '') + '" type="button" data-mark="' + L + '">' + L + '</button>';
+          }).join('') + '<button class="ww-wc-tag clear" type="button" data-mark="">清除</button></div>' +
+          '<div class="ww-wc-log">' + ((G.wolfChat || []).length
+            ? G.wolfChat.map(function (m) { return '<div><b>' + m.seat + '号</b>' + esc(m.text) + '</div>'; }).join('')
+            : '<div class="dim">狼队频道：队友都看得到，好人看不到</div>') + '</div>' +
+          '<div class="ww-wc-send"><input id="wwWolfInput" type="text" maxlength="160" placeholder="' +
+            (G.markLabel ? ('点座位打上「' + G.markLabel + '」') : '和队友说点什么…') + '">' +
+          '<button id="wwWolfSend" class="ww-btn small" type="button">发送</button></div>' +
+          '</div>';
       }
       if (role === 'witch' && G.witch) {
         panel = '<div class="ww-actions">' +
@@ -593,7 +615,10 @@
     Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-seat]'), function (el) {
       el.addEventListener('click', function () {
         var seat = Number(el.getAttribute('data-seat'));
-        if (st === 'night') return nightClick(seat);
+        if (st === 'night') {
+          if (G.markLabel) { send({ t: 'ww_mark', target: seat, label: G.markLabel }); return; }
+          return nightClick(seat);
+        }
         if (st === 'vote') {
           if (G.you && seat === G.you.seat) { toast('不能投自己'); return; }
           chosenSeat = seat;
@@ -622,6 +647,24 @@
     }
     if (st === 'shoot' && $('#wwGiveup')) $('#wwGiveup').addEventListener('click', function () { send({ t: 'ww_shoot', target: 0 }); });
     if (st === 'speech' && $('#wwSkipSay')) $('#wwSkipSay').addEventListener('click', function () { send({ t: 'ww_skip_speech' }); });
+    Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-mark]'), function (b) {
+      b.addEventListener('click', function () {
+        var L = b.getAttribute('data-mark');
+        G.markLabel = (G.markLabel === L) ? '' : L;
+        toast(G.markLabel ? ('点座位标上「' + G.markLabel + '」') : '已取消标记模式');
+        render();
+      });
+    });
+    if ($('#wwWolfSend') && $('#wwWolfInput')) {
+      var doSend = function () {
+        var v = ($('#wwWolfInput').value || '').trim();
+        if (!v) return;
+        send({ t: 'ww_wolf_chat', text: v });
+        $('#wwWolfInput').value = '';
+      };
+      $('#wwWolfSend').addEventListener('click', doSend);
+      $('#wwWolfInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doSend(); } });
+    }
     Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-act]'), function (b) {
       b.addEventListener('click', function () {
         var act = b.getAttribute('data-act');
@@ -807,6 +850,9 @@
       case 'ww_night':
         G.night = d; if (d.you && d.you.role) G.you = d.you; G.checkResult = null;
         G.wolfPicks = null;
+        G.wolfChat = d.history || [];
+        G.marks = d.marks || {};
+        G.markLabel = '';
         fx('night');
         if (G.room) { G.room.state = 'night'; G.room.round = d.round || G.room.round; G.room.deadline = d.deadline || 0; }
         sfx('night'); judge('天黑请闭眼，第 ' + (d.round || 1) + ' 天');
@@ -885,6 +931,16 @@
         render(); break;
       case 'ww_kicked': toast('你被房主请出了房间'); leaveRoom(); G.stage = ''; render(); break;
       case 'ww_left': G.room = null; G.stage = ''; render(); break;
+      case 'ww_wolf_chat':
+        G.wolfChat = (G.wolfChat || []).concat([d.msg]).slice(-30);
+        sfx('seat');
+        if (G.room && G.room.state === 'night') render();
+        break;
+      case 'ww_mark':
+        G.marks = d.marks || G.marks || {};
+        sfx('click');
+        if (G.room && G.room.state === 'night') render();
+        break;
       case 'ww_wolf_pick':
         G.wolfPicks = d;
         sfx('seat');

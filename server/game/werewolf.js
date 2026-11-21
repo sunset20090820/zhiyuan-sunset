@@ -148,6 +148,8 @@ function joinGame(api, c, d) {
     api.send(c, { t: 'ww_room', game: publicGame(game), you: youOf(game, existing) });
     const rule = micRule(game, existing);
     sendKey(api, existing.key, { t: 'ww_mic_perm', ok: rule.ok, scope: rule.scope, reason: rule.reason });
+    // 夜里重连：补发当前夜间状态（含狼队聊天历史与标记）
+    if (game.state === 'night' && existing.alive) sendNightState(game, api, existing, true);
     syncPlayers(game, api);
     return game;
   }
@@ -379,6 +381,19 @@ function deal(game) {
 }
 
 /* ---------------- 夜晚 ---------------- */
+function sendNightState(game, api, p, withInfo) {
+  if (!p || !p.alive) return;
+  const targets = nightTargetsFor(game, p);
+  sendKey(api, p.key, {
+    t: 'ww_night', round: game.round, deadline: game.deadline,
+    you: { seat: p.seat, role: p.role, alive: p.alive },
+    targets: targets,
+    marks: isWolf(p.role) ? (game.night.marks || {}) : undefined,
+    history: isWolf(p.role) ? (game.night.wolfChat || []).slice(-20) : undefined,
+  });
+  if (!withInfo) return;
+}
+
 function startNight(game, api) {
   game.state = 'night';
   game.night = {
@@ -386,16 +401,12 @@ function startNight(game, api) {
     witchSave: false, witchPoison: null, witchDone: false,
     guardTarget: null, guardDone: false, cupidDone: game.round > 1,
     charmTarget: null, charmDone: false, acted: {},
+    marks: {}, wolfChat: [],          // 狼队标记与夜间文字记录
   };
   game.deadline = api.now() + 60 * 1000;
   for (const p of game.players) {
     if (!p.alive) continue;
-    const targets = nightTargetsFor(game, p);
-    sendKey(api, p.key, {
-      t: 'ww_night', round: game.round, deadline: game.deadline,
-      you: { seat: p.seat, role: p.role, alive: p.alive },
-      targets,
-    });
+    sendNightState(game, api, p, true);
     if (p.role === 'witch') {
       const killedSeat = game.night.wolfTarget ? seatOf(game, game.night.wolfTarget) : 0;
       sendKey(api, p.key, {
@@ -867,6 +878,55 @@ function handleSay(api, c, d) {
   nextSpeaker(game, api);
 }
 
+/* ---------------- 狼人夜间频道 ---------------- */
+const WOLF_CHAT_MAX = 160;
+const WOLF_MARK_LABELS = ['预言家', '女巫', '守卫', '猎人', '平民', '金水', '查杀'];
+
+/** 只有活着的狼人、且处于夜晚阶段才能用 */
+function wolfChannelGame(api, c) {
+  const game = findGameOfPlayer(api, c);
+  if (!game) throw new Error('你不在任何游戏中');
+  if (game.state !== 'night') throw new Error('狼人频道只在夜里开放');
+  const p = game.players.find(x => x.key === keyOf(api, c));
+  if (!p || !p.alive) throw new Error('你已出局');
+  if (!isWolf(p.role)) throw new Error('你不是狼人');
+  return { game, p };
+}
+
+function handleWolfChat(api, c, d) {
+  const { game, p } = wolfChannelGame(api, c);
+  const text = String(d.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, WOLF_CHAT_MAX);
+  if (!text) throw new Error('消息不能为空');
+  const t = api.now();
+  if (p.lastWolfChatAt && t - p.lastWolfChatAt < 400) throw new Error('说太快了');
+  p.lastWolfChatAt = t;
+  const msg = { seat: p.seat, name: p.name, text, ts: t };
+  game.night.wolfChat = (game.night.wolfChat || []).concat([msg]).slice(-50);
+  for (const w of game.players) {
+    if (!w.alive || !isWolf(w.role)) continue;
+    sendKey(api, w.key, { t: 'ww_wolf_chat', round: game.round, msg });
+  }
+}
+
+function handleMark(api, c, d) {
+  const { game, p } = wolfChannelGame(api, c);
+  const seat = Number(d.target) || 0;
+  const label = String(d.label || '').slice(0, 8);
+  const target = playerAt(game, seat);
+  if (!target) throw new Error('目标不合法');
+  if (label && WOLF_MARK_LABELS.indexOf(label) < 0) throw new Error('不支持的标记');
+  if (!game.night.marks) game.night.marks = {};
+  if (label) game.night.marks[seat] = { label, by: p.seat };
+  else delete game.night.marks[seat];
+  for (const w of game.players) {
+    if (!w.alive || !isWolf(w.role)) continue;
+    sendKey(api, w.key, {
+      t: 'ww_mark', round: game.round, seat,
+      label: label, by: p.seat, marks: game.night.marks,
+    });
+  }
+}
+
 /** 跳过当前发言（本人或房主） */
 function handleSkipSpeech(api, c, d) {
   const game = findGameOfPlayer(api, c);
@@ -1122,6 +1182,8 @@ function handle(c, d, api) {
       case 'ww_shoot': handleShoot(api, c, d); return true;
       case 'ww_say': handleSay(api, c, d); return true;
       case 'ww_skip_speech': handleSkipSpeech(api, c, d); return true;
+      case 'ww_wolf_chat': handleWolfChat(api, c, d); return true;
+      case 'ww_mark': handleMark(api, c, d); return true;
       case 'ww_voice': handleVoice(api, c, d); return true;
       case 'ww_audio': handleAudioFrame(api, c, d); return true;
       case 'ww_mic_ask': {

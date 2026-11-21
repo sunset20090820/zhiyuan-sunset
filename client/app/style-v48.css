@@ -1505,3 +1505,23 @@ body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #c
   border: 1px solid rgba(229,57,53,.25); font-size: 12.5px; color: #ffd9d9; margin-bottom: 4px; }
 .ww-wolfinfo .ok { color: #7fd1a6; margin-top: 3px; }
 .ww-wolfinfo .warn { color: #ffb4a2; margin-top: 3px; }
+
+/* 狼队夜间频道与标记 */
+.ww-p-mark { position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+  font-style: normal; font-size: 9px; padding: 1px 5px; border-radius: 6px;
+  background: rgba(94,181,247,.92); color: #fff; white-space: nowrap; z-index: 3; }
+.ww-wolfchat { width: 100%; margin-bottom: 6px; padding: 9px 10px; border-radius: 12px;
+  background: rgba(120,20,20,.22); border: 1px solid rgba(229,57,53,.28); }
+.ww-wc-marks { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+.ww-wc-tag { font-size: 11px; padding: 3px 8px; border-radius: 8px;
+  background: rgba(255,255,255,.09); color: #f2dede; border: 1px solid transparent; }
+.ww-wc-tag.on { background: rgba(94,181,247,.9); color: #06121c; border-color: transparent; }
+.ww-wc-tag.clear { opacity: .75; }
+.ww-wc-log { max-height: 92px; overflow-y: auto; font-size: 12px; line-height: 1.5;
+  color: #ffdede; margin-bottom: 6px; }
+.ww-wc-log b { color: #ffb4b4; margin-right: 4px; }
+.ww-wc-log .dim { color: #9d8484; }
+.ww-wc-send { display: flex; gap: 6px; }
+.ww-wc-send input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.28); color: #fff; font-size: 13px; }
+.ww-wc-send .ww-btn { flex: 0 0 auto; min-width: 64px; }
