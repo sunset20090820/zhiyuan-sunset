@@ -1331,10 +1331,10 @@ body { height: var(--app-h, 100%); }
 .ww-phase-icon { font-size: 30px; }
 .ww-phase-text { font-size: 13px; color: #cfe4f4; margin-top: 2px; }
 .ww-countdown { font-size: 12px; color: #7fb6dd; margin-top: 2px; min-height: 16px; }
-.ww-p { position: absolute; transform: translate(-50%, -50%); width: 20%; display: flex;
+.ww-p { position: absolute; transform: translate(-50%, -50%); width: 20%; max-width: 72px; display: flex;
   flex-direction: column; align-items: center; gap: 1px; }
 .ww-p-ava { width: 100%; aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center;
-  justify-content: center; font-size: 15px; font-weight: 600; color: #0d1620;
+  justify-content: center; font-size: clamp(11px, 3.4vw, 15px); font-weight: 600; color: #0d1620;
   background: linear-gradient(160deg, #cfe0ec, #8fa6b8); border: 2px solid rgba(255,255,255,.35); }
 .ww-p.me .ww-p-ava { border-color: #ffd166; box-shadow: 0 0 0 3px rgba(255,209,102,.22); }
 .ww-p.speaking .ww-p-ava { border-color: #5eb5f7; box-shadow: 0 0 0 3px rgba(94,181,247,.3); }
@@ -1434,3 +1434,9 @@ body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #c
 .ww-vd-row.out b { color: #ff7b7b; }
 .ww-vd-row em { font-style: normal; color: #8fa6b8; flex: 1; text-align: right; }
 .ww-vd-skip { margin-top: 6px; font-size: 11.5px; color: #7f93a4; }
+
+/* 自己名字标红 */
+.ww-p.me .ww-p-name { color: #ff6b6b; font-weight: 600; }
+.ww-p.me .ww-p-ava { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,.22); }
+/* 座位多时名字更小，避免挤在一起 */
+.ww-p-name { line-height: 1.15; }

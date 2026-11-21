@@ -417,15 +417,19 @@
   function tableHtml() {
     var ps = (G.room.players || []).slice().sort(function (a, b) { return a.seat - b.seat; });
     var n = Math.max(ps.length, 1);
+    // 座位占比随人数缩小：6 人 21%、9 人 16%、12 人 13%
+    var seatW = Math.max(11, Math.min(21, Math.round(126 / n)));
+    var radiusX = n >= 11 ? 41 : (n >= 9 ? 40 : 39);
+    var radiusY = n >= 11 ? 40 : (n >= 9 ? 38.5 : 37);
     var seats = ps.map(function (p, i) {
       var ang = (-90 + i * 360 / n) * Math.PI / 180;
-      var x = 50 + Math.cos(ang) * 39;
-      var y = 50 + Math.sin(ang) * 37;
+      var x = 50 + Math.cos(ang) * radiusX;
+      var y = 50 + Math.sin(ang) * radiusY;
       var me = G.you && G.you.seat === p.seat;
       var speak = G.speech && G.speech.seat === p.seat;
       var cls = 'ww-p' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (speak ? ' speaking' : '') +
         (p.connected === false ? ' off' : '') + (p.bot ? ' bot' : '');
-      return '<div class="' + cls + '" style="left:' + x.toFixed(2) + '%;top:' + y.toFixed(2) + '%" data-seat="' + p.seat + '">' +
+      return '<div class="' + cls + '" style="left:' + x.toFixed(2) + '%;top:' + y.toFixed(2) + '%;width:' + seatW + '%" data-seat="' + p.seat + '">' +
         '<div class="ww-p-ava">' + (p.seat) + '</div>' +
         '<div class="ww-p-name">' + esc(p.name) + '</div>' +
         (p.host ? '<i class="ww-p-badge">房主</i>' : '') +
@@ -496,9 +500,18 @@
         '</div>';
     } else if (st === 'vote') {
       var meAlive = G.you && G.you.alive;
+      var total = 0, done = 0;
+      if (G.voteStart && G.voteStart.candidates) {
+        total = G.voteStart.candidates.length;
+        done = (G.voteResult && G.voteResult.detail)
+          ? (G.voteResult.detail.reduce(function (a, d) { return a + (d.voters ? d.voters.length : 0); }, 0) +
+             ((G.voteResult.skipped || []).length))
+          : (G._voted ? 1 : 0);
+      }
+      var progress = G.voteResult ? '' : ('　已投 ' + done + '/' + total);
       panel = meAlive
         ? '<div class="ww-actions">' +
-          '<div class="ww-tip">点头像选人，再按投票（不能投自己）</div>' +
+          '<div class="ww-tip">点头像选人，再按投票（不能投自己）' + progress + '</div>' +
           '<button id="wwVoteBtn" class="ww-btn main" type="button" disabled>投票</button>' +
           '<button id="wwSkip" class="ww-btn ghost" type="button">弃票</button></div>'
         : '<div class="ww-actions"><div class="ww-tip">你已出局，只能旁观投票</div></div>';
@@ -533,6 +546,7 @@
           '<em>' + (who ? ('投他：' + who) : '票数公开未列出') + '</em></div>';
       }).join('') +
       (skipped.length ? '<div class="ww-vd-skip">弃票：' + skipped.map(function (x) { return x.seat + '号'; }).join('、') + '</div>' : '') +
+      ((v.notVoted && v.notVoted.length) ? '<div class="ww-vd-skip">未投票：' + v.notVoted.map(function (x) { return x.seat + '号'; }).join('、') + '</div>' : '') +
       '</div>';
   }
 
@@ -556,8 +570,18 @@
       });
     });
     if (st === 'vote') {
-      if ($('#wwVoteBtn')) $('#wwVoteBtn').addEventListener('click', function () { if (chosenSeat) send({ t: 'ww_vote', target: chosenSeat }); });
-      if ($('#wwSkip')) $('#wwSkip').addEventListener('click', function () { send({ t: 'ww_vote', target: 'skip' }); });
+      if ($('#wwVoteBtn')) $('#wwVoteBtn').addEventListener('click', function () {
+        if (!chosenSeat) return;
+        send({ t: 'ww_vote', target: chosenSeat });
+        G._voted = true;
+        var b = $('#wwVoteBtn'); if (b) { b.disabled = true; b.textContent = '已投票'; }
+        toast('已投票，等其他人');
+      });
+      if ($('#wwSkip')) $('#wwSkip').addEventListener('click', function () {
+        send({ t: 'ww_vote', target: 'skip' });
+        G._voted = true;
+        toast('已弃票');
+      });
     }
     if (st === 'shoot' && $('#wwGiveup')) $('#wwGiveup').addEventListener('click', function () { send({ t: 'ww_shoot', target: 0 }); });
     if (st === 'speech' && $('#wwSkipSay')) $('#wwSkipSay').addEventListener('click', function () { send({ t: 'ww_skip_speech' }); });
@@ -765,7 +789,7 @@
         if (d.skipped) { G._lastSaid = null; render(); }
         break;
       case 'ww_vote_start':
-        G.voteStart = d;
+        G.voteStart = d; G._voted = false; G.voteResult = null;
         if (G.room) { G.room.state = 'vote'; G.room.deadline = d.deadline || 0; }
         sfx('vote'); judge('请投票'); render(); break;
       case 'ww_vote_result':

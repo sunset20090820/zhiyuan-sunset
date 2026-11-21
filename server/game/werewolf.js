@@ -835,6 +835,8 @@ function handleSkipSpeech(api, c, d) {
 function startVote(game, api) {
   game.state = 'vote';
   game.votes = {};
+  game.voteSettled = false;
+  game.voteOut = null;
   pushMicRule(game, api);
   game.deadline = api.now() + 30 * 1000;
   toGame(game, api, {
@@ -866,7 +868,7 @@ function handleVote(api, c, d) {
 }
 
 function resolveVote(game, api) {
-  if (game.state !== 'vote' || game._resolvingVote) return;
+  if (game.state !== 'vote' || game._resolvingVote || game.voteSettled) return;
   game._resolvingVote = true;
   try { doResolveVote(game, api); }
   catch (e) { game._resolvingVote = false; throw e; }
@@ -904,13 +906,30 @@ function doResolveVote(game, api) {
   const skipped = Object.keys(game.votes)
     .filter(k => game.votes[k] === 'skip')
     .map(k => ({ seat: seatOf(game, k), name: (game.players.find(x => x.key === k) || {}).name || '' }));
+  const notVoted = alivePlayers(game)
+    .filter(x => x.canVote && game.votes[x.key] === undefined)
+    .map(x => ({ seat: x.seat, name: x.name }));
   toGame(game, api, {
     t: 'ww_vote_result', round: game.round, tally: entries, detail: detail,
     skipped: skipped,
     out: out, tie: out === null && entries.length > 0,
+    notVoted: notVoted,
     votes: game.opts.voteMode === 'public' ? Object.keys(game.votes).map(k => ({ seat: seatOf(game, k), target: game.votes[k] })) : undefined,
   });
 
+  // 汇总先停留 5 秒给玩家看，再真正结算（出局/翻牌/进夜晚）
+  game.voteOut = out;
+  game.voteSettled = true;
+  game.deadline = api.now() + 5000;
+}
+
+/** 展示结束后真正执行投票结果 */
+function applyVoteResult(game, api) {
+  if (!game.voteSettled) return;
+  game.voteSettled = false;
+  const out = game.voteOut;
+  game.voteOut = null;
+  game.deadline = 0;
   const deaths = [];
   if (out) {
     const p = playerAt(game, out);
@@ -991,10 +1010,8 @@ function tick(api) {
         nextSpeaker(game, api);
         break;
       case 'vote': {
-        const voters = alivePlayers(game).filter(x => x.canVote && !x.bot).map(x => x.key);
-        const everyoneVoted = voters.every(k => game.votes[k] !== undefined);
+        if (game.voteSettled) { applyVoteResult(game, api); break; }
         resolveVote(game, api);
-        if (everyoneVoted) break;
         break;
       }
       default: break;
