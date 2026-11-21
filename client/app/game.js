@@ -169,6 +169,106 @@
     } catch (e) {}
   }
 
+  /* ---------------- 实时语音（连续推流） ---------------- */
+  var RT = {
+    on: false, ctx: null, stream: null, src: null, proc: null,
+    seq: 0, playCtx: null, nextAt: 0, recvGain: null, lastSeat: 0,
+  };
+  function rtCanUse() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
+      (window.AudioContext || window.webkitAudioContext));
+  }
+  /** 开始推流：8kHz 单声道 Int16 分帧发送 */
+  function rtStart() {
+    if (RT.on) return true;
+    if (!rtCanUse()) { toast('这个系统不支持实时语音'); return false; }
+    try {
+      RT.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      RT.stream = null;
+    } catch (e) { toast('音频引擎启动失败'); return false; }
+    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+      .then(function (stream) {
+        RT.stream = stream;
+        RT.src = RT.ctx.createMediaStreamSource(stream);
+        var bufSize = 2048;
+        RT.proc = RT.ctx.createScriptProcessor(bufSize, 1, 1);
+        var ratio = (RT.ctx.sampleRate || 48000) / 8000;
+        var pending = [];
+        var lastSend = 0;
+        RT.proc.onaudioprocess = function (ev) {
+          if (!RT.on) return;
+          var ch = ev.inputBuffer.getChannelData(0);
+          var outLen = Math.floor(ch.length / ratio);
+          for (var k = 0; k < outLen; k++) {
+            var v = ch[Math.floor(k * ratio)] || 0;
+            pending.push(Math.max(-1, Math.min(1, v)) * 0x7fff);
+          }
+          var now2 = Date.now();
+          if (now2 - lastSend < 260) return;        // 约 4 帧/秒，够流畅也不打爆限流
+          lastSend = now2;
+          var pcm = new Int16Array(pending);
+          pending = [];
+          var bytes = new Uint8Array(pcm.buffer);
+          var bin = '';
+          for (var j = 0; j < bytes.length; j++) bin += String.fromCharCode(bytes[j]);
+          send({ t: 'ww_audio', seq: ++RT.seq, fmt: 'pcm8', data: btoa(bin) });
+        };
+        RT.src.connect(RT.proc);
+        RT.proc.connect(RT.ctx.destination);   // 需要连到 destination 才会跑（音量置 0 不影响）
+        try { RT.proc.disconnect && null; } catch (e) {}
+        RT.on = true;
+        syncMicState();
+      })
+      .catch(function (err) {
+        var nm = err && err.name || '';
+        toast(nm === 'NotAllowedError' ? '麦克风被拒绝：去系统设置给纸鸢开麦克风' : '麦克风启动失败');
+      });
+    return true;
+  }
+  function rtStop() {
+    RT.on = false;
+    try { if (RT.proc) RT.proc.disconnect(); } catch (e) {}
+    try { if (RT.src) RT.src.disconnect(); } catch (e) {}
+    try { if (RT.stream) RT.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    try { if (RT.ctx && RT.ctx.close) RT.ctx.close(); } catch (e) {}
+    RT.ctx = null; RT.proc = null; RT.src = null; RT.stream = null;
+    syncMicState();
+  }
+  /** 播放收到的音频帧（8kHz Int16） */
+  function rtPlay(d) {
+    try {
+      if (!RT.playCtx) RT.playCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var ctx = RT.playCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      var bin = atob(d.data || '');
+      var len = bin.length >> 1;
+      if (!len) return;
+      var buf = ctx.createBuffer(1, len, 8000);
+      var out = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) {
+        var lo = bin.charCodeAt(i * 2), hi = bin.charCodeAt(i * 2 + 1);
+        var v = (hi << 8) | lo;
+        if (v >= 0x8000) v -= 0x10000;
+        out[i] = v / 0x8000;
+      }
+      var srcNode = ctx.createBufferSource();
+      srcNode.buffer = buf;
+      if (!RT.recvGain) { RT.recvGain = ctx.createGain(); RT.recvGain.gain.value = 1.2; RT.recvGain.connect(ctx.destination); }
+      srcNode.connect(RT.recvGain);
+      var now2 = ctx.currentTime;
+      if (RT.nextAt < now2 + 0.05) RT.nextAt = now2 + 0.12;   // 小缓冲，抗抖动
+      srcNode.start(RT.nextAt);
+      RT.nextAt += buf.duration;
+      if (d.seat !== RT.lastSeat) { RT.lastSeat = d.seat; syncMicState(); }
+    } catch (e) {}
+  }
+  function syncMicState() {
+    var b = $('#wwMic');
+    if (!b) return;
+    b.classList.toggle('live', RT.on);
+    b.textContent = RT.on ? '🎙 正在开麦（点一下关麦）' : '🎤 点一下开麦（实时语音）';
+  }
+
   /* ---------------- 页面骨架 ---------------- */
   function ensurePage() {
     if ($('#gamePage')) return;
@@ -185,8 +285,7 @@
       '</header>',
       '<div id="wwBody" class="ww-body"></div>',
       '<div id="wwMicBar" class="ww-micbar hidden">' +
-      '  <button id="wwMic" class="ww-mic" type="button">🎤 按住说话</button>' +
-      '  <span class="ww-michint">群聊语音，松开即发送（最长 10 秒）</span>' +
+      '  <button id="wwMic" class="ww-mic" type="button">🎤 点一下开麦（实时语音）</button>' +
       '</div>',
       '<div id="wwToast" class="ww-toast"></div>',
     ].join('');
@@ -194,10 +293,10 @@
     $('#wwBack').addEventListener('click', function () { close(); });
     var micBtn = $('#wwMic');
     if (micBtn) {
-      micBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); micBtn.classList.add('on'); micStart(); });
-      micBtn.addEventListener('pointerup', function () { micBtn.classList.remove('on'); micStop(); });
-      micBtn.addEventListener('pointercancel', function () { micBtn.classList.remove('on'); micStop(); });
-      micBtn.addEventListener('pointerleave', function () { if (mic.held) { micBtn.classList.remove('on'); micStop(); } });
+      micBtn.addEventListener('click', function () {
+        if (RT.on) { rtStop(); toast('已关麦'); }
+        else { if (rtStart()) toast('已开麦，说话就能被听见'); }
+      });
     }
     $('#wwSfx').addEventListener('click', function () {
       SFX.on = !SFX.on;
@@ -218,6 +317,7 @@
 
   function open() {
     ensurePage();
+    document.body.classList.add('in-game');
     $('#gamePage').classList.remove('hidden');
     G.open = true;
     if (!G.rooms.length) send({ t: 'ww_list' });
@@ -227,8 +327,10 @@
   function close() {
     var p = $('#gamePage');
     if (p) p.classList.add('hidden');
+    document.body.classList.remove('in-game');
     judgeStop();
     try { if (voicePlayer) voicePlayer.pause(); } catch (e) {}
+    rtStop();
     G.open = false;
     if (G.room) leaveRoom();
   }
@@ -240,7 +342,6 @@
     G.checkResult = G.witch = G.guard = G.lover = G.shoot = null;
   }
 
-  /* ---------------- 渲染 ---------------- */
   function syncMicBar() {
     var bar = $('#wwMicBar');
     if (!bar) return;
@@ -248,6 +349,7 @@
     bar.classList.toggle('hidden', !inGame);
   }
 
+  /* ---------------- 渲染（网易式布局） ---------------- */
   function render() {
     if (!G.open) return;
     syncMicBar();
@@ -256,60 +358,255 @@
     var st = G.room ? (G.room.state || 'waiting') : '';
     if ($('#wwState')) $('#wwState').textContent = st ? (STATE_NAME[st] || st) : '';
     if (!G.room) return renderLobby(body);
-    if (G.stage === 'result' || G.room.state === 'settlement') return renderResult(body);
-    if (G.room.state === 'waiting') return renderWaiting(body);
-    return renderPlaying(body);
+    if (st === 'waiting') return renderWaiting(body);
+    if (st === 'settlement' || G.stage === 'result') return renderResult(body);
+    return renderTable(body);
   }
 
+  /* 首页：房间列表（最多 3 个） */
   function renderLobby(body) {
-    var list = G.rooms.filter(function (r) { return r.state === 'waiting'; });
+    var list = G.rooms || [];
     body.innerHTML = [
-      '<div class="ww-hero">',
-      '  <div class="ww-hero-emoji">🐺</div>',
-      '  <h2>狼人杀</h2>',
-      '  <p>和好友开一局：天黑请闭眼，白天靠发言与投票找出狼人。</p>',
-      '  <button id="wwCreate" class="primary" type="button">创建房间</button>',
-      '</div>',
-      '<div class="ww-section"><h3>正在等人的房间</h3>',
+      '<div class="ww-lobbylist">',
+      '<div class="ww-list-head"><span>房间列表</span><b>' + list.length + ' / 3</b></div>',
       list.length ? list.map(function (r) {
-        return '<button class="ww-room" type="button" data-join="' + esc(r.id) + '">' +
-          '<b>' + esc(r.boardName) + '</b>' +
-          '<span>' + esc(r.hostName) + ' 的房间 · ' + r.players + '/' + r.max + ' 人</span>' +
-          '<i>加入</i></button>';
-      }).join('') : '<p class="ww-empty">还没有房间，点上面「创建房间」开一局</p>',
+        var full = r.players >= r.max;
+        var mine = r.state !== 'waiting';
+        return '<button class="ww-card' + (mine ? ' playing' : '') + '" type="button" data-join="' + esc(r.id) + '">' +
+          '<div class="ww-card-top"><b>' + esc(r.boardName) + '</b><em>' + (STATE_NAME[r.state] || r.state) + '</em></div>' +
+          '<div class="ww-card-mid"><span class="ww-card-host">房主 ' + esc(r.hostName || '') + '</span>' +
+          '<span class="ww-card-count">' + r.players + '/' + r.max + ' 人</span></div>' +
+          '<div class="ww-card-go">' + (full ? '已满' : (mine ? '加入' : '加入')) + '</div>' +
+          '</button>';
+      }).join('') : '<div class="ww-empty-card">还没有房间<br><small>点下面新建一个，或叫朋友开房</small></div>',
+      '</div>',
+      '<div class="ww-lobby-actions">',
+      '  <button id="wwCreate" class="primary" type="button">＋ 创建房间</button>',
+      '  <button id="wwQuick" class="flat" type="button">有房间就进最快的</button>',
       '</div>',
     ].join('');
     $('#wwCreate').addEventListener('click', openCreate);
+    $('#wwQuick').addEventListener('click', function () {
+      var r = list.find(function (x) { return x.state === 'waiting' && x.players < x.max; });
+      if (!r) return toast('现在没有可加入的房间');
+      send({ t: 'ww_join', id: r.id });
+    });
     Array.prototype.forEach.call(body.querySelectorAll('[data-join]'), function (b) {
-      b.addEventListener('click', function () { send({ t: 'ww_join', id: b.getAttribute('data-join') }); });
+      b.addEventListener('click', function () { sfx('click'); send({ t: 'ww_join', id: b.getAttribute('data-join') }); });
     });
   }
 
+  /* 圆桌：座位沿椭圆分布 */
+  function tableHtml() {
+    var ps = (G.room.players || []).slice().sort(function (a, b) { return a.seat - b.seat; });
+    var n = Math.max(ps.length, 1);
+    var seats = ps.map(function (p, i) {
+      var ang = (-90 + i * 360 / n) * Math.PI / 180;
+      var x = 50 + Math.cos(ang) * 39;
+      var y = 50 + Math.sin(ang) * 37;
+      var me = G.you && G.you.seat === p.seat;
+      var speak = G.speech && G.speech.seat === p.seat;
+      var cls = 'ww-p' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (speak ? ' speaking' : '') +
+        (p.connected === false ? ' off' : '') + (p.bot ? ' bot' : '');
+      return '<div class="' + cls + '" style="left:' + x.toFixed(2) + '%;top:' + y.toFixed(2) + '%" data-seat="' + p.seat + '">' +
+        '<div class="ww-p-ava">' + (p.seat) + '</div>' +
+        '<div class="ww-p-name">' + esc(p.name) + '</div>' +
+        (p.host ? '<i class="ww-p-badge">房主</i>' : '') +
+        (speak ? '<i class="ww-p-mic">🎙</i>' : '') +
+        '</div>';
+    }).join('');
+    return '<div class="ww-table">' +
+      '<div class="ww-table-center">' +
+      '  <div class="ww-phase-icon">' + phaseIcon() + '</div>' +
+      '  <div class="ww-phase-text">' + phaseText() + '</div>' +
+      '  <div class="ww-countdown" id="wwCountdown"></div>' +
+      '</div>' + seats + '</div>';
+  }
+
+  function phaseIcon() {
+    var st = G.room.state;
+    if (st === 'night') return '🌙';
+    if (st === 'dawn') return '🌅';
+    if (st === 'speech') return '💬';
+    if (st === 'vote') return '🗳';
+    if (st === 'shoot') return '🔫';
+    return '🐺';
+  }
+  function phaseText() {
+    var st = G.room.state;
+    if (st === 'night') return '第 ' + (G.room.round || 1) + ' 夜';
+    if (st === 'dawn') return G.dawn && G.dawn.deaths && G.dawn.deaths.length ? (G.dawn.deaths.join('、') + ' 号出局') : '平安夜';
+    if (st === 'speech') return G.speech ? (G.speech.seat + ' 号发言中') : '发言';
+    if (st === 'vote') return '请投票';
+    if (st === 'shoot') return '开枪';
+    return '';
+  }
+
+  function roleBar() {
+    var role = G.you && G.you.role;
+    if (!role) return '';
+    return '<div class="ww-rolebar">' +
+      '<span class="ww-role-emoji">' + (ROLE_EMOJI[role] || '') + '</span>' +
+      '<span class="ww-role-name">' + (ROLE_NAME[role] || role) + '</span>' +
+      (G.mates.length ? '<span class="ww-role-mates">队友 ' + G.mates.map(function (m) { return m.seat; }).join('/') + '</span>' : '') +
+      (G.checkResult ? '<span class="ww-role-info">验 ' + G.checkResult.target + '：' + (G.checkResult.result === 'wolf' ? '狼' : '好') + '</span>' : '') +
+      (G.lover ? '<span class="ww-role-info">情侣 ' + G.lover.seat + '</span>' : '') +
+      '</div>';
+  }
+
+  /* 对局界面：圆桌 + 底部操作区 */
+  function renderTable(body) {
+    var st = G.room.state;
+    var role = G.you && G.you.role;
+    var panel = '';
+
+    if (st === 'night') {
+      if (role === 'witch' && G.witch) {
+        panel = '<div class="ww-actions">' +
+          '<div class="ww-tip">' + (G.witch.killed ? ('今晚 ' + G.witch.killed + ' 号被刀') : '今晚没人被刀') + '</div>' +
+          (G.witch.canSave ? '<button class="ww-btn main" data-act="save" type="button">用解药</button>' : '') +
+          (G.witch.canPoison ? '<button class="ww-btn" data-act="poison" type="button">用毒药' + (G._poisonSeat ? ('（' + G._poisonSeat + ' 号）') : '') + '</button>' : '') +
+          '<button class="ww-btn ghost" data-act="witch_none" type="button">不用药</button></div>';
+      } else {
+        panel = '<div class="ww-actions"><div class="ww-tip">' + actionHint(role) + '</div></div>';
+      }
+    } else if (st === 'speech') {
+      var mine = G.speech && G.you && G.speech.seat === G.you.seat;
+      panel = '<div class="ww-actions">' +
+        (mine ? '<div class="ww-tip on">轮到你了，直接说话（实时语音已开）</div>' : '<div class="ww-tip">听 ' + (G.speech ? G.speech.seat + ' 号' : '') + ' 发言</div>') +
+        '</div>';
+    } else if (st === 'vote') {
+      panel = '<div class="ww-actions">' +
+        '<div class="ww-tip">点头像选人，再按投票</div>' +
+        '<button id="wwVoteBtn" class="ww-btn main" type="button" disabled>投票</button>' +
+        '<button id="wwSkip" class="ww-btn ghost" type="button">弃票</button></div>';
+    } else if (st === 'shoot') {
+      panel = '<div class="ww-actions"><div class="ww-tip">你可以带走一个人</div>' +
+        '<button id="wwGiveup" class="ww-btn ghost" type="button">不开枪</button></div>';
+    } else if (st === 'dawn') {
+      panel = '<div class="ww-actions"><div class="ww-tip">' + phaseText() + '</div></div>';
+    }
+
+    body.innerHTML = tableHtml() + roleBar() + panel;
+    bindTable();
+  }
+
+  var chosenSeat = null;
+  function bindTable() {
+    var st = G.room.state;
+    Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-seat]'), function (el) {
+      el.addEventListener('click', function () {
+        var seat = Number(el.getAttribute('data-seat'));
+        if (st === 'night') return nightClick(seat);
+        if (st === 'vote') {
+          chosenSeat = seat;
+          Array.prototype.forEach.call(document.querySelectorAll('#wwBody .ww-p.chosen'), function (x) { x.classList.remove('chosen'); });
+          el.classList.add('chosen');
+          var b = $('#wwVoteBtn'); if (b) b.disabled = false;
+          sfx('click');
+          return;
+        }
+        if (st === 'shoot') { sfx('click'); return send({ t: 'ww_shoot', target: seat }); }
+      });
+    });
+    if (st === 'vote') {
+      if ($('#wwVoteBtn')) $('#wwVoteBtn').addEventListener('click', function () { if (chosenSeat) send({ t: 'ww_vote', target: chosenSeat }); });
+      if ($('#wwSkip')) $('#wwSkip').addEventListener('click', function () { send({ t: 'ww_vote', target: 'skip' }); });
+    }
+    if (st === 'shoot' && $('#wwGiveup')) $('#wwGiveup').addEventListener('click', function () { send({ t: 'ww_shoot', target: 0 }); });
+    Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-act]'), function (b) {
+      b.addEventListener('click', function () {
+        var act = b.getAttribute('data-act');
+        if (act === 'save') send({ t: 'ww_action', kind: 'save' });
+        else if (act === 'poison') {
+          if (!G._poisonSeat) return toast('先点头像选人');
+          send({ t: 'ww_action', kind: 'poison', target: G._poisonSeat });
+        } else send({ t: 'ww_action', kind: 'witch_none' });
+      });
+    });
+    startCountdown();
+  }
+
+  /* 倒计时 */
+  var cdTimer = null;
+  function startCountdown() {
+    clearInterval(cdTimer);
+    var el = $('#wwCountdown');
+    if (!el || !G.room || !G.room.deadline) return;
+    var tick = function () {
+      var left = Math.max(0, Math.round((G.room.deadline - Date.now()) / 1000));
+      el.textContent = left > 0 ? (left + '″') : '';
+      if (left <= 0) clearInterval(cdTimer);
+    };
+    tick();
+    cdTimer = setInterval(tick, 500);
+  }
+
+  /* 等待厅：圆桌 + 人机按钮 */
+  function renderWaiting(body) {
+    var me = (G.room.players || []).find(function (p) { return G.you && p.seat === G.you.seat; });
+    var host = me && me.host;
+    var need = G.room.size || 0;
+    var full = G.room.players.length >= need;
+    body.innerHTML = tableHtml() +
+      '<div class="ww-wait">' +
+      '<div class="ww-wait-line">房间号 <code>' + esc(G.room.id) + '</code> · ' + G.room.players.length + '/' + need + ' 人</div>' +
+      (host ? '<div class="ww-wait-btns">' +
+        '<button id="wwAddBot" class="ww-btn small" type="button"' + (full ? ' disabled' : '') + '>＋人机</button>' +
+        '<button id="wwDelBot" class="ww-btn small" type="button"' + (G.room.players.some(function (p) { return p.bot; }) ? '' : ' disabled') + '>－人机</button>' +
+        '</div>' : '<div class="ww-wait-line">等房主开始…</div>') +
+      (host ? '<button id="wwStart" class="ww-btn main" type="button"' + (full ? '' : ' disabled') + '>' + (full ? '开始游戏' : '还差 ' + (need - G.room.players.length) + ' 人') + '</button>' : '') +
+      '<button id="wwLeave" class="ww-btn ghost" type="button">离开房间</button>' +
+      '</div>';
+    Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-seat]'), function (el) {
+      el.addEventListener('click', function () { sfx('click'); });
+    });
+    if (host && $('#wwStart')) $('#wwStart').addEventListener('click', function () { send({ t: 'ww_start', id: G.room.id }); });
+    if ($('#wwAddBot')) $('#wwAddBot').addEventListener('click', function () { send({ t: 'ww_addbot', id: G.room.id }); });
+    if ($('#wwDelBot')) $('#wwDelBot').addEventListener('click', function () { send({ t: 'ww_removebot', id: G.room.id }); });
+    if ($('#wwLeave')) $('#wwLeave').addEventListener('click', function () { leaveRoom(); render(); });
+  }
+
+  function renderResult(body) {
+    var r = G.result || {};
+    var win = r.winner === 'wolf' ? '狼人胜利' : '好人胜利';
+    body.innerHTML = '<div class="ww-result ' + (r.winner === 'wolf' ? 'wolf' : 'good') + '">' +
+      '<div class="ww-result-title">' + win + '</div></div>' +
+      '<div class="ww-reveal">' + (r.reveal || []).map(function (p) {
+        return '<div class="ww-rev-row' + (p.alive ? '' : ' dead') + '">' +
+          '<b>' + p.seat + '</b><span>' + esc(p.name) + '</span>' +
+          '<em>' + (ROLE_EMOJI[p.role] || '') + (ROLE_NAME[p.role] || p.role) + '</em></div>';
+      }).join('') + '</div>' +
+      '<button id="wwAgain" class="ww-btn main" type="button">回到房间列表</button>';
+    $('#wwAgain').addEventListener('click', function () {
+      G.result = null; G.stage = ''; leaveRoom(); send({ t: 'ww_list' }); render();
+    });
+  }
+
+  /* ---------------- 创建房间（板子选择） ---------------- */
   function openCreate() {
     var body = $('#wwBody');
     var sel = G.boards[0] ? G.boards[0].id : 'ww6';
     function paint() {
       var b = G.boards.find(function (x) { return x.id === sel; }) || G.boards[0] || { roles: {} };
-      body.innerHTML = [
-        '<div class="ww-section"><h3>选一个板子</h3><div class="ww-boards">',
-        G.boards.map(function (x) {
+      body.innerHTML =
+        '<div class="ww-list-head"><span>选板子</span><b>' + G.boards.length + ' 种</b></div>' +
+        '<div class="ww-boards">' + G.boards.map(function (x) {
           return '<button class="ww-board' + (x.id === sel ? ' on' : '') + '" type="button" data-board="' + esc(x.id) + '">' +
-            '<b>' + esc(x.name) + '</b><small>' + x.size + ' 人 · ' + esc(x.desc || '') + '</small>' +
+            '<b>' + esc(x.name) + '</b><small>' + x.size + ' 人</small>' +
             '<span class="ww-roles">' + Object.keys(x.roles).map(function (k) {
-              return '<i title="' + esc(ROLE_NAME[k] || k) + '">' + (ROLE_EMOJI[k] || '?') + '×' + x.roles[k] + '</i>';
+              return '<i>' + (ROLE_EMOJI[k] || '?') + x.roles[k] + '</i>';
             }).join('') + '</span></button>';
-        }).join(''),
-        '</div></div>',
-        '<div class="ww-section"><h3>选项</h3>',
-        '<label class="ww-opt">发言时长 <input id="wwSpeech" type="number" min="15" max="180" value="' + (G.defaults.speechTime || 45) + '"> 秒</label>',
-        '<label class="ww-opt"><input id="wwSelfSave" type="checkbox" checked> 女巫可首夜自救</label>',
-        '<label class="ww-opt"><input id="wwCity" type="checkbox"> 屠城模式（狼过半即胜）</label>',
-        '</div>',
-        '<button id="wwDoCreate" class="primary" type="button">创建 ' + esc(b.name || '') + '</button>',
-        '<button id="wwCancelCreate" class="flat" type="button">返回</button>',
-      ].join('');
-      Array.prototype.forEach.call(body.querySelectorAll('[data-board]'), function (b2) {
-        b2.addEventListener('click', function () { sel = b2.getAttribute('data-board'); paint(); });
+        }).join('') + '</div>' +
+        '<div class="ww-opts">' +
+        '<label class="ww-opt">发言 <input id="wwSpeech" type="number" min="15" max="180" value="' + (G.defaults.speechTime || 45) + '"> 秒</label>' +
+        '<label class="ww-opt"><input id="wwSelfSave" type="checkbox" checked> 女巫首夜可自救</label>' +
+        '<label class="ww-opt"><input id="wwCity" type="checkbox"> 屠城模式</label>' +
+        '</div>' +
+        '<button id="wwDoCreate" class="ww-btn main" type="button">创建 ' + esc(b.name || '') + '</button>' +
+        '<button id="wwCancelCreate" class="ww-btn ghost" type="button">返回列表</button>';
+      Array.prototype.forEach.call(body.querySelectorAll('[data-board]'), function (el) {
+        el.addEventListener('click', function () { sel = el.getAttribute('data-board'); sfx('click'); paint(); });
       });
       $('#wwDoCreate').addEventListener('click', function () {
         send({
@@ -326,160 +623,15 @@
     paint();
   }
 
-  function playerGrid(withAction) {
-    if (!G.room) return '';
-    return '<div class="ww-seats">' + (G.room.players || []).map(function (p) {
-      var me = G.you && G.you.seat === p.seat;
-      var cls = 'ww-seat' + (p.alive ? '' : ' dead') + (me ? ' me' : '') + (p.host ? ' host' : '') + (p.connected === false ? ' off' : '');
-      var roleTag = p.role ? '<em>' + (ROLE_EMOJI[p.role] || '') + (ROLE_NAME[p.role] || p.role) + '</em>' : '';
-      return '<button class="' + cls + '" type="button" data-seat="' + p.seat + '">' +
-        '<b>' + p.seat + ' 号</b><span>' + esc(p.name) + '</span>' +
-        (p.bot ? '<i class="ww-bot">人机</i>' : '') + roleTag +
-        (p.host ? '<i>房主</i>' : '') + '</button>';
-    }).join('') + '</div>';
-  }
-
-  function bindSeats(handler) {
-    Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-seat]'), function (b) {
-      b.addEventListener('click', function () {
-        var seat = Number(b.getAttribute('data-seat'));
-        handler(seat, b);
-      });
-    });
-  }
-
-  function renderWaiting(body) {
-    var me = (G.room.players || []).find(function (p) { return G.you && p.seat === G.you.seat; });
-    var host = me && me.host;
-    var need = G.room.size || G.room.max || 0;
-    var full = G.room.players.length >= need;
-    body.innerHTML = [
-      '<div class="ww-section">',
-      '  <h3>' + esc(G.room.boardName) + ' · ' + G.room.players.length + '/' + need + ' 人</h3>',
-      '  <p class="ww-hint">把房间号发给好友：<code>' + esc(G.room.id) + '</code></p>',
-      playerGrid(),
-      '</div>',
-      host
-        ? '<button id="wwStart" class="primary" type="button"' + (full ? '' : ' disabled') + '>' + (full ? '开始游戏' : '还差 ' + (need - G.room.players.length) + ' 人') + '</button>'
-        : '<p class="ww-hint">等房主开始…</p>',
-      host ? '<div class="ww-bots">' +
-        '<button id="wwAddBot" class="flat" type="button"' + (full ? ' disabled' : '') + '>＋ 人机</button>' +
-        '<button id="wwDelBot" class="flat" type="button"' + (G.room.players.some(function (p) { return p.bot; }) ? '' : ' disabled') + '>－ 人机</button>' +
-        '</div>' +
-        '<p class="ww-hint">人不够可以先加人机陪练，等人齐了再踢掉人机</p>' : '',
-      '<button id="wwLeave" class="flat" type="button">离开房间</button>',
-    ].join('');
-    if (host) $('#wwStart').addEventListener('click', function () { send({ t: 'ww_start', id: G.room.id }); });
-    if ($('#wwAddBot')) $('#wwAddBot').addEventListener('click', function () { send({ t: 'ww_addbot', id: G.room.id }); });
-    if ($('#wwDelBot')) $('#wwDelBot').addEventListener('click', function () { send({ t: 'ww_removebot', id: G.room.id }); });
-    $('#wwLeave').addEventListener('click', function () { leaveRoom(); render(); });
-  }
-
-  var chosenSeat = null;
-
-  function renderPlaying(body) {
-    var st = G.room.state;
-    var role = G.you && G.you.role;
-    var head = [
-      '<div class="ww-status">',
-      '  <div class="ww-myrole">' + (role ? (ROLE_EMOJI[role] || '') + ' 你是 <b>' + (ROLE_NAME[role] || role) + '</b>' : '') + '</div>',
-      G.mates.length ? '<div class="ww-mates">队友：' + G.mates.map(function (m) { return m.seat + ' 号 ' + esc(m.name); }).join('、') + '</div>' : '',
-      G.lover ? '<div class="ww-mates">情侣：' + G.lover.seat + ' 号 ' + esc(G.lover.name) + '</div>' : '',
-      '</div>',
-      playerGrid(),
-    ].join('');
-
-    var panel = '';
-    if (st === 'night') {
-      panel = '<div class="ww-panel"><h3>天黑请闭眼</h3>';
-      if (role === 'witch' && G.witch) {
-        panel += '<p class="ww-hint">' + (G.witch.killed ? ('今晚 ' + G.witch.killed + ' 号被刀') : '今晚没人被刀') + '</p>';
-        if (G.witch.canSave) panel += '<button class="ww-act" data-act="save" type="button">💊 用解药救他</button>';
-        if (G.witch.canPoison) panel += '<button class="ww-act" data-act="poison" type="button">☠️ 用毒药（先点座位选人）</button>';
-        panel += '<button class="ww-act" data-act="witch_none" type="button">这晚不用药</button>';
-      } else if (G.checkResult) {
-        panel += '<p class="ww-hint">你验了 ' + G.checkResult.target + ' 号：<b>' +
-          (G.checkResult.result === 'wolf' ? '狼人' : '好人') + '</b>（点座位可继续验）</p>';
-      } else {
-        panel += '<p class="ww-hint">' + actionHint(role) + '</p>';
-      }
-      panel += '</div>';
-    } else if (st === 'dawn') {
-      panel = '<div class="ww-panel"><h3>天亮了</h3><p class="ww-hint">' +
-        (G.dawn && G.dawn.deaths && G.dawn.deaths.length ? ('昨晚 ' + G.dawn.deaths.join('、') + ' 号出局') : '昨晚是平安夜') +
-        '</p></div>';
-    } else if (st === 'speech') {
-      var mine = G.speech && G.you && G.speech.seat === G.you.seat;
-      panel = '<div class="ww-panel"><h3>发言</h3><p class="ww-hint">' +
-        (G.speech ? ('轮到 ' + G.speech.seat + ' 号 ' + esc(G.speech.name)) : '') + '</p>' +
-        (mine ? '<textarea id="wwSay" maxlength="500" placeholder="说点什么…"></textarea>' +
-                '<button id="wwSendSay" class="primary" type="button">发言</button>'
-              : '<p class="ww-hint">等别人说完</p>') + '</div>';
-    } else if (st === 'vote') {
-      chosenSeat = null;
-      panel = '<div class="ww-panel"><h3>投票</h3><p class="ww-hint">点头像选人，再按「投票」；也可以弃票</p>' +
-        '<button id="wwVoteBtn" class="primary" type="button" disabled>投票</button>' +
-        '<button id="wwSkip" class="flat" type="button">弃票</button></div>';
-    } else if (st === 'shoot') {
-      panel = '<div class="ww-panel"><h3>开枪</h3><p class="ww-hint">你是' + (ROLE_NAME[role] || '') +
-        '，可以带走一个人（点座位选人）</p><button id="wwGiveup" class="flat" type="button">不开枪</button></div>';
-    }
-
-    body.innerHTML = head + panel;
-
-    // ---- DOM 就绪后再绑定 ----
-    bindSeats(function (seat, el) {
-      if (G.room.state === 'night') { nightClick(seat); return; }
-      if (G.room.state === 'vote') {
-        chosenSeat = seat;
-        Array.prototype.forEach.call(document.querySelectorAll('#wwBody .ww-seat.chosen'), function (x) { x.classList.remove('chosen'); });
-        el.classList.add('chosen');
-        var vb = $('#wwVoteBtn'); if (vb) vb.disabled = false;
-        return;
-      }
-      if (G.room.state === 'shoot') { send({ t: 'ww_shoot', target: seat }); return; }
-    });
-
-    if (st === 'vote') {
-      var btn = $('#wwVoteBtn');
-      if (btn) btn.addEventListener('click', function () { if (chosenSeat) send({ t: 'ww_vote', target: chosenSeat }); });
-      var sk = $('#wwSkip');
-      if (sk) sk.addEventListener('click', function () { send({ t: 'ww_vote', target: 'skip' }); });
-    }
-    if (st === 'speech') {
-      var sb = $('#wwSendSay');
-      if (sb) sb.addEventListener('click', function () {
-        var v = ($('#wwSay').value || '').trim();
-        if (!v) return toast('先说点什么');
-        send({ t: 'ww_say', text: v });
-      });
-    }
-    if (st === 'shoot') {
-      var gv = $('#wwGiveup');
-      if (gv) gv.addEventListener('click', function () { send({ t: 'ww_shoot', target: 0 }); });
-    }
-    if (st === 'night') {
-      Array.prototype.forEach.call(document.querySelectorAll('#wwBody [data-act]'), function (b) {
-        b.addEventListener('click', function () {
-          var act = b.getAttribute('data-act');
-          if (act === 'save') send({ t: 'ww_action', kind: 'save' });
-          else if (act === 'poison') {
-            if (!G._poisonSeat) return toast('先点上面的座位选人');
-            send({ t: 'ww_action', kind: 'poison', target: G._poisonSeat });
-          } else send({ t: 'ww_action', kind: 'witch_none' });
-        });
-      });
-    }
-  }
-
+  /* ---------------- 夜间行动 ---------------- */
   function actionHint(role) {
     switch (role) {
-      case 'wolf': case 'wolfking': return '点上面的座位选择今晚要刀的人';
-      case 'wolfbeauty': return '点座位选择今晚魅惑的人';
-      case 'seer': return '点座位选择要查验的人';
-      case 'guard': return '点座位选择要守护的人' + (G.guard && G.guard.lastGuard ? ('（上晚守了 ' + G.guard.lastGuard + ' 号）') : '');
-      case 'cupid': return '点两个座位连成情侣';
-      case 'witch': return '等待夜间信息';
+      case 'wolf': case 'wolfking': return '点头像选今晚要刀的人';
+      case 'wolfbeauty': return '点头像选今晚魅惑的人';
+      case 'seer': return '点头像选要查验的人';
+      case 'guard': return '点头像选要守护的人' + (G.guard && G.guard.lastGuard ? ('（上晚 ' + G.guard.lastGuard + ' 号）') : '');
+      case 'cupid': return '点两个头像连成情侣';
+      case 'witch': return '等夜间信息';
       default: return '闭眼等待天亮';
     }
   }
@@ -488,41 +640,19 @@
   function nightClick(seat) {
     var role = G.you && G.you.role;
     if (!role) return;
-    if (role === 'wolf' || role === 'wolfking' || role === 'wolfbeauty') return send({ t: 'ww_action', kind: 'kill', target: seat });
+    sfx('click');
+    if (role === 'wolf' || role === 'wolfking') return send({ t: 'ww_action', kind: 'kill', target: seat });
+    if (role === 'wolfbeauty') return send({ t: 'ww_action', kind: 'charm', target: seat });
     if (role === 'seer') return send({ t: 'ww_action', kind: 'check', target: seat });
     if (role === 'guard') return send({ t: 'ww_action', kind: 'guard', target: seat });
     if (role === 'witch') { G._poisonSeat = seat; return toast('已选 ' + seat + ' 号，点「用毒药」确认'); }
     if (role === 'cupid') {
       cupidPick.push(seat);
-      if (cupidPick.length === 2) { send({ t: 'ww_action', kind: 'link', a: cupidPick[0], b: cupidPick[1] }); cupidPick = []; }
-      else toast('再选一个人');
+      if (cupidPick.length === 2) {
+        send({ t: 'ww_action', kind: 'link', a: cupidPick[0], b: cupidPick[1] });
+        cupidPick = [];
+      } else toast('再选一个人');
     }
-  }
-
-  function renderResult(body) {
-    var r = G.result || {};
-    var win = r.winner === 'wolf' ? '狼人胜利' : '好人胜利';
-    body.innerHTML = [
-      '<div class="ww-result">',
-      '  <h2 class="' + (r.winner === 'wolf' ? 'wolf' : 'good') + '">' + win + '</h2>',
-      '</div>',
-      '<div class="ww-section"><h3>身份公开</h3><div class="ww-reveal">',
-      (r.reveal || []).map(function (p) {
-        return '<div class="ww-reveal-row' + (p.alive ? '' : ' dead') + '">' +
-          '<b>' + p.seat + ' 号</b><span>' + esc(p.name) + '</span>' +
-          '<em>' + (ROLE_EMOJI[p.role] || '') + ' ' + (ROLE_NAME[p.role] || p.role) + '</em></div>';
-      }).join(''),
-      '</div></div>',
-      '<button id="wwAgain" class="primary" type="button">回到大厅</button>',
-    ].join('');
-    $('#wwAgain').addEventListener('click', function () {
-      G.result = null; G.stage = ''; leaveRoom(); render();
-    });
-  }
-
-  function isWolfSide() {
-    var r = G.you && G.you.role;
-    return r === 'wolf' || r === 'wolfking' || r === 'wolfbeauty';
   }
 
   /* ---------------- 消息 ---------------- */
@@ -542,6 +672,7 @@
       case 'ww_lover': G.lover = d; render(); break;
       case 'ww_night':
         G.night = d; if (d.you && d.you.role) G.you = d.you; G.checkResult = null;
+        if (G.room) { G.room.state = 'night'; G.room.round = d.round || G.room.round; G.room.deadline = d.deadline || 0; }
         sfx('night'); judge('天黑请闭眼，第 ' + (d.round || 1) + ' 天');
         render(); break;
       case 'ww_witch_info': G.witch = d; render(); break;
@@ -551,14 +682,20 @@
       case 'ww_deaths': toast('昨晚：' + (d.deaths || []).map(function (x) { return x.seat + ' 号'; }).join('、') + ' 出局'); break;
       case 'ww_dawn':
         G.dawn = { deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }) };
+        if (G.room) { G.room.state = 'dawn'; G.room.deadline = d.deadline || 0; }
         sfx('dawn');
         judge(G.dawn.deaths.length ? ('天亮了，' + G.dawn.deaths.join('号、') + '号出局') : '天亮了，昨晚是平安夜');
         if (G.dawn.deaths.length) setTimeout(function () { sfx('out'); }, 900);
         render(); break;
-      case 'ww_speech': G.speech = d; render(); break;
+      case 'ww_speech':
+        G.speech = d;
+        if (G.room) { G.room.state = 'speech'; G.room.deadline = d.deadline || 0; }
+        render(); break;
       case 'ww_said': toast(d.seat + ' 号：' + (d.text || '')); break;
       case 'ww_vote_start':
-        G.voteStart = d; sfx('vote'); judge('请投票'); render(); break;
+        G.voteStart = d;
+        if (G.room) { G.room.state = 'vote'; G.room.deadline = d.deadline || 0; }
+        sfx('vote'); judge('请投票'); render(); break;
       case 'ww_vote_result':
         G.voteResult = d;
         sfx('vote');
@@ -566,7 +703,10 @@
         toast(d.out ? (d.out + ' 号被放逐') : '平票，无人出局');
         break;
       case 'ww_flip': toast(d.seat + ' 号翻牌：' + (ROLE_NAME[d.role] || d.role) + '，失去投票权'); break;
-      case 'ww_hunter': G.stage = 'shoot'; render(); break;
+      case 'ww_hunter':
+        G.stage = 'shoot';
+        if (G.room) { G.room.state = 'shoot'; G.room.deadline = d.deadline || 0; }
+        render(); break;
       case 'ww_over':
         G.result = d; G.stage = 'result';
         var iWin = G.result.winner === (isWolfSide() ? 'wolf' : 'good');
@@ -575,6 +715,9 @@
         render(); break;
       case 'ww_kicked': toast('你被房主请出了房间'); leaveRoom(); G.stage = ''; render(); break;
       case 'ww_left': G.room = null; G.stage = ''; render(); break;
+      case 'ww_audio':
+        rtPlay(d);
+        break;
       case 'ww_voice':
         playVoice(d);
         toast(d.seat + ' 号语音' + (d.duration ? (' ' + d.duration + '″') : ''));

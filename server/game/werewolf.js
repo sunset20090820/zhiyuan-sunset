@@ -7,7 +7,7 @@ const { ROLES, isWolf, isGod } = require('./roles');
 const { validateBoard, getBoard, mergeOpts, DEFAULT_OPTS } = require('./boards');
 
 const games = new Map();
-const MAX_GAMES = 200;
+const MAX_GAMES = 3;   // 受服务器带宽限制：最多同时 3 个房间
 const IDLE_MS = 30 * 60 * 1000;   // 空房 30 分钟回收
 const OFFLINE_GRACE = 60 * 1000;  // 掉线保留座位 60 秒
 
@@ -700,6 +700,27 @@ function nextSpeaker(game, api) {
   startVote(game, api);
 }
 
+/* ---------------- 实时语音（连续 PCM/Opus 帧中继） ---------------- */
+const AUDIO_FRAME_MAX = 16 * 1024;    // 单帧 base64 上限（约 12KB 原始数据）
+const AUDIO_RATE_MS = 120;            // 单人最少间隔，防刷
+function handleAudioFrame(api, c, d) {
+  const game = findGameOfPlayer(api, c);
+  if (!game) throw new Error('你不在任何游戏中');
+  const p = game.players.find(x => x.key === keyOf(api, c));
+  if (!p || !p.alive) return;                       // 死人不推流，静默丢弃
+  const data = String(d.data || '');
+  if (!data || data.length > AUDIO_FRAME_MAX) return;
+  const t = api.now();
+  if (p.lastAudioAt && t - p.lastAudioAt < AUDIO_RATE_MS) return;
+  p.lastAudioAt = t;
+  game.speaking = { seat: p.seat, until: t + 900 };
+  const payload = { t: 'ww_audio', seat: p.seat, seq: Number(d.seq) || 0, fmt: d.fmt || 'pcm8', data };
+  for (const other of game.players) {
+    if (other.key === p.key) continue;
+    sendKey(api, other.key, payload);
+  }
+}
+
 const VOICE_MAX = 700 * 1024;   // base64 后约 500KB，够 10 秒左右 opus
 function handleVoice(api, c, d) {
   const game = findGameOfPlayer(api, c);
@@ -924,6 +945,7 @@ function handle(c, d, api) {
       case 'ww_shoot': handleShoot(api, c, d); return true;
       case 'ww_say': handleSay(api, c, d); return true;
       case 'ww_voice': handleVoice(api, c, d); return true;
+      case 'ww_audio': handleAudioFrame(api, c, d); return true;
       case 'ww_vote': handleVote(api, c, d); return true;
       default: return false;
     }

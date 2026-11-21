@@ -1292,79 +1292,122 @@ body { height: var(--app-h, 100%); }
 .pin-ico, .mute-ico { margin-right: 3px; font-size: 12px; opacity: .85; }
 .room.muted .room-name { color: var(--sub); }
 
-/* ================= 狼人杀 ================= */
-.game { position: fixed; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--bg); }
-.game-top { background: var(--tg-header); color: #fff; }
-.game-top .brand { color: #fff; }
-.ww-state { margin-left: 8px; font-size: 12px; font-weight: 400; opacity: .85; }
-.ww-body { flex: 1; overflow-y: auto; padding: 12px var(--pad) calc(var(--safe-bottom) + 20px); }
-.ww-body .primary, .ww-body .flat { margin: 8px 0; }
-.ww-hero { text-align: center; padding: 18px 0 10px; }
-.ww-hero-emoji { font-size: 54px; line-height: 1.1; }
-.ww-hero h2 { margin: 6px 0 4px; font-size: 20px; }
-.ww-hero p { color: var(--sub); font-size: 13px; margin: 0 10px 12px; line-height: 1.6; }
-.ww-section { margin-bottom: 14px; }
-.ww-section h3 { font-size: 14px; color: var(--sub); margin: 0 0 8px; font-weight: 600; }
-.ww-empty, .ww-hint { color: var(--sub); font-size: 13px; line-height: 1.6; margin: 6px 0; }
-.ww-hint code { background: var(--bg-soft); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
-.ww-room { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
-  padding: 12px 14px; margin-bottom: 8px; border-radius: 12px; background: var(--bg-soft); text-align: left; }
-.ww-room b { font-size: 14px; }
-.ww-room span { font-size: 12px; color: var(--sub); }
-.ww-room i { align-self: flex-end; font-style: normal; font-size: 12px; color: var(--accent); }
-.ww-boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.ww-board { display: flex; flex-direction: column; gap: 3px; padding: 10px; border-radius: 12px;
-  background: var(--bg-soft); border: 2px solid transparent; text-align: left; }
-.ww-board.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-soft)); }
+/* ================= 狼人杀（网易式布局） ================= */
+.game { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: radial-gradient(120% 80% at 50% 0%, #1b2b3a 0%, #0d1620 60%, #070c12 100%); color: #eaf2f8; }
+.game-top { display: flex; align-items: center; gap: 6px; padding: calc(var(--safe-top) + 8px) 10px 8px;
+  background: rgba(8, 14, 20, .55); border-bottom: 1px solid rgba(255,255,255,.07); }
+.game-top .brand { color: #fff; font-size: 17px; }
+.game-top .icon-btn { color: #cfe0ec; }
+.ww-state { margin-left: 6px; font-size: 11px; opacity: .75; font-weight: 400; }
+.ww-body { flex: 1; overflow-y: auto; padding: 10px 12px calc(var(--safe-bottom) + 96px); }
+
+/* 房间列表首页 */
+.ww-list-head { display: flex; align-items: baseline; justify-content: space-between;
+  font-size: 13px; color: #8fa6b8; margin: 6px 2px 10px; }
+.ww-card { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 13px 14px;
+  border-radius: 14px; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.08);
+  color: inherit; }
+.ww-card.playing { border-color: rgba(94,181,247,.45); }
+.ww-card-top { display: flex; align-items: center; justify-content: space-between; }
+.ww-card-top b { font-size: 15px; }
+.ww-card-top em { font-style: normal; font-size: 11px; color: #7fd1a6; }
+.ww-card-mid { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: #8fa6b8; }
+.ww-card-go { margin-top: 8px; font-size: 12.5px; color: #5eb5f7; text-align: right; }
+.ww-empty-card { padding: 26px 12px; text-align: center; font-size: 13px; color: #7f93a4;
+  border-radius: 14px; background: rgba(255,255,255,.04); }
+.ww-empty-card small { font-size: 11.5px; opacity: .8; }
+.ww-lobby-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+/* 圆桌 */
+.ww-table { position: relative; width: 100%; padding-top: 104%; margin: 4px auto 0; max-width: 460px; }
+.ww-table::before { content: ''; position: absolute; left: 12%; right: 12%; top: 12%; bottom: 12%;
+  border-radius: 50%; background: radial-gradient(circle at 50% 40%, rgba(46,74,96,.55), rgba(16,26,36,.75) 70%);
+  border: 1px solid rgba(120,190,240,.16); box-shadow: inset 0 0 40px rgba(0,0,0,.55); }
+.ww-table-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  text-align: center; width: 46%; }
+.ww-phase-icon { font-size: 30px; }
+.ww-phase-text { font-size: 13px; color: #cfe4f4; margin-top: 2px; }
+.ww-countdown { font-size: 12px; color: #7fb6dd; margin-top: 2px; min-height: 16px; }
+.ww-p { position: absolute; transform: translate(-50%, -50%); width: 20%; display: flex;
+  flex-direction: column; align-items: center; gap: 1px; }
+.ww-p-ava { width: 100%; aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 15px; font-weight: 600; color: #0d1620;
+  background: linear-gradient(160deg, #cfe0ec, #8fa6b8); border: 2px solid rgba(255,255,255,.35); }
+.ww-p.me .ww-p-ava { border-color: #ffd166; box-shadow: 0 0 0 3px rgba(255,209,102,.22); }
+.ww-p.speaking .ww-p-ava { border-color: #5eb5f7; box-shadow: 0 0 0 3px rgba(94,181,247,.3); }
+.ww-p.dead { opacity: .38; }
+.ww-p.dead .ww-p-ava { filter: grayscale(1); }
+.ww-p.chosen .ww-p-ava { border-color: #e53935; box-shadow: 0 0 0 3px rgba(229,57,53,.35); }
+.ww-p.bot .ww-p-ava { background: linear-gradient(160deg, #9fb3c4, #63798d); }
+.ww-p-name { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: #d7e6f2; }
+.ww-p-badge { font-style: normal; font-size: 9px; color: #ffd166; }
+.ww-p-mic { position: absolute; right: 6%; top: 0; font-style: normal; font-size: 12px; }
+
+/* 角色条 / 操作区 */
+.ww-rolebar { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 10px;
+  border-radius: 12px; background: rgba(255,255,255,.06); font-size: 12.5px; }
+.ww-role-emoji { font-size: 16px; }
+.ww-role-name { font-weight: 600; }
+.ww-role-mates, .ww-role-info { color: #ff9aa2; }
+.ww-role-info { color: #7fd1a6; }
+.ww-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ww-tip { width: 100%; font-size: 12px; color: #9fb6c8; }
+.ww-tip.on { color: #7fd1a6; }
+.ww-btn { flex: 1; min-width: 108px; padding: 12px 10px; border-radius: 12px; font-size: 14px;
+  background: rgba(255,255,255,.1); color: #eaf2f8; border: 1px solid rgba(255,255,255,.12); }
+.ww-btn.main { background: linear-gradient(160deg, #4aa3e8, #2b7fc4); border-color: transparent; color: #fff; }
+.ww-btn.ghost { background: transparent; color: #9fb6c8; }
+.ww-btn.small { padding: 9px 8px; font-size: 12.5px; min-width: 84px; }
+.ww-btn[disabled] { opacity: .4; }
+
+/* 等待厅 */
+.ww-wait { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.ww-wait-line { font-size: 12.5px; color: #9fb6c8; text-align: center; }
+.ww-wait-line code { background: rgba(255,255,255,.1); padding: 2px 8px; border-radius: 6px; color: #cfe4f4; }
+.ww-wait-btns { display: flex; gap: 8px; }
+
+/* 结算 */
+.ww-result { text-align: center; padding: 14px 0 6px; }
+.ww-result-title { font-size: 22px; font-weight: 700; }
+.ww-result.wolf .ww-result-title { color: #ff7b7b; }
+.ww-result.good .ww-result-title { color: #7fd1a6; }
+.ww-reveal { margin-top: 8px; }
+.ww-rev-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px;
+  border-radius: 10px; background: rgba(255,255,255,.05); font-size: 13px; }
+.ww-rev-row.dead { opacity: .5; }
+.ww-rev-row em { margin-left: auto; font-style: normal; }
+
+/* 麦克风栏 */
+.ww-micbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
+  padding: 8px 12px calc(var(--safe-bottom) + 10px); background: rgba(8,14,20,.92);
+  border-top: 1px solid rgba(255,255,255,.08); }
+.ww-mic { width: 100%; padding: 13px; border-radius: 24px; font-size: 14px;
+  background: rgba(255,255,255,.1); color: #eaf2f8; }
+.ww-mic.live { background: linear-gradient(160deg, #e05b5b, #b83b3b); color: #fff; }
+
+/* 音效按钮 */
+.ww-tog { font-size: 16px; }
+.ww-tog.off { opacity: .35; }
+
+/* 板子选择 */
+.ww-boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.ww-board { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 12px;
+  background: rgba(255,255,255,.055); border: 2px solid transparent; color: inherit; text-align: left; }
+.ww-board.on { border-color: #5eb5f7; background: rgba(94,181,247,.12); }
 .ww-board b { font-size: 13.5px; }
-.ww-board small { color: var(--sub); font-size: 11.5px; }
+.ww-board small { font-size: 11px; color: #8fa6b8; }
 .ww-roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.ww-roles i { font-style: normal; font-size: 11.5px; background: var(--bg); padding: 1px 5px; border-radius: 6px; }
-.ww-opt { display: flex; align-items: center; gap: 8px; padding: 10px 0; font-size: 14px; }
-.ww-opt input[type=number] { width: 66px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-soft); color: var(--text); }
-.ww-seats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.ww-seat { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 10px 4px;
-  border-radius: 12px; background: var(--bg-soft); font-size: 12px; border: 2px solid transparent; }
-.ww-seat b { font-size: 12.5px; color: var(--sub); }
-.ww-seat span { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ww-seat em { font-style: normal; font-size: 11px; color: var(--accent); }
-.ww-seat i { font-style: normal; font-size: 10.5px; color: var(--sub); }
-.ww-seat.me { border-color: var(--accent); }
-.ww-seat.dead { opacity: .42; }
-.ww-seat.off { filter: grayscale(1); }
-.ww-seat.chosen { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--bg-soft)); }
-.ww-myrole { font-size: 14px; margin-bottom: 4px; }
-.ww-mates { font-size: 12.5px; color: var(--danger); margin-bottom: 4px; }
-.ww-panel { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--bg-soft); }
-.ww-panel h3 { margin: 0 0 6px; font-size: 15px; }
-.ww-act { display: block; width: 100%; padding: 11px; margin-bottom: 6px; border-radius: 10px;
-  background: var(--bg); font-size: 14px; text-align: center; }
-.ww-panel textarea { width: 100%; min-height: 76px; padding: 10px; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; resize: vertical; }
-.ww-toast { position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 10px);
-  max-width: 84vw; padding: 9px 14px; border-radius: 12px; background: rgba(16, 24, 32, .92);
+.ww-roles i { font-style: normal; font-size: 11px; background: rgba(255,255,255,.09); padding: 1px 5px; border-radius: 5px; }
+.ww-opts { margin: 12px 0; display: flex; flex-direction: column; gap: 6px; }
+.ww-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfe4f4; }
+.ww-opt input[type=number] { width: 62px; padding: 5px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.08); color: #eaf2f8; }
+.ww-toast { position: fixed; left: 50%; bottom: 92px; transform: translate(-50%, 8px);
+  max-width: 84vw; padding: 9px 14px; border-radius: 12px; background: rgba(10,18,26,.94);
   color: #fff; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 60; }
 .ww-toast.show { opacity: 1; transform: translate(-50%, 0); }
-.ww-result { text-align: center; padding: 18px 0; }
-.ww-result h2 { font-size: 22px; margin: 0; }
-.ww-result h2.wolf { color: var(--danger); }
-.ww-result h2.good { color: #31c48d; }
-.ww-reveal-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg-soft); margin-bottom: 6px; font-size: 13px; }
-.ww-reveal-row.dead { opacity: .5; }
-.ww-reveal-row em { margin-left: auto; font-style: normal; }
-/* 人机陪练 */
-.ww-bots { display: flex; gap: 8px; }
-.ww-bots .flat { flex: 1; }
-.ww-bot { color: var(--accent) !important; }
-/* 游戏内音频控件 */
-.ww-tog { font-size: 17px; }
-.ww-tog.off { opacity: .38; }
-.ww-micbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 46;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 8px var(--pad) calc(var(--safe-bottom) + 10px); background: var(--bg);
-  border-top: 1px solid var(--line); }
-.ww-mic { width: 100%; max-width: 420px; padding: 13px; border-radius: 26px;
-  background: var(--bg-soft); font-size: 15px; color: var(--text); }
-.ww-mic.on { background: var(--danger); color: #fff; transform: scale(.99); }
-.ww-michint { font-size: 11px; color: var(--sub); }
-.game .ww-body { padding-bottom: calc(var(--safe-bottom) + 96px); }
+
+/* 打开游戏时隐藏聊天界面元素，避免遮挡点击 */
+body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #contacts, body.in-game #mePage { display: none !important; }
