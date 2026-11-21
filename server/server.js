@@ -1186,7 +1186,7 @@ function handleMessage(c, buf, opcode) {
       code: versionInfo.code,
       name: versionInfo.name,
       notes: versionInfo.notes || '',
-      url: versionInfo.url || ('http://' + (HOST === '0.0.0.0' ? '114.55.230.190' : HOST) + ':' + PORT + '/download/apk'),
+      url: versionInfo.url || ('http://' + (HOST === '0.0.0.0' ? '127.0.0.1' : HOST) + ':' + PORT + '/download/apk'),
       size: versionInfo.size || 0,
       needUpdate: code > 0 && versionInfo.code > code
     });
