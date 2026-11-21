@@ -495,19 +495,45 @@
         ((mine || amHost) ? '<button id="wwSkipSay" class="ww-btn ghost" type="button">跳过发言</button>' : '') +
         '</div>';
     } else if (st === 'vote') {
-      panel = '<div class="ww-actions">' +
-        '<div class="ww-tip">点头像选人，再按投票（不能投自己）</div>' +
-        '<button id="wwVoteBtn" class="ww-btn main" type="button" disabled>投票</button>' +
-        '<button id="wwSkip" class="ww-btn ghost" type="button">弃票</button></div>';
+      var meAlive = G.you && G.you.alive;
+      panel = meAlive
+        ? '<div class="ww-actions">' +
+          '<div class="ww-tip">点头像选人，再按投票（不能投自己）</div>' +
+          '<button id="wwVoteBtn" class="ww-btn main" type="button" disabled>投票</button>' +
+          '<button id="wwSkip" class="ww-btn ghost" type="button">弃票</button></div>'
+        : '<div class="ww-actions"><div class="ww-tip">你已出局，只能旁观投票</div></div>';
     } else if (st === 'shoot') {
-      panel = '<div class="ww-actions"><div class="ww-tip">你可以带走一个人</div>' +
-        '<button id="wwGiveup" class="ww-btn ghost" type="button">不开枪</button></div>';
+      var amShooter = G.shootMe;
+      panel = amShooter
+        ? '<div class="ww-actions"><div class="ww-tip">你可以带走一个人（点头像选）</div>' +
+          '<button id="wwGiveup" class="ww-btn ghost" type="button">不开枪</button></div>'
+        : '<div class="ww-actions"><div class="ww-tip">等待 ' + (G.shootSeat || '') + ' 号开枪…</div></div>';
     } else if (st === 'dawn') {
       panel = '<div class="ww-actions"><div class="ww-tip">' + phaseText() + '</div></div>';
     }
 
-    body.innerHTML = tableHtml() + roleBar() + panel;
+    body.innerHTML = tableHtml() + roleBar() + voteDetailHtml() + panel;
     bindTable();
+  }
+
+  /* 投票明细：谁被投、谁投的他 */
+  function voteDetailHtml() {
+    var v = G.voteResult;
+    if (!v || G.room.state !== 'vote') return '';
+    var detail = v.detail || [];
+    var skipped = v.skipped || [];
+    if (!detail.length && !skipped.length) return '';
+    return '<div class="ww-votedetail">' +
+      '<div class="ww-vd-title">本轮投票 · ' + (v.out ? (v.out + ' 号出局') : '平票/无人出局') + '</div>' +
+      detail.map(function (d) {
+        var who = (d.voters || []).map(function (x) { return x.seat + '号'; }).join('、');
+        return '<div class="ww-vd-row' + (v.out === d.seat ? ' out' : '') + '">' +
+          '<b>' + d.seat + ' 号 ' + esc(d.name || '') + '</b>' +
+          '<span>' + d.votes + ' 票</span>' +
+          '<em>' + (who ? ('投他：' + who) : '票数公开未列出') + '</em></div>';
+      }).join('') +
+      (skipped.length ? '<div class="ww-vd-skip">弃票：' + skipped.map(function (x) { return x.seat + '号'; }).join('、') + '</div>' : '') +
+      '</div>';
   }
 
   var chosenSeat = null;
@@ -695,7 +721,13 @@
         if (d.game.state !== 'settlement') { G.result = null; }
         render(); break;
       case 'ww_players':
-        if (G.room) { G.room.players = d.players || G.room.players; G.room.state = d.state || G.room.state; render(); }
+        if (G.room) {
+          G.room.players = d.players || G.room.players;
+          G.room.state = d.state || G.room.state;
+          var mine = (G.room.players || []).find(function (p) { return G.you && p.seat === G.you.seat; });
+          if (mine) G.you = Object.assign({}, G.you, { alive: mine.alive, host: mine.host });
+          render();
+        }
         break;
       case 'ww_started': G.room = d.game; G.stage = 'playing'; render(); break;
       case 'ww_wolves': G.mates = d.mates || []; render(); break;
@@ -709,6 +741,13 @@
       case 'ww_guard_info': G.guard = d; break;
       case 'ww_check_result': G.checkResult = d; render(); break;
       case 'ww_action_ack': if (d.kind === 'poison') { G.witch = null; } if (d.kind === 'save') { G.witch = null; } render(); break;
+      case 'ww_night_step':
+        if (d.done === 'wolf') {
+          toast('狼人已选定目标' + (d.target ? ('（' + d.target + ' 号）') : ''));
+          if (G.room) G.room.deadline = Math.min(G.room.deadline || 0, Date.now() + 18000);
+          render();
+        }
+        break;
       case 'ww_deaths': toast('昨晚：' + (d.deaths || []).map(function (x) { return x.seat + ' 号'; }).join('、') + ' 出局'); break;
       case 'ww_dawn':
         G.dawn = { deaths: (d.deaths || []).map(function (x) { return typeof x === 'object' ? x.seat : x; }) };
@@ -734,10 +773,13 @@
         sfx('vote');
         judge(d.out ? (d.out + '号被放逐') : '平票，本轮无人出局');
         toast(d.out ? (d.out + ' 号被放逐') : '平票，无人出局');
+        render();
         break;
       case 'ww_flip': toast(d.seat + ' 号翻牌：' + (ROLE_NAME[d.role] || d.role) + '，失去投票权'); break;
       case 'ww_hunter':
         G.stage = 'shoot';
+        G.shootSeat = d.seat;
+        G.shootMe = !!(G.you && G.you.seat === d.seat);
         if (G.room) { G.room.state = 'shoot'; G.room.deadline = d.deadline || 0; }
         render(); break;
       case 'ww_over':

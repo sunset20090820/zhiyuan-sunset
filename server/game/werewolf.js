@@ -558,7 +558,16 @@ function maybeAdvance(game, api) {
     if (p.role === 'cupid') return n.cupidDone || game.round > 1;
     return n.acted[k];
   });
-  if (allWolvesActed && othersActed) finishNight(game, api);
+  if (allWolvesActed && othersActed) { finishNight(game, api); return; }
+  if (allWolvesActed && !game._wolfStepDone) {
+    game._wolfStepDone = true;
+    // 狼人已经选定目标：立刻告诉全场，狼人不必再等读秒
+    const targetSeat = n.wolfTarget ? seatOf(game, n.wolfTarget) : 0;
+    toGame(game, api, { t: 'ww_night_step', done: 'wolf', target: targetSeat, round: game.round });
+    // 剩余夜间角色还有事做时，也不让狼人干等满 60 秒
+    const short = api.now() + 18000;
+    if (game.deadline > short) game.deadline = short;
+  }
 }
 
 function finishNight(game, api) {
@@ -815,8 +824,7 @@ function handleSkipSpeech(api, c, d) {
   const p = game.players.find(x => x.key === keyOf(api, c));
   if (!p) throw new Error('你不在这一局');
   const curKey = game.speechOrder[game.speechIndex];
-  const isHost = p.seat === game.hostSeat;
-  if (p.key !== curKey && !isHost) throw new Error('只能跳过自己的发言');
+  if (p.key !== curKey) throw new Error('只能跳过自己的发言');
   const cur = game.players.find(x => x.key === curKey);
   if (cur) toGame(game, api, { t: 'ww_said', seat: cur.seat, name: cur.name, text: '（跳过发言）', skipped: true });
   game.speechIndex++;
@@ -881,8 +889,24 @@ function doResolveVote(game, api) {
     const topList = entries.filter(e => e.votes === top);
     if (topList.length === 1) out = topList[0].seat;
   }
+  // 明细：目标座位 + 投票人（公开模式才给出谁投了谁；匿名模式只给票数）
+  const detail = entries.map(e => {
+    const tgt = playerAt(game, e.seat);
+    const voters = Object.keys(game.votes)
+      .filter(k => game.votes[k] !== 'skip' && game.votes[k] === (tgt ? tgt.key : null))
+      .map(k => {
+        const vp = game.players.find(x => x.key === k);
+        return { seat: seatOf(game, k), name: vp ? vp.name : '' };
+      });
+    return { seat: e.seat, name: tgt ? tgt.name : '', votes: e.votes,
+      voters: game.opts.voteMode === 'public' ? voters : [] };
+  });
+  const skipped = Object.keys(game.votes)
+    .filter(k => game.votes[k] === 'skip')
+    .map(k => ({ seat: seatOf(game, k), name: (game.players.find(x => x.key === k) || {}).name || '' }));
   toGame(game, api, {
-    t: 'ww_vote_result', round: game.round, tally: entries,
+    t: 'ww_vote_result', round: game.round, tally: entries, detail: detail,
+    skipped: skipped,
     out: out, tie: out === null && entries.length > 0,
     votes: game.opts.voteMode === 'public' ? Object.keys(game.votes).map(k => ({ seat: seatOf(game, k), target: game.votes[k] })) : undefined,
   });
