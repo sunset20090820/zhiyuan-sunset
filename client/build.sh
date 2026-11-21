@@ -10,6 +10,9 @@ cd "$(dirname "$0")"
 
 VER_NAME="${1:-dev}"
 VER_CODE="${2:-1}"
+# 服务器地址：SERVER / UPDATE_SERVER 环境变量写进 app/config.js
+#   SERVER="ws://chat.example.com:8080" 登录页默认服务器（留空则让用户自己填）
+#   UPDATE_SERVER="http://chat.example.com:8080" 更新源（留空=不检查更新）
 : "${ANDROID_HOME:?请设置 ANDROID_HOME（内含 build-tools 与 platforms/android-34）}"
 
 BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
@@ -24,7 +27,15 @@ echo "window.APP_VERSION = \"$VER_NAME\";" > app/version.js
 sed -i.bak -E "s/android:versionCode=\"[0-9]+\"/android:versionCode=\"$VER_CODE\"/; s/android:versionName=\"[^\"]*\"/android:versionName=\"$VER_NAME\"/" AndroidManifest.xml
 rm -f AndroidManifest.xml.bak
 
-cp -r app build/assets/www
+# 生成运行时配置（不把地址写死在 app.js 里）
+cat > app/config.js <<CFG
+/* 由 build.sh 生成；提交到仓库的是空模板 */
+window.ZY_CONFIG = {
+  server: '${SERVER:-}',
+  updateServer: '${UPDATE_SERVER:-}'
+};
+CFG
+rm -rf build/assets/www && mkdir -p build/assets && cp -r app build/assets/www
 aapt2 compile --dir res -o build/gen/res.zip >/dev/null 2>&1 || true
 aapt package -f -m -M AndroidManifest.xml -S res -A build/assets -I "$PLATFORM" -J build/gen -F build/base.apk
 javac -source 8 -target 8 -bootclasspath "$PLATFORM" -d build/obj $(find src build/gen -name '*.java')

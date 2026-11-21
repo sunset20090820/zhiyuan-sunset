@@ -37,23 +37,37 @@ docs/                   协议与实现说明
 ```bash
 cd client
 ANDROID_HOME=/path/to/android-sdk \
+SERVER=ws://chat.example.com:8080 \
+UPDATE_SERVER=http://chat.example.com:8080 \
 KEYSTORE=/path/to/my.jks KS_PASS=你的口令 \
-./build.sh 5.6 56
+./build.sh 5.7 57
 ```
 
-产物在 `dist/zhiyuan-5.6.apk`。不给 `KEYSTORE` 时只产出未签名包。
+产物在仓库根 `dist/zhiyuan-5.7.apk`。
+
+| 环境变量 | 作用 |
+|---|---|
+| `SERVER` | 写进登录页默认的服务器地址（留空 = 让用户自己填） |
+| `UPDATE_SERVER` | 检查更新的服务器（留空 = 不检查更新） |
+| `KEYSTORE` / `KS_PASS` / `KS_ALIAS` | 签名用；不提供则产出未签名包 |
+
+服务器地址**不写死在代码里**，由 `build.sh` 生成 `app/config.js`；仓库里提交的是空模板
+`client/app/config.js`，所以源码公开不会泄露你的服务器地址。
 
 > 签名口令只从环境变量读取，不要写进仓库。第一次签名：
 > `keytool -genkeypair -keystore my.jks -alias zy -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=ZhiYuan"`
 
-**换默认服务器**：改 `client/app/app.js` 里两处常量
+**换默认服务器**：不用改代码，构建时传 `SERVER` / `UPDATE_SERVER` 即可（见上表）。
+也可以直接编辑 `client/app/config.js`：
 
 ```js
-var OFFICIAL_SERVER = 'ws://你的域名或IP:8080';   // 只用于「检查更新」
-var DEFAULT_SERVER  = 'ws://你的域名或IP:8080';   // 登录页默认值
+window.ZY_CONFIG = {
+  server: 'ws://chat.example.com:8080',
+  updateServer: 'http://chat.example.com:8080'
+};
 ```
 
-用户也可以在登录页自己填别的服务器。
+用户同样可以在登录页自己填别的服务器；本机数据按服务器隔离，换服务器不会串数据。
 
 ## 服务端部署
 

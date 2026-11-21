@@ -13,7 +13,9 @@
 
   /* ---------------- 多服务器：本地数据按服务器隔离 ---------------- */
   var CUR_SRV_KEY = 'pl.curServer';
-  var OFFICIAL_SERVER = 'ws://114.55.230.190:8080';
+  var CFG = window.ZY_CONFIG || {};
+  // 更新源：留空 = 不检查更新（自建服务器可以自己配）
+  var OFFICIAL_SERVER = String(CFG.updateServer || '').replace(/\/+$/, '');
   var srvTag = 'default';
   function srvTagOf(server) {
     var t = String(server || '').replace(/^wss?:\/\//i, '').replace(/\/+$/, '').toLowerCase();
@@ -2326,7 +2328,7 @@
   // 允许 ws:// wss:// http:// https:// 或裸地址；自动补协议与默认端口
   function normServer(v) {
     var s = (v || '').trim();
-    if (!s) return DEFAULT_SERVER;
+    if (!s) return DEFAULT_SERVER || '';
     s = s.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
     if (!/^wss?:\/\//i.test(s)) s = 'ws://' + s;
     s = s.replace(/\/+$/, '');
@@ -2462,7 +2464,7 @@
   var checkSeq = 0, checkDone = 0, checkJob = null;
   function runVersionCheck(manual) {
     var base = serverHttpBase();
-    if (!base) { if (manual) toast('还没连上服务器'); return; }
+    if (!base) { if (manual) toast('这台设备没有配置更新服务器'); return; }
     if (manual) toast('正在检查更新…');
     window.__manualCheck = !!manual;
     var my = ++checkSeq;
@@ -3045,8 +3047,8 @@
       }
     });
   }
-  // 默认服务器（已部署好的阿里云）
-  var DEFAULT_SERVER = 'ws://114.55.230.190:8080';
+  // 默认服务器：在 app/config.js 里配；留空则要求用户自己填
+  var DEFAULT_SERVER = String(CFG.server || '').replace(/\/+$/, '');
 
   function guessServer() {
     try {

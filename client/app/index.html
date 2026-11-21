@@ -24,7 +24,7 @@
     <!-- 登录 -->
     <div id="paneLogin">
       <label class="field"><span>服务器</span>
-        <input id="inServer" maxlength="120" placeholder="ws://114.55.230.190:8080" autocomplete="off" spellcheck="false"></label>
+        <input id="inServer" maxlength="120" placeholder="ws://你的服务器:8080" autocomplete="off" spellcheck="false"></label>
       <label class="field"><span>用户名</span>
         <input id="inUser" maxlength="16" placeholder="你的用户名" autocomplete="off"></label>
       <label class="field"><span>密码</span>
@@ -37,7 +37,7 @@
     <!-- 注册 -->
     <div id="paneRegister" class="hidden">
       <label class="field"><span>服务器</span>
-        <input id="regServer" maxlength="120" placeholder="ws://114.55.230.190:8080" autocomplete="off" spellcheck="false"></label>
+        <input id="regServer" maxlength="120" placeholder="ws://你的服务器:8080" autocomplete="off" spellcheck="false"></label>
       <label class="field"><span>用户名</span>
         <input id="regUser" maxlength="16" placeholder="2–16 位，中文/字母/数字/下划线" autocomplete="off"></label>
       <label class="field"><span>昵称</span>
@@ -363,6 +363,7 @@
 
 <div id="toast" class="toast"></div>
 
+<script src="config.js"></script>
 <script src="version.js"></script>
 <script src="app.js"></script>
 </body>
