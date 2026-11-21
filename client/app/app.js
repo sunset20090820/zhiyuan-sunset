@@ -2424,12 +2424,18 @@
     webVersionCheck();
   }
   // 登录页还没连 WS，也能查版本：直接打 HTTP /version
-  function serverHttpBase() {
-    var s = OFFICIAL_SERVER || S.server || guessServer();
-    var m = /^wss?:\/\/([^/:]+)(?::(\d+))?/.exec(s);
+  // ws(s):// / http(s):// / 裸地址 都能转成 http(s) 基地址
+  function toHttpBase(s) {
+    var t = String(s || '').trim().replace(/\/+$/, '');
+    if (!t) return '';
+    t = t.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+    if (!/^wss?:\/\//i.test(t)) t = 'ws://' + t;
+    var m = /^(wss?):\/\/([^\/:]+)(?::(\d+))?/i.exec(t);
     if (!m) return '';
-    var isSecure = s.indexOf('wss://') === 0;
-    return (isSecure ? 'https://' : 'http://') + m[1] + (m[2] ? ':' + m[2] : '');
+    return (m[1].toLowerCase() === 'wss:' ? 'https://' : 'http://') + m[2] + (m[3] ? ':' + m[3] : '');
+  }
+  function serverHttpBase() {
+    return toHttpBase(OFFICIAL_SERVER) || toHttpBase(S.server) || toHttpBase(guessServer());
   }
   // 原生回调（空串表示原生失败，转网页 fetch 兜底）
   window.__updateResult = function (json) {
