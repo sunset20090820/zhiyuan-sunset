@@ -104,3 +104,13 @@ docker compose up -d        # Docker
 ## License
 
 MIT
+
+## 自动构建（可选）
+
+仓库自带 `.github/workflows/build.yml`：推 `v*` tag 或手动触发时自动构建 APK。
+需要在仓库设置里配置：
+
+- Variables：`ZY_SERVER`（默认服务器）、`ZY_UPDATE_SERVER`（更新源）
+- Secrets：`KEYSTORE_BASE64`（`base64 -w0 my.jks`）、`KS_PASS`、`KS_ALIAS`
+
+不配 keystore 也能跑，只是产出的是未签名包。
