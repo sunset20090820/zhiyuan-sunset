@@ -72,7 +72,7 @@
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
           list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
-    glass: true, accent: 'periwinkle', topbarText: 'auto'
+    glass: true, glassLevel: 55, accent: 'periwinkle', topbarText: 'auto'
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -194,7 +194,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, accent: S.accent, topbarText: S.topbarText, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, accent: S.accent, topbarText: S.topbarText, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -233,6 +233,7 @@
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
         S.bg = normalizeBg(o.bg);
         if (typeof o.glass === 'boolean') S.glass = o.glass;
+        if (typeof o.glassLevel === 'number') S.glassLevel = o.glassLevel;
         if (o.accent) S.accent = o.accent;
         if (o.topbarText) S.topbarText = o.topbarText;
         S.auth = !!o.auth;
@@ -1284,6 +1285,19 @@
     else if (cw.wall !== 'none' || lw.wall !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
     else root.removeAttribute('data-wall');
 
+    // 玻璃强度：0–100 → 模糊 4–44px、透明度 .18–.86、色渗 .02–.16
+    var lv = (typeof S.glassLevel === 'number') ? S.glassLevel : 55;
+    var blur = 4 + lv * 0.40;
+    var alpha = 0.18 + lv * 0.0068;
+    var tint = 0.02 + lv * 0.0014;
+    var sat = 150 + lv * 0.9;              // 150% – 240%
+    root.style.setProperty('--row-blur', blur.toFixed(1) + 'px');
+    root.style.setProperty('--row-sat', sat.toFixed(0) + '%');
+    root.style.setProperty('--row-alpha', alpha.toFixed(3));
+    root.style.setProperty('--row-tint', tint.toFixed(3));
+    var gl = $('#glassLevel');
+    if (gl && Number(gl.value) !== lv) gl.value = String(lv);
+
     root.classList.toggle('no-glass', !S.glass);
     if (S.accent && S.accent !== 'periwinkle') root.setAttribute('data-accent', S.accent);
     else root.removeAttribute('data-accent');
@@ -1897,6 +1911,11 @@
       if (el) el.textContent = names[S.topbarText];
       toast('顶栏文字：' + names[S.topbarText]);
     });
+    on('#glassLevel', 'input', function (e) {
+      S.glassLevel = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+      applyChatBg();
+    });
+    on('#glassLevel', 'change', function () { save(); });
     on('#btnGlass', 'click', function () {
       S.glass = !S.glass;
       applyChatBg();
