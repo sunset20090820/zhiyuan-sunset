@@ -2115,3 +2115,65 @@ html.no-glass .action-card { background: var(--card); }
 html[data-theme="dark"] .bg-chip span { background: rgba(30, 32, 46, .72); color: #dfe3f5; }
 .bg-dim-row { display: flex; align-items: center; gap: 10px; margin: 2px 0 10px; }
 .bg-dim-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+/* =========================================================
+   9.3 背景模糊 · 主题色 · 下拉回弹 · 深色自动压暗
+   ========================================================= */
+
+/* ---------- 1) 自定义背景：可选模糊层 ---------- */
+html.wall-blur .msgs { background-image: none; }
+html.wall-blur .msgs::after {
+  content: '';
+  position: absolute; inset: -10px;
+  z-index: -2;
+  pointer-events: none;
+  background-image: var(--chat-wall, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(var(--chat-wall-blur, 10px)) saturate(115%);
+  transform: scale(1.04);
+}
+.msgs { will-change: background-image; }
+
+/* ---------- 2) 主题色（换一套主色，全套跟着变） ---------- */
+:root {
+  --out-a: #6478e8;
+  --out-b: #7a6ae6;
+}
+.msg.out .bubble { background-image: linear-gradient(135deg, var(--out-a), var(--out-b)); }
+.send, .fab, .primary { background-image: linear-gradient(135deg, var(--out-a), var(--out-b)); }
+
+:root[data-accent="mint"] {
+  --accent: #5ec9b0; --accent-ink: #1c8f77; --accent-2: #8fe0c8;
+  --out-a: #3fb39a; --out-b: #57c9b3; --accent-3: #ffd28f;
+}
+:root[data-accent="peach"] {
+  --accent: #ff9f7a; --accent-ink: #cf6438; --accent-2: #ffc3a3;
+  --out-a: #f08a5d; --out-b: #f5a06f; --accent-3: #ff9ec4;
+}
+:root[data-accent="sakura"] {
+  --accent: #ff8fb1; --accent-ink: #cf4a7a; --accent-2: #ffbcd1;
+  --out-a: #ef6f97; --out-b: #f58fb0; --accent-3: #a78bfa;
+}
+:root[data-accent="lavender"] {
+  --accent: #a78bfa; --accent-ink: #7a5cf0; --accent-2: #c9b8ff;
+  --out-a: #8b6ff0; --out-b: #a67cf2; --accent-3: #ff9ec4;
+}
+:root[data-accent="cream"] {
+  --accent: #e5b769; --accent-ink: #a97c20; --accent-2: #f3d59a;
+  --out-a: #d9a544; --out-b: #e8bd6d; --accent-3: #ffb08a;
+}
+
+/* ---------- 3) 下拉回弹 ---------- */
+#roomList { will-change: transform; }
+#roomList.pulling { transition: none; }
+
+/* ---------- 4) 主题色选择器 ---------- */
+.accent-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 8px 0 14px; }
+.accent-chip {
+  height: 44px; border-radius: 14px; border: 2px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 6px 14px rgba(124, 139, 250, .16);
+  transition: transform .16s ease, border-color .16s ease;
+}
+.accent-chip.on { border-color: rgba(31, 34, 51, .35); transform: translateY(-2px); }
+html[data-theme="dark"] .accent-chip.on { border-color: rgba(255, 255, 255, .55); }

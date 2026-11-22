@@ -190,7 +190,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, accent: S.accent, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -1221,17 +1221,29 @@
     var root = document.documentElement, bg = S.bg || {};
     var dark = root.getAttribute('data-theme') === 'dark';
     var wall = 'none';
-    if (bg.key === 'custom' && bg.image) wall = 'url("' + bg.image + '")';
+    var isImage = false;
+    if (bg.key === 'custom' && bg.image) { wall = 'url("' + bg.image + '")'; isImage = true; }
     else if (bg.key && bg.key !== 'none') {
       var p = bgPreset(bg.key);
       if (p) wall = p.css;
     }
     root.style.setProperty('--chat-wall', wall);
+    // 相册图在深色下自动多压一点，字更好读
     var d = Number(bg.dim);
     if (isNaN(d)) d = 0.18;
+    if (dark && isImage) d = Math.min(0.72, d + 0.16);
     var base = dark ? '12,14,24' : '255,255,255';
     root.style.setProperty('--chat-wall-dim', 'rgba(' + base + ',' + d.toFixed(2) + ')');
+
+    // 背景模糊（只对相册图有意义）
+    var blur = Number(bg.blur) || 0;
+    if (!isImage) blur = 0;
+    root.style.setProperty('--chat-wall-blur', blur + 'px');
+    root.classList.toggle('wall-blur', blur > 0);
+
     root.classList.toggle('no-glass', !S.glass);
+    if (S.accent && S.accent !== 'periwinkle') root.setAttribute('data-accent', S.accent);
+    else root.removeAttribute('data-accent');
   }
   function setChatBg(key, image) {
     S.bg.key = key;
@@ -1261,6 +1273,30 @@
   function pickBgImage() {
     var el = $('#bgInput');
     if (el) { el.value = ''; el.click(); }
+  }
+
+  var ACCENTS = [
+    { key: 'periwinkle', name: '长春花', css: 'linear-gradient(135deg,#6478e8,#7a6ae6)' },
+    { key: 'lavender',   name: '薰衣草', css: 'linear-gradient(135deg,#8b6ff0,#a67cf2)' },
+    { key: 'sakura',     name: '樱花',   css: 'linear-gradient(135deg,#ef6f97,#f58fb0)' },
+    { key: 'peach',      name: '蜜桃',   css: 'linear-gradient(135deg,#f08a5d,#f5a06f)' },
+    { key: 'mint',       name: '薄荷',   css: 'linear-gradient(135deg,#3fb39a,#57c9b3)' },
+    { key: 'cream',      name: '奶油',   css: 'linear-gradient(135deg,#d9a544,#e8bd6d)' }
+  ];
+  function renderAccentSheet() {
+    var box = $('#accentGrid');
+    if (!box) return;
+    box.innerHTML = ACCENTS.map(function (a) {
+      return '<button class="accent-chip' + ((S.accent || 'periwinkle') === a.key ? ' on' : '') +
+             '" type="button" data-accent="' + a.key + '" style="background-image:' + a.css +
+             '" aria-label="' + a.name + '"></button>';
+    }).join('');
+  }
+  function setAccent(key) {
+    S.accent = key || 'periwinkle';
+    applyChatBg();
+    save();
+    renderAccentSheet();
   }
 
   /* ---------------- 事件绑定 ---------------- */
@@ -1665,6 +1701,37 @@
       $('#agentSheet').classList.remove('hidden');
       requestAnimationFrame(function () { $('#agentSheet').classList.add('open'); });
     });
+    (function bindPullToRefresh() {
+      var list = $('#roomList');
+      if (!list) return;
+      var startY = 0, pulling = false, dy = 0;
+      list.addEventListener('touchstart', function (e) {
+        if (list.scrollTop > 0 || !e.touches || !e.touches[0]) return;
+        startY = e.touches[0].clientY; pulling = true; dy = 0;
+        list.style.transition = 'none';
+      }, { passive: true });
+      list.addEventListener('touchmove', function (e) {
+        if (!pulling || !e.touches || !e.touches[0]) return;
+        dy = e.touches[0].clientY - startY;
+        if (dy <= 0) { dy = 0; list.style.transform = ''; return; }
+        var pull = Math.min(96, Math.pow(dy, 0.86) * 1.6);
+        list.style.transform = 'translateY(' + pull + 'px)';
+      }, { passive: true });
+      list.addEventListener('touchend', function () {
+        if (!pulling) return;
+        pulling = false;
+        list.style.transition = 'transform .32s cubic-bezier(.2,.9,.2,1.2)';
+        list.style.transform = '';
+        if (dy > 64) {
+          toast('正在重新连接…');
+          try { if (ws) ws.close(); } catch (e) {}
+          try { ws = null; } catch (e) {}
+          setTimeout(function () { try { connect(); } catch (e) {} }, 120);
+        }
+        dy = 0;
+      }, { passive: true });
+    })();
+
     on('#btnChatBg', 'click', function () {
       renderBgSheet();
       $('#bgSheet').classList.remove('hidden');
@@ -1702,6 +1769,27 @@
       img.onerror = function () { toast('这张图打不开'); };
       img.src = url;
     });
+    on('#btnAccent', 'click', function () {
+      renderAccentSheet();
+      $('#accentSheet').classList.remove('hidden');
+      requestAnimationFrame(function () { $('#accentSheet').classList.add('open'); });
+    });
+    on('#accentClose', 'click', function () {
+      var el = $('#accentSheet');
+      el.classList.remove('open');
+      setTimeout(function () { el.classList.add('hidden'); }, 200);
+    });
+    on('#accentGrid', 'click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-accent]') : null;
+      if (!b) return;
+      setAccent(b.getAttribute('data-accent'));
+      toast('主题色已切换');
+    });
+    on('#bgBlur', 'input', function (e) {
+      S.bg.blur = Number(e.target.value) || 0;
+      applyChatBg();
+    });
+    on('#bgBlur', 'change', function () { save(); });
     on('#bgDim', 'input', function (e) {
       S.bg.dim = Math.max(0, Math.min(0.6, Number(e.target.value) / 100));
       applyChatBg();
