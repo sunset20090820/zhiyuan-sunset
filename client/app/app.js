@@ -1222,6 +1222,7 @@
     document.documentElement.setAttribute('data-skin', v);
     try { localStorage.setItem('paperlite.skin', v); } catch (e) {}
     try { var el = $('#skinState'); if (el) el.textContent = (v === 'm3e') ? '开' : '关'; } catch (e) {}
+    try { setTimeout(function () { moveNavPill(false); }, 60); } catch (e) {}
   }
   function toggleSkin() {
     applySkin((S.skin || 'm3e') === 'm3e' ? 'classic' : 'm3e');
@@ -3547,6 +3548,39 @@
   };
 
   /* ---------------- 底部导航 ---------------- */
+  /* 果冻药丸：底栏里有一个会滑动的胶囊，选中项变了它就弹过去 */
+  var navBootAt = Date.now();   // 启动 400ms 内的切换不弹，免得一进 App 就抖
+  function moveNavPill(animate) {
+    var bar = $('#tabbar'), pill = $('#navPill');
+    if (!bar || !pill) return;
+    if (document.documentElement.getAttribute('data-skin') !== 'm3e' || bar.classList.contains('hidden')) {
+      pill.style.display = 'none';
+      return;
+    }
+    pill.style.display = '';
+    var on = bar.querySelector('.tab-item.on');
+    var ico = on && on.querySelector('.tab-ico');
+    if (!ico) return;
+    var br = bar.getBoundingClientRect(), ir = ico.getBoundingClientRect();
+    if (!ir.width) return;
+    var w = 64, h = 32;
+    var x = (ir.left - br.left) + (ir.width - w) / 2;
+    var y = (ir.top - br.top) + (ir.height - h) / 2;
+    var prev = pill.__x;
+    pill.style.width = w + 'px';
+    pill.style.height = h + 'px';
+    pill.style.top = (y + bar.scrollTop) + 'px';
+    pill.style.transform = 'translateX(' + x + 'px)';
+    pill.__x = x;
+    if (animate && typeof prev === 'number' && Math.abs(prev - x) > 1) {
+      pill.classList.remove('jelly');
+      void pill.offsetWidth;
+      pill.classList.add('jelly');
+      clearTimeout(pill.__jt);
+      pill.__jt = setTimeout(function () { pill.classList.remove('jelly'); }, 660);
+    }
+  }
+
   function showTab(name) {
     S.tab = name;
     $('#chats').classList.toggle('hidden', name !== 'chats');
@@ -3557,11 +3591,32 @@
      '#groupSheet', '#remarkSheet'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
+    var animate = (Date.now() - navBootAt) > 400;
     var items = document.querySelectorAll('#tabbar .tab-item');
     Array.prototype.forEach.call(items, function (b) {
-      b.classList.toggle('on', b.getAttribute('data-tab') === name);
+      var on = b.getAttribute('data-tab') === name;
+      b.classList.toggle('on', on);
+      b.classList.remove('pop');
+      if (on && animate) {
+        void b.offsetWidth;
+        b.classList.add('pop');
+        setTimeout(function () { b.classList.remove('pop'); }, 560);
+      }
     });
     $('#tabbar').classList.toggle('hidden', !$('#chat').classList.contains('hidden'));
+    try {
+      requestAnimationFrame(function () { moveNavPill(animate); });
+    } catch (e) { moveNavPill(animate); }
+    if (animate) {
+      var page = name === 'me' ? $('#mePage') : (name === 'contacts' ? $('#contacts') : $('#chats'));
+      if (page) {
+        page.classList.remove('tab-switch');
+        void page.offsetWidth;
+        page.classList.add('tab-switch');
+        setTimeout(function () { page.classList.remove('tab-switch'); }, 460);
+      }
+    }
+
     if (name === 'me') fillMe();
     if (name === 'contacts') renderContacts();
   }
@@ -3735,6 +3790,11 @@
     loadRemarks();
     loadStickers();
     try { applySkin(); } catch (e) {}
+    try {
+      setTimeout(function () { moveNavPill(false); }, 80);
+      window.addEventListener('resize', function () { moveNavPill(false); });
+      window.addEventListener('orientationchange', function () { setTimeout(function () { moveNavPill(false); }, 260); });
+    } catch (e) {}
     try {
       var ver = window.APP_VERSION || '1.0';
       var line = $('#verLine');

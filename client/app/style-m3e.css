@@ -1,3 +1,6 @@
+/* 底栏果冻药丸：默认不显示，只有 m3e 皮肤才用 */
+#navPill { display: none; }
+
 /* =========================================================
    12.0 · 原生安卓 16 皮肤（Material 3 Expressive）
    ---------------------------------------------------------
@@ -75,16 +78,12 @@ html[data-skin="m3e"] .storage-page { background: var(--m3e-surface); }
 html[data-skin="m3e"] .chat { background: var(--m3e-surface); }
 
 /* 玻璃层：全部关掉（这是「原生」和「小清新」最大的分界） */
+/* 先把旧的玻璃渐变/描边清掉，新的玻璃在下面第 10 节重新给 */
 html[data-skin="m3e"] .topbar,
 html[data-skin="m3e"] .chat-top,
 html[data-skin="m3e"] .tabbar,
 html[data-skin="m3e"] .composer,
-html[data-skin="m3e"] .action-card {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-  background-image: none !important;
-  border: 0 !important;
-}
+html[data-skin="m3e"] .action-card { background-image: none !important; }
 html[data-skin="m3e"] .topbar::before,
 html[data-skin="m3e"] .chat-top::before,
 html[data-skin="m3e"] .tabbar::before,
@@ -902,16 +901,7 @@ html[data-skin="m3e"] .pin-btn::before {
 /* 导航栏选中项：药丸底放在父元素上，图标本身保持透明底 */
 html[data-skin="m3e"] .tab-item { position: relative; color: var(--m3e-on-variant); }
 html[data-skin="m3e"] .tab-item.on { color: var(--m3e-on-surface); }
-html[data-skin="m3e"] .tab-item.on::before {
-  content: '';
-  position: absolute;
-  top: 4px; left: 50%;
-  transform: translateX(-50%);
-  width: 64px; height: 32px;
-  border-radius: var(--m3e-full);
-  background: var(--m3e-secondary-container);
-  z-index: 0;
-}
+
 html[data-skin="m3e"] .tab-item .tab-ico {
   position: relative;
   z-index: 1;
@@ -922,4 +912,192 @@ html[data-skin="m3e"] .tab-item.on .tab-ico {
   background-color: currentColor !important;
   background-image: none !important;
   color: var(--m3e-on-secondary-container);
+}
+
+/* ---------------------------------------------------------
+   10) 玻璃：顶栏 / 底栏 / 输入条 / 面板 / 列表，全部变厚
+   —— 跟随「液态玻璃强度」滑块（--row-blur / --row-sat）
+   —— 关掉液态玻璃时退回实底（html.no-glass）
+   --------------------------------------------------------- */
+html[data-skin="m3e"] {
+  --m3e-glass-blur: var(--row-blur, 26px);
+  --m3e-glass-sat: var(--row-sat, 200%);
+  --m3e-glass-a: var(--row-alpha, 0.55);
+  --m3e-glass-line: rgba(255, 255, 255, .55);
+  --m3e-glass-line-dark: rgba(255, 255, 255, .12);
+  --m3e-glass-hi: rgba(255, 255, 255, .38);
+}
+
+/* 底衬：让模糊有东西可模糊（否则透出的是纯色，看不出玻璃） */
+html[data-skin="m3e"] .screen,
+html[data-skin="m3e"] .me-page,
+html[data-skin="m3e"] .chat { background: transparent; }
+html[data-skin="m3e"] body {
+  background:
+    radial-gradient(120% 80% at 8% -10%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 58%),
+    radial-gradient(100% 70% at 100% 8%, color-mix(in srgb, var(--accent-2, var(--accent)) 20%, transparent) 0%, transparent 62%),
+    radial-gradient(90% 60% at 50% 108%, color-mix(in srgb, var(--accent-3, var(--accent)) 16%, transparent) 0%, transparent 60%),
+    var(--m3e-surface);
+  background-attachment: fixed;
+}
+
+/* 玻璃通用外观 */
+html[data-skin="m3e"] .topbar,
+html[data-skin="m3e"] .chat-top,
+html[data-skin="m3e"] .tabbar,
+html[data-skin="m3e"] .composer,
+html[data-skin="m3e"] .action-card,
+html[data-skin="m3e"] .sheet-body,
+html[data-skin="m3e"] #roomList,
+html[data-skin="m3e"] #friendList,
+html[data-skin="m3e"] .me-card,
+html[data-skin="m3e"] .me-group {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent);
+  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat)) brightness(1.06);
+  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat)) brightness(1.06);
+  border: 1px solid var(--m3e-glass-line);
+  box-shadow:
+    inset 0 1px 0 var(--m3e-glass-hi),
+    inset 0 -1px 0 rgba(255, 255, 255, .16),
+    0 10px 30px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+html[data-skin="m3e"][data-theme="dark"] .topbar,
+html[data-skin="m3e"][data-theme="dark"] .chat-top,
+html[data-skin="m3e"][data-theme="dark"] .tabbar,
+html[data-skin="m3e"][data-theme="dark"] .composer,
+html[data-skin="m3e"][data-theme="dark"] .action-card,
+html[data-skin="m3e"][data-theme="dark"] .sheet-body,
+html[data-skin="m3e"][data-theme="dark"] #roomList,
+html[data-skin="m3e"][data-theme="dark"] #friendList,
+html[data-skin="m3e"][data-theme="dark"] .me-card,
+html[data-skin="m3e"][data-theme="dark"] .me-group {
+  border-color: var(--m3e-glass-line-dark);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    inset 0 -1px 0 rgba(255, 255, 255, .04),
+    0 12px 32px rgba(0, 0, 0, .45);
+}
+
+/* 顶栏 / 底栏 / 输入条：只留一条玻璃高光边，不要整圈描边 */
+html[data-skin="m3e"] .topbar,
+html[data-skin="m3e"] .chat-top {
+  border: 0;
+  border-radius: 0 0 var(--m3e-lg) var(--m3e-lg);
+  box-shadow:
+    inset 0 1px 0 var(--m3e-glass-hi),
+    0 8px 24px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+html[data-skin="m3e"] .tabbar {
+  border: 0;
+  border-radius: var(--m3e-lg) var(--m3e-lg) 0 0;
+  box-shadow:
+    inset 0 1px 0 var(--m3e-glass-hi),
+    0 -8px 24px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+html[data-skin="m3e"] .composer {
+  border: 0;
+}
+
+/* 关掉液态玻璃 / 不支持 backdrop-filter → 实底，别糊成一片 */
+html[data-skin="m3e"].no-glass .topbar,
+html[data-skin="m3e"].no-glass .chat-top,
+html[data-skin="m3e"].no-glass .tabbar,
+html[data-skin="m3e"].no-glass .composer,
+html[data-skin="m3e"].no-glass .action-card,
+html[data-skin="m3e"].no-glass #roomList,
+html[data-skin="m3e"].no-glass #friendList,
+html[data-skin="m3e"].no-glass .me-card,
+html[data-skin="m3e"].no-glass .me-group {
+  background: var(--m3e-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-skin="m3e"] .topbar,
+  html[data-skin="m3e"] .chat-top,
+  html[data-skin="m3e"] .tabbar,
+  html[data-skin="m3e"] .composer,
+  html[data-skin="m3e"] .action-card,
+  html[data-skin="m3e"] #roomList,
+  html[data-skin="m3e"] #friendList { background: var(--m3e-surface); }
+}
+
+/* 列表行压在玻璃上时别再自己叠一层底 */
+html[data-skin="m3e"] #roomList .room,
+html[data-skin="m3e"] #friendList .room { background: transparent !important; }
+
+/* ---------------------------------------------------------
+   11) 底栏果冻药丸：滑动 + 拉伸 + 图标弹跳
+   --------------------------------------------------------- */
+html[data-skin="m3e"] .tabbar { position: fixed; }
+html[data-skin="m3e"] #navPill {
+  display: block;
+}
+html[data-skin="m3e"] .nav-pill {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 64px; height: 32px;
+  margin-left: calc(var(--pill-x, 0px) * 0);
+  border-radius: var(--m3e-full);
+  background: var(--m3e-secondary-container);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none;
+  z-index: 0;
+  transform: translateX(var(--pill-x, 0px));
+  transition: transform 420ms cubic-bezier(.34, 1.56, .64, 1);
+  will-change: transform;
+}
+html[data-skin="m3e"] .nav-pill i {
+  display: block;
+  width: 100%; height: 100%;
+  border-radius: inherit;
+  background: inherit;
+  transform-origin: center;
+}
+/* 滑动时先拉长、到位再回弹 —— 果冻感来源 */
+html[data-skin="m3e"] .nav-pill.jelly { transition-duration: 460ms; }
+html[data-skin="m3e"] .nav-pill.jelly i { animation: m3e-jelly 560ms cubic-bezier(.3, .9, .4, 1) both; }
+@keyframes m3e-jelly {
+  0%   { transform: scaleX(1) scaleY(1); }
+  18%  { transform: scaleX(1.34) scaleY(.86); }
+  46%  { transform: scaleX(.88) scaleY(1.08); }
+  68%  { transform: scaleX(1.08) scaleY(.96); }
+  84%  { transform: scaleX(.98) scaleY(1.02); }
+  100% { transform: scaleX(1) scaleY(1); }
+}
+/* 点中的图标也抖一下 */
+html[data-skin="m3e"] .tab-item.pop .tab-ico { animation: m3e-ico-pop 520ms cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes m3e-ico-pop {
+  0%   { transform: scale(1) translateY(0); }
+  24%  { transform: scale(.82) translateY(2px); }
+  58%  { transform: scale(1.16) translateY(-2px); }
+  78%  { transform: scale(.96) translateY(1px); }
+  100% { transform: scale(1) translateY(0); }
+}
+/* 文字也跟着轻轻一晃 */
+html[data-skin="m3e"] .tab-item.pop { animation: m3e-label-pop 480ms cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes m3e-label-pop {
+  0%   { transform: translateY(0); }
+  30%  { transform: translateY(1.5px); }
+  62%  { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+
+/* 切页时内容也弹一下（不同界面从侧面滑入 + 回弹） */
+@keyframes m3e-tab-in {
+  0%   { opacity: .4; transform: translateY(6px) scale(.985); }
+  60%  { opacity: 1;  transform: translateY(-1.5px) scale(1.004); }
+  100% { opacity: 1;  transform: translateY(0) scale(1); }
+}
+html[data-skin="m3e"] .screen.tab-switch,
+html[data-skin="m3e"] .me-page.tab-switch { animation: m3e-tab-in 380ms cubic-bezier(.34, 1.56, .64, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="m3e"] .nav-pill,
+  html[data-skin="m3e"] .nav-pill i,
+  html[data-skin="m3e"] .tab-item.pop,
+  html[data-skin="m3e"] .tab-item.pop .tab-ico,
+  html[data-skin="m3e"] .screen.tab-switch,
+  html[data-skin="m3e"] .me-page.tab-switch { animation: none !important; transition: none !important; }
 }
