@@ -61,10 +61,22 @@ public class LocalAgentServer {
     public synchronized void start() {
         if (running) return;
         try {
-            server = new ServerSocket();
-            server.setReuseAddress(true);
-            InetAddress addr = InetAddress.getByName(lanBind ? "0.0.0.0" : "127.0.0.1");
-            server.bind(new InetSocketAddress(addr, port), 8);
+            Exception last = null;
+            for (int attempt = 0; attempt < 3 && !running; attempt++) {
+                try {
+                    server = new ServerSocket();
+                    server.setReuseAddress(true);
+                    InetAddress addr = InetAddress.getByName(lanBind ? "0.0.0.0" : "127.0.0.1");
+                    server.bind(new InetSocketAddress(addr, port), 8);
+                    last = null;
+                } catch (Exception e) {
+                    last = e;
+                    try { if (server != null) server.close(); } catch (Exception e2) { }
+                    server = null;
+                    try { Thread.sleep(400); } catch (Exception e3) { }
+                }
+            }
+            if (last != null) throw last;
             running = true;
             lastError = "";
             acceptThread = new Thread(new Runnable() {
@@ -75,7 +87,9 @@ public class LocalAgentServer {
             notifyStatus();
             Log.i(TAG, "本地 Agent 端口已开启 " + (lanBind ? "0.0.0.0:" : "127.0.0.1:") + port);
         } catch (Exception e) {
-            lastError = "端口 " + port + " 打不开：" + e.getMessage();
+            lastError = "端口 " + port + " 打不开：" + e.getMessage()
+                    + (String.valueOf(e.getMessage()).indexOf("in use") >= 0
+                       ? "（这个端口已被别的程序占用；换个端口，或先关掉占用它的程序）" : "");
             running = false;
             Log.w(TAG, "启动失败", e);
             notifyStatus();

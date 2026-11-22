@@ -177,7 +177,7 @@
     <label class="me-row agent-row"><span class="me-ico">🌐</span>允许局域网连接
       <input id="agentLan" type="checkbox" class="agent-switch"></label>
     <p class="hint" id="agentStat">未开启</p>
-    <p class="hint" id="agentHint">默认只监听 127.0.0.1:6721；协议为每行一个 JSON。</p>
+    <p class="hint" id="agentHint">默认只监听 127.0.0.1:6721；协议为每行一个 JSON。这个端口是纸鸢自己监听的：Agent 只能连进来（connect），不能自己去占用 6721。若连不上，把纸鸢的省电策略设为「无限制」。</p>
     <button id="agentApply" class="primary" type="button">保存</button>
     <button id="agentClose" class="action-cancel" type="button">关闭</button>
   </div>

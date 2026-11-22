@@ -1,2 +1,5 @@
-/* 纸鸢 运行时配置（构建时会按环境变量重写本文件） */
-window.ZY_CONFIG = { server: '', updateServer: '' };
+/* 由 build.sh 生成；提交到仓库的是空模板 */
+window.ZY_CONFIG = {
+  server: '',
+  updateServer: ''
+};

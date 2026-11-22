@@ -40,7 +40,34 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingMic;
     private android.webkit.ValueCallback<Uri[]> fileCallback;
     private String pendingJump = null;
-    private LocalAgentServer localAgent = null;
+
+    /** 本地用户：消息/状态由前台服务推上来，页面只负责显示 */
+    private final KeepAliveService.Listener agentUi = new KeepAliveService.Listener() {
+        @Override public boolean onAgentMessage(final String text, final String from) {
+            if (web == null) return false;
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        String js = "try{window.__agentOnMessage&&window.__agentOnMessage("
+                            + org.json.JSONObject.quote(text) + ")}catch(e){}";
+                        if (web != null) web.evaluateJavascript(js, null);
+                    } catch (Exception e) { }
+                }
+            });
+            return true;
+        }
+        @Override public void onAgentStatus(final String json) {
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        String js = "try{window.__agentOnStatus&&window.__agentOnStatus("
+                            + org.json.JSONObject.quote(json) + ")}catch(e){}";
+                        if (web != null) web.evaluateJavascript(js, null);
+                    } catch (Exception e) { }
+                }
+            });
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,6 +110,8 @@ public class MainActivity extends Activity {
                         view.evaluateJavascript(js, null);
                     }
                 } catch (Exception e) { Log.w(TAG, "restore 失败: " + e); }
+                // 页面就绪，把后端服务攒下的 Agent 消息补发上来
+                KeepAliveService.setListener(agentUi);
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -524,68 +553,52 @@ public class MainActivity extends Activity {
     }
 
     /* ---------------- 本地用户 / Agent 接入 ---------------- */
+    // 真正的 server 在 KeepAliveService 里（前台服务托管），这里只做转发。
     private void startLocalAgent(int port, boolean lan) {
-        stopLocalAgent();
-        localAgent = new LocalAgentServer(port, lan, new LocalAgentServer.Listener() {
-            @Override public void onAgentMessage(final String text, final String from) {
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        try {
-                            String js = "try{window.__agentOnMessage&&window.__agentOnMessage("
-                                + org.json.JSONObject.quote(text) + ")}catch(e){}";
-                            if (web != null) web.evaluateJavascript(js, null);
-                        } catch (Exception e) { }
-                    }
-                });
-            }
-            @Override public void onStatusChanged(final int clients, final String lastError) {
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        try {
-                            org.json.JSONObject o = new org.json.JSONObject();
-                            o.put("on", localAgent != null && localAgent.isRunning());
-                            o.put("clients", clients);
-                            o.put("port", localAgent == null ? 0 : localAgent.getPort());
-                            o.put("error", lastError == null ? "" : lastError);
-                            String js = "try{window.__agentOnStatus&&window.__agentOnStatus("
-                                + org.json.JSONObject.quote(o.toString()) + ")}catch(e){}";
-                            if (web != null) web.evaluateJavascript(js, null);
-                        } catch (Exception e) { }
-                    }
-                });
-            }
-        });
-        localAgent.start();
+        KeepAliveService.startAgent(this, port, lan);
+        KeepAliveService.setListener(agentUi);
     }
 
     private void stopLocalAgent() {
-        if (localAgent != null) {
-            try { localAgent.stop(); } catch (Exception e) { }
-            localAgent = null;
-        }
+        KeepAliveService.stopAgent(this);
     }
 
     private String agentStatusJson() {
-        try {
-            org.json.JSONObject o = new org.json.JSONObject();
-            boolean on = localAgent != null && localAgent.isRunning();
-            o.put("on", on);
-            o.put("clients", localAgent == null ? 0 : localAgent.clientCount());
-            o.put("port", localAgent == null ? 0 : localAgent.getPort());
-            o.put("error", localAgent == null ? "" : localAgent.lastError());
-            return o.toString();
-        } catch (Exception e) { return "{}"; }
+        return KeepAliveService.statusJson();
     }
 
     private void toggleLocalAgent(boolean on, int port, boolean lan) {
         android.content.SharedPreferences sp = getSharedPreferences("paperlite", MODE_PRIVATE);
         int p = port > 0 && port < 65536 ? port : 6721;
         sp.edit().putBoolean("agent_enabled", on).putInt("agent_port", p).putBoolean("agent_lan", lan).commit();
-        if (on) startLocalAgent(p, lan); else stopLocalAgent();
+        if (on) {
+            startLocalAgent(p, lan);
+            askIgnoreBatteryOptimizations();
+        } else {
+            stopLocalAgent();
+        }
+    }
+
+    /** 小米/澎湃这类 ROM 会把后台进程冻住，申请一下电池优化豁免，端口才稳 */
+    private void askIgnoreBatteryOptimizations() {
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                Intent i = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                i.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(i);
+            }
+        } catch (Exception e) { }
     }
 
     private void sendToAgent(String text) {
-        if (localAgent != null) localAgent.broadcastMessage(text);
+        KeepAliveService.sendToAgent(text);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        KeepAliveService.setListener(agentUi);
     }
 
     @Override
@@ -597,12 +610,13 @@ public class MainActivity extends Activity {
                 web.evaluateJavascript("try{window.__flushState&&window.__flushState()}catch(e){}", null);
             }
         } catch (Exception e) { }
+        KeepAliveService.setListener(null);
     }
 
     @Override
     protected void onDestroy() {
-        stopLocalAgent();
-        try { stopService(new Intent(this, KeepAliveService.class)); } catch (Exception e) { }
+        // 注意：不要停 KeepAliveService，也不要停本地用户端口 —— 退出界面后 Agent 还要能连
+        KeepAliveService.setListener(null);
         if (web != null) {
             try { web.stopLoading(); } catch (Exception e) { }
             web.destroy();
