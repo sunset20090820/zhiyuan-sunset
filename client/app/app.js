@@ -903,7 +903,8 @@
     renderMsgs(true);
     if (isDM(rid)) {
       var peerId = dmPeerOf(rid);
-      if (peerId) wsSend({ t: 'pm_open', with: peerId, withName: room(rid).name });
+      // 本地用户是纯本机会话，不能把它的对端告诉服务器
+      if (peerId && peerId !== LOCAL_PEER) wsSend({ t: 'pm_open', with: peerId, withName: room(rid).name });
     } else {
       wsSend({ t: 'room', room: rid });
     }
@@ -958,6 +959,7 @@
   // 连接建立后刷新所有私聊，把离线期间的消息拉回来
   function refreshDMs() {
     Object.keys(S.dms || {}).forEach(function (peer) {
+      if (peer === LOCAL_PEER) return;      // 本地用户不向服务器登记
       wsSend({ t: 'pm_open', with: peer, withName: S.dms[peer].name || '' });
     });
   }
