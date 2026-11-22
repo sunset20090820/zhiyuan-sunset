@@ -69,7 +69,9 @@
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' },
-    bg: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
+    bg: { scope: 'chat',
+          chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
+          list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
     glass: true, accent: 'periwinkle', topbarText: 'auto'
   };
   /* 备注：只改自己看到的称呼，存本地 */
@@ -229,7 +231,7 @@
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
-        S.bg = Object.assign({ key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false }, o.bg || {});
+        S.bg = normalizeBg(o.bg);
         if (typeof o.glass === 'boolean') S.glass = o.glass;
         if (o.accent) S.accent = o.accent;
         if (o.topbarText) S.topbarText = o.topbarText;
@@ -1204,6 +1206,7 @@
     else document.documentElement.removeAttribute('data-theme');
     try { localStorage.setItem('paperlite.theme', t || ''); } catch (e) {}
     try { applyChatBg(); } catch (e) {}
+    try { renderBeautyPanel(); } catch (e) {}
   }
   function toggleTheme() {
     var cur = document.documentElement.getAttribute('data-theme');
@@ -1223,76 +1226,144 @@
     for (var i = 0; i < BG_PRESETS.length; i++) if (BG_PRESETS[i].key === key) return BG_PRESETS[i];
     return null;
   }
+  function normalizeBg(raw) {
+    var defChat = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
+    var defList = { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false };
+    var b = raw || {};
+    if (b.chat || b.list) {
+      return { scope: b.scope === 'list' ? 'list' : 'chat',
+               chat: Object.assign({}, defChat, b.chat || {}),
+               list: Object.assign({}, defList, b.list || {}) };
+    }
+    // 旧版是扁平的 { key, image, dim } —— 当成聊天页背景迁移过来
+    var legacy = (b.key || b.image) ? Object.assign({}, defChat, b) : defChat;
+    return { scope: 'chat', chat: legacy, list: Object.assign({}, defList) };
+  }
+  function bgOf(scope) {
+    if (!S.bg) S.bg = normalizeBg(null);
+    var key = scope || S.bg.scope || 'chat';
+    if (!S.bg.chat || !S.bg.list) S.bg = normalizeBg(S.bg);
+    return key === 'list' ? S.bg.list : S.bg.chat;
+  }
+  function wallFor(cfg) {
+    if (!cfg) return { wall: 'none', dark: false, image: false };
+    if (cfg.key === 'custom' && cfg.image) return { wall: 'url("' + cfg.image + '")', dark: !!cfg.imageDark, image: true };
+    if (cfg.key && cfg.key !== 'none') {
+      var p = bgPreset(cfg.key);
+      if (p) return { wall: p.css, dark: !!p.dark, image: false };
+    }
+    return { wall: 'none', dark: false, image: false };
+  }
   function applyChatBg() {
-    if (!S.bg) S.bg = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
-    var root = document.documentElement, bg = S.bg;
-    var dark = root.getAttribute('data-theme') === 'dark';
-    var wall = 'none';
-    var isImage = false;
-    if (bg.key === 'custom' && bg.image) { wall = 'url("' + bg.image + '")'; isImage = true; }
-    else if (bg.key && bg.key !== 'none') {
-      var p = bgPreset(bg.key);
-      if (p) wall = p.css;
-    }
-    root.style.setProperty('--chat-wall', wall);
-    // 相册图在深色下自动多压一点，字更好读
-    var d = Number(bg.dim);
-    if (isNaN(d)) d = 0.18;
-    if (dark && isImage) d = Math.min(0.72, d + 0.16);
-    var base = dark ? '12,14,24' : '255,255,255';
-    root.style.setProperty('--chat-wall-dim', 'rgba(' + base + ',' + d.toFixed(2) + ')');
+    S.bg = normalizeBg(S.bg);
+    var root = document.documentElement;
 
-    // 背景模糊（只对相册图有意义）
-    var blur = Number(bg.blur) || 0;
-    if (!isImage) blur = 0;
-    root.style.setProperty('--chat-wall-blur', blur + 'px');
-    root.classList.toggle('wall-blur', blur > 0);
+    // 聊天页
+    var chat = S.bg.chat, cw = wallFor(chat);
+    root.style.setProperty('--chat-wall', cw.wall);
+    var cd = Number(chat.dim); if (isNaN(cd)) cd = 0.18;
+    var cDark = root.getAttribute('data-theme') === 'dark';
+    if (cDark && cw.image) cd = Math.min(0.72, cd + 0.16);
+    root.style.setProperty('--chat-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + cd.toFixed(2) + ')');
+    var cblur = cw.image ? (Number(chat.blur) || 0) : 0;
+    root.style.setProperty('--chat-wall-blur', cblur + 'px');
+    root.classList.toggle('wall-blur', cblur > 0);
 
-    // 顶栏文字跟着背景走：暗底白字、亮底黑字
-    var wallDark = false;
-    if (bg.key === 'custom' && bg.image) wallDark = !!bg.imageDark;
-    else if (bg.key && bg.key !== 'none') {
-      var pp = bgPreset(bg.key);
-      wallDark = !!(pp && pp.dark);
-    }
+    // 主界面
+    var list = S.bg.list, lw = wallFor(list);
+    root.style.setProperty('--list-wall', lw.wall);
+    var ld = Number(list.dim); if (isNaN(ld)) ld = 0.12;
+    if (cDark && lw.image) ld = Math.min(0.72, ld + 0.16);
+    root.style.setProperty('--list-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + ld.toFixed(2) + ')');
+
     // 顶栏文字：auto 跟背景走，也可以手动钉死成黑/白
     var mode = S.topbarText || 'auto';
-    if (mode === 'light') root.setAttribute('data-wall', 'dark');        // 白字
-    else if (mode === 'dark') root.setAttribute('data-wall', 'light');   // 黑字
-    else if (bg.key && bg.key !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
+    var wallDark = cw.dark || lw.dark;
+    if (mode === 'light') root.setAttribute('data-wall', 'dark');
+    else if (mode === 'dark') root.setAttribute('data-wall', 'light');
+    else if (cw.wall !== 'none' || lw.wall !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
     else root.removeAttribute('data-wall');
 
     root.classList.toggle('no-glass', !S.glass);
     if (S.accent && S.accent !== 'periwinkle') root.setAttribute('data-accent', S.accent);
     else root.removeAttribute('data-accent');
   }
-  function setChatBg(key, image) {
-    if (!S.bg) S.bg = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
-    S.bg.key = key;
-    S.bg.image = image || '';
-    if (!image) S.bg.imageDark = false;
+
+  function setChatBg(key, image, scope) {
+    var cfg = bgOf(scope);
+    cfg.key = key;
+    cfg.image = image || '';
+    if (!image) cfg.imageDark = false;
     applyChatBg();
     save();
-    renderBgSheet();
+    renderBeautyPanel();
   }
-  function renderBgSheet() {
+  function renderBeautyPanel() {
+    S.bg = normalizeBg(S.bg);
+    var scope = S.bg.scope || 'chat';
+    var cfg = bgOf(scope);
+    var cur = cfg.key || (scope === 'chat' ? 'mist' : 'none');
+
     var grid = $('#bgGrid');
-    if (!grid) return;
-    var cur = (S.bg && S.bg.key) || 'mist';
-    var html = BG_PRESETS.map(function (p) {
-      return '<button class="bg-chip' + (cur === p.key ? ' on' : '') + '" type="button" data-bg="' + p.key +
-             '" style="background-image:' + p.css + '"><span>' + p.name + '</span></button>';
-    }).join('');
-    if (S.bg && S.bg.image) {
-      html += '<button class="bg-chip' + (cur === 'custom' ? ' on' : '') + '" type="button" data-bg="custom" ' +
-              'style="background-image:url(\'' + S.bg.image + '\')"><span>相册</span></button>';
+    if (grid) {
+      var html = BG_PRESETS.map(function (p) {
+        return '<button class="bg-chip' + (cur === p.key ? ' on' : '') + '" type="button" data-bg="' + p.key +
+               '" style="background-image:' + p.css + '"><span>' + p.name + '</span></button>';
+      }).join('');
+      if (cfg.image) {
+        html += '<button class="bg-chip' + (cur === 'custom' ? ' on' : '') + '" type="button" data-bg="custom" ' +
+                'style="background-image:url(\'' + cfg.image + '\')"><span>相册</span></button>';
+      }
+      html += '<button class="bg-chip' + (cur === 'none' ? ' on' : '') + '" type="button" data-bg="none" ' +
+              'style="background:var(--card-2)"><span>纯色</span></button>';
+      grid.innerHTML = html;
     }
-    html += '<button class="bg-chip' + (cur === 'none' ? ' on' : '') + '" type="button" data-bg="none" ' +
-            'style="background:var(--card-2)"><span>纯色</span></button>';
-    grid.innerHTML = html;
+
     var dim = $('#bgDim');
-    if (dim) dim.value = String(Math.round((Number(S.bg && S.bg.dim) || 0.18) * 100));
+    if (dim) dim.value = String(Math.round((Number(cfg.dim) || (scope === 'chat' ? 0.18 : 0.12)) * 100));
+    var bl = $('#bgBlur');
+    if (bl) bl.value = String(Number(cfg.blur) || 0);
+
+    var segs = document.querySelectorAll('#bgScope .seg-item');
+    Array.prototype.forEach.call(segs, function (b) {
+      b.classList.toggle('on', b.getAttribute('data-scope') === scope);
+    });
+
+    renderAccentGrid();
+    var ts = $('#topbarTextState');
+    if (ts) ts.textContent = ({ auto: '自动', light: '白字', dark: '黑字' })[S.topbarText || 'auto'];
+    var gs = $('#glassState');
+    if (gs) gs.textContent = S.glass ? '开' : '关';
   }
+  function renderAccentGrid() {
+    var box = $('#accentGrid');
+    if (!box) return;
+    box.innerHTML = ACCENTS.map(function (a) {
+      return '<button class="accent-chip' + ((S.accent || 'periwinkle') === a.key ? ' on' : '') +
+             '" type="button" data-accent="' + a.key + '" style="background-image:' + a.css +
+             '" aria-label="' + a.name + '"></button>';
+    }).join('');
+  }
+  function toggleBeautyPanel(force) {
+    var panel = $('#beautyPanel'), arrow = $('#beautyArrow'), btn = $('#btnBeauty');
+    if (!panel) return;
+    var open = (typeof force === 'boolean') ? force : !panel.classList.contains('open');
+    if (open) {
+      panel.classList.add('open');
+      panel.style.maxHeight = panel.scrollHeight + 40 + 'px';
+      renderBeautyPanel();
+      setTimeout(function () { try { panel.style.maxHeight = 'none'; } catch (e) {} }, 420);
+    } else {
+      panel.style.maxHeight = panel.scrollHeight + 'px';
+      // 强制一次回流，保证从固定高度过渡到 0
+      void panel.offsetHeight;
+      panel.classList.remove('open');
+      panel.style.maxHeight = '0px';
+    }
+    if (arrow) arrow.classList.toggle('open', open);
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
   function pickBgImage() {
     var el = $('#bgInput');
     if (el) { el.value = ''; el.click(); }
@@ -1306,20 +1377,11 @@
     { key: 'mint',       name: '薄荷',   css: 'linear-gradient(135deg,#3fb39a,#57c9b3)' },
     { key: 'cream',      name: '奶油',   css: 'linear-gradient(135deg,#d9a544,#e8bd6d)' }
   ];
-  function renderAccentSheet() {
-    var box = $('#accentGrid');
-    if (!box) return;
-    box.innerHTML = ACCENTS.map(function (a) {
-      return '<button class="accent-chip' + ((S.accent || 'periwinkle') === a.key ? ' on' : '') +
-             '" type="button" data-accent="' + a.key + '" style="background-image:' + a.css +
-             '" aria-label="' + a.name + '"></button>';
-    }).join('');
-  }
   function setAccent(key) {
     S.accent = key || 'periwinkle';
     applyChatBg();
     save();
-    renderAccentSheet();
+    renderAccentGrid();
   }
 
   /* ---------------- 事件绑定 ---------------- */
@@ -1755,15 +1817,14 @@
       }, { passive: true });
     })();
 
-    on('#btnChatBg', 'click', function () {
-      renderBgSheet();
-      $('#bgSheet').classList.remove('hidden');
-      requestAnimationFrame(function () { $('#bgSheet').classList.add('open'); });
-    });
-    on('#bgClose', 'click', function () {
-      var el = $('#bgSheet');
-      el.classList.remove('open');
-      setTimeout(function () { el.classList.add('hidden'); }, 200);
+    on('#btnBeauty', 'click', function () { toggleBeautyPanel(); });
+    on('#bgScope', 'click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-scope]') : null;
+      if (!b) return;
+      S.bg = normalizeBg(S.bg);
+      S.bg.scope = b.getAttribute('data-scope') === 'list' ? 'list' : 'chat';
+      save();
+      renderBeautyPanel();
     });
     on('#bgGrid', 'click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-bg]') : null;
@@ -1783,7 +1844,6 @@
         var c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
-        // 采样上半部分，判断顶栏该用黑字还是白字
         var dark = false;
         try {
           var ctx = c.getContext('2d');
@@ -1798,40 +1858,34 @@
         var q = 0.82, data = c.toDataURL('image/jpeg', q);
         while (data.length > 600000 && q > 0.4) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
         try { URL.revokeObjectURL(url); } catch (e2) {}
-        S.bg.imageDark = dark;
+        var cfg = bgOf();
+        cfg.imageDark = dark;
         setChatBg('custom', data);
-        toast('聊天背景已更新');
+        toast('背景已更新');
       };
       img.onerror = function () { toast('这张图打不开'); };
       img.src = url;
     });
-    on('#btnAccent', 'click', function () {
-      renderAccentSheet();
-      $('#accentSheet').classList.remove('hidden');
-      requestAnimationFrame(function () { $('#accentSheet').classList.add('open'); });
-    });
-    on('#accentClose', 'click', function () {
-      var el = $('#accentSheet');
-      el.classList.remove('open');
-      setTimeout(function () { el.classList.add('hidden'); }, 200);
-    });
-    on('#accentGrid', 'click', function (e) {
-      var b = e.target.closest ? e.target.closest('[data-accent]') : null;
-      if (!b) return;
-      setAccent(b.getAttribute('data-accent'));
-      toast('主题色已切换');
-    });
-    on('#bgBlur', 'input', function (e) {
-      S.bg.blur = Number(e.target.value) || 0;
-      applyChatBg();
-    });
-    on('#bgBlur', 'change', function () { save(); });
     on('#bgDim', 'input', function (e) {
-      S.bg.dim = Math.max(0, Math.min(0.6, Number(e.target.value) / 100));
+      var cfg = bgOf();
+      cfg.dim = Math.max(0, Math.min(0.6, Number(e.target.value) / 100));
       applyChatBg();
     });
     on('#bgDim', 'change', function () { save(); });
-    on('#bgReset', 'click', function () { setChatBg('mist', ''); S.bg.dim = 0.18; applyChatBg(); save(); renderBgSheet(); toast('已恢复默认背景'); });
+    on('#bgBlur', 'input', function (e) {
+      var cfg = bgOf();
+      cfg.blur = Number(e.target.value) || 0;
+      applyChatBg();
+    });
+    on('#bgBlur', 'change', function () { save(); });
+    on('#bgReset', 'click', function () {
+      var scope = (S.bg && S.bg.scope) || 'chat';
+      S.bg = normalizeBg(S.bg);
+      if (scope === 'list') S.bg.list = { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false };
+      else S.bg.chat = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
+      applyChatBg(); save(); renderBeautyPanel();
+      toast('已恢复默认背景');
+    });
     on('#btnTopbarText', 'click', function () {
       var order = ['auto', 'light', 'dark'];
       var names = { auto: '自动', light: '白字', dark: '黑字' };
@@ -1850,6 +1904,12 @@
       var el = $('#glassState');
       if (el) el.textContent = S.glass ? '开' : '关';
       toast(S.glass ? '液态玻璃已开启' : '液态玻璃已关闭（更省电）');
+    });
+    on('#accentGrid', 'click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-accent]') : null;
+      if (!b) return;
+      setAccent(b.getAttribute('data-accent'));
+      toast('主题色已切换');
     });
 
     on('#btnAgentUser', 'click', function () {

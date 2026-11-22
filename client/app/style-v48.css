@@ -2318,3 +2318,98 @@ html[data-theme="dark"] .icon-btn {
 
 .me-arrow { color: var(--sub); opacity: .8; }
 .me-ico { filter: saturate(1.05); }
+
+/* =========================================================
+   9.6 主界面背景 · 美化设置折叠面板
+   ========================================================= */
+
+/* ---------- 1) 主界面（会话列表）背景 ---------- */
+#chats {
+  isolation: isolate;
+  background-image: var(--list-wall, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-image .3s ease;
+}
+#chats::before {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--list-wall-dim, rgba(255, 255, 255, .2));
+  transition: background .3s ease;
+}
+/* 列表/底栏在有背景时保持可读：半透明卡片化 */
+#chats .topbar { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+/* ---------- 2) 美化设置折叠面板 ---------- */
+.beauty-panel {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: max-height .38s cubic-bezier(.22,.9,.3,1),
+              opacity .26s ease,
+              transform .3s cubic-bezier(.22,.9,.3,1);
+}
+.beauty-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+}
+.beauty-inner { padding: 4px 2px 12px; }
+.beauty-block {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 20px;
+  background: rgba(124, 139, 250, .06);
+  border: 1px solid rgba(124, 139, 250, .12);
+}
+html[data-theme="dark"] .beauty-block {
+  background: rgba(255, 255, 255, .05);
+  border-color: rgba(255, 255, 255, .08);
+}
+.beauty-title {
+  font-size: 12.5px; font-weight: 700; letter-spacing: .3px;
+  color: var(--sub); margin: 0 0 8px 2px;
+}
+/* 展开时内部小块依次浮现 */
+.beauty-panel.open .beauty-block { animation: page-in-up .34s cubic-bezier(.22,.9,.3,1) both; }
+.beauty-panel.open .beauty-block:nth-child(1) { animation-delay: .04s; }
+.beauty-panel.open .beauty-block:nth-child(2) { animation-delay: .09s; }
+.beauty-panel.open .beauty-block:nth-child(3) { animation-delay: .14s; }
+.beauty-panel.open .beauty-block:nth-child(4) { animation-delay: .19s; }
+
+.beauty-arrow {
+  display: inline-block;
+  transition: transform .3s cubic-bezier(.22,.9,.3,1);
+}
+.beauty-arrow.open { transform: rotate(90deg); }
+
+/* ---------- 3) 分段控件（主界面 / 聊天页） ---------- */
+.seg {
+  display: flex; gap: 6px; padding: 4px;
+  border-radius: 14px;
+  background: rgba(124, 139, 250, .10);
+}
+html[data-theme="dark"] .seg { background: rgba(255, 255, 255, .07); }
+.seg-item {
+  flex: 1; padding: 8px 10px; border-radius: 11px;
+  font-size: 13.5px; font-weight: 600; color: var(--sub);
+  transition: background-color .2s ease, color .2s ease, transform .2s cubic-bezier(.2,.9,.3,1.2);
+}
+.seg-item.on {
+  background: var(--card); color: var(--accent-ink);
+  box-shadow: 0 4px 12px rgba(124, 139, 250, .16);
+  transform: translateY(-1px);
+}
+html[data-theme="dark"] .seg-item.on { background: rgba(255, 255, 255, .12); color: #fff; }
+
+/* 美化块里的行更紧凑 */
+.beauty-block .me-row { background: transparent; padding: 10px 6px; }
+.beauty-block .bg-grid { margin: 4px 0 8px; }
+.beauty-block .flat { width: 100%; margin: 6px 0 0; }
+@media (prefers-reduced-motion: reduce) {
+  .beauty-panel, .beauty-arrow, .seg-item { transition: none !important; }
+  .beauty-panel.open .beauty-block { animation: none !important; }
+}

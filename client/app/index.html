@@ -218,37 +218,6 @@
   </div>
 </div>
 
-<!-- 聊天背景 -->
-<div id="bgSheet" class="action-layer hidden">
-  <button class="action-scrim" type="button" aria-label="关闭"></button>
-  <div class="action-card" role="dialog" aria-modal="true" aria-label="聊天背景">
-    <div class="action-grip"></div>
-    <h3 class="remark-title">聊天背景</h3>
-    <p class="remark-sub">选一张喜欢的底色，或用相册里的图</p>
-    <div id="bgGrid" class="bg-grid"></div>
-    <div class="bg-dim-row"><span class="hint">明暗</span>
-      <input id="bgDim" type="range" min="0" max="60" value="18"></div>
-    <div class="bg-dim-row"><span class="hint">模糊</span>
-      <input id="bgBlur" type="range" min="0" max="20" value="0"></div>
-    <button id="bgPick" class="flat" type="button">从相册选一张…</button>
-    <input id="bgInput" type="file" accept="image/*" class="hidden">
-    <button id="bgReset" class="flat" type="button">恢复默认</button>
-    <button id="bgClose" class="action-cancel" type="button">关闭</button>
-  </div>
-</div>
-
-<!-- 主题色 -->
-<div id="accentSheet" class="action-layer hidden">
-  <button class="action-scrim" type="button" aria-label="关闭"></button>
-  <div class="action-card" role="dialog" aria-modal="true" aria-label="主题色">
-    <div class="action-grip"></div>
-    <h3 class="remark-title">主题色</h3>
-    <p class="remark-sub">气泡、按钮、角标会一起换色</p>
-    <div id="accentGrid" class="accent-grid"></div>
-    <button id="accentClose" class="action-cancel" type="button">关闭</button>
-  </div>
-</div>
-
 <!-- 黑名单 -->
 <div id="blockPage" class="me-page hidden">
   <header class="topbar">
@@ -399,10 +368,39 @@
       <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
       <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
       <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
-      <button id="btnChatBg" class="me-row" type="button"><span class="me-ico">🖼</span>聊天背景<span class="me-arrow">›</span></button>
-      <button id="btnAccent" class="me-row" type="button"><span class="me-ico">🎨</span>主题色<span class="me-arrow">›</span></button>
-      <button id="btnTopbarText" class="me-row" type="button"><span class="me-ico">🔤</span>顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
-      <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>液态玻璃<span class="me-arrow" id="glassState">开</span></button>
+      <button id="btnBeauty" class="me-row" type="button" aria-expanded="false">
+        <span class="me-ico">🎨</span>美化设置<span class="me-arrow beauty-arrow" id="beautyArrow">›</span></button>
+      <div id="beautyPanel" class="beauty-panel">
+        <div class="beauty-inner">
+          <div class="beauty-block">
+            <div class="beauty-title">背景范围</div>
+            <div class="seg" id="bgScope">
+              <button class="seg-item" type="button" data-scope="list">主界面</button>
+              <button class="seg-item on" type="button" data-scope="chat">聊天页</button>
+            </div>
+          </div>
+          <div class="beauty-block">
+            <div class="beauty-title">背景</div>
+            <div id="bgGrid" class="bg-grid"></div>
+            <div class="bg-dim-row"><span class="hint">明暗</span>
+              <input id="bgDim" type="range" min="0" max="60" value="18"></div>
+            <div class="bg-dim-row"><span class="hint">模糊</span>
+              <input id="bgBlur" type="range" min="0" max="20" value="0"></div>
+            <button id="bgPick" class="flat" type="button">从相册选一张…</button>
+            <input id="bgInput" type="file" accept="image/*" class="hidden">
+            <button id="bgReset" class="flat" type="button">恢复默认</button>
+          </div>
+          <div class="beauty-block">
+            <div class="beauty-title">主题色</div>
+            <div id="accentGrid" class="accent-grid"></div>
+          </div>
+          <div class="beauty-block">
+            <div class="beauty-title">其它</div>
+            <button id="btnTopbarText" class="me-row" type="button"><span class="me-ico">🔤</span>顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
+            <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>液态玻璃<span class="me-arrow" id="glassState">开</span></button>
+          </div>
+        </div>
+      </div>
       <button id="btnStorage" class="me-row" type="button"><span class="me-ico">🗂</span>存储管理<span class="me-arrow">›</span></button>
       <button id="btnNewChatRow" class="me-row" type="button"><span class="me-ico">✎</span>新建对话<span class="me-arrow">›</span></button>
     </div>
