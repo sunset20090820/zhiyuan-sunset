@@ -2070,7 +2070,23 @@
       toast('已退出登录，聊天记录还在本机');
     });
 
-    document.querySelector('.brand').addEventListener('dblclick', toggleTheme);
+    // 单击顶部标题：切换顶栏文字颜色（自动 → 白字 → 黑字）
+    try {
+      var brandEl = document.querySelector('.brand');
+      if (brandEl) {
+        brandEl.style.cursor = 'pointer';
+        brandEl.addEventListener('click', function () {
+          var order = ['auto', 'light', 'dark'];
+          var names = { auto: '自动', light: '白字', dark: '黑字' };
+          var i = order.indexOf(S.topbarText || 'auto');
+          S.topbarText = order[(i + 1) % order.length];
+          applyChatBg();
+          save();
+          try { var el = $('#topbarTextState'); if (el) el.textContent = names[S.topbarText]; } catch (e) {}
+          toast('顶栏文字：' + names[S.topbarText]);
+        });
+      }
+    } catch (e) {}
   }
 
   function setReply(m) {

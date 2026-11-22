@@ -733,14 +733,14 @@ html[data-theme="dark"] {
 .logout-chip { border: 1px solid rgba(255,255,255,.5); border-radius: 14px; padding: 5px 12px; font-size: 13px; }
 
 /* ---- 会话列表 ---- */
-.list { background: var(--bg); }
+.list { background: transparent; }   /* 让主界面背景能透出来 */
 .room {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  background: transparent;
 }
 .room:active { background: var(--bg-soft); }
 .room .ava {
