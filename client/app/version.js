@@ -1,1 +1,1 @@
-window.APP_VERSION = "12.5";
+window.APP_VERSION = "12.6";

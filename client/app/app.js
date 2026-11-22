@@ -952,13 +952,22 @@
     });
     list.forEach(function (x) { html += item(x.r, x.isDM, x.peerId); });
     var box = $('#roomList');
+    // 内容没变就别重建：presence 心跳/在线状态每秒都会调用这里，
+    // 全量重设 innerHTML 会掉滚动位置、也像「界面在刷新」
+    if (box.__html === html) { markPainted(box, 600); return; }
+    var scroller = box.parentElement;
+    var keepScroll = scroller ? scroller.scrollTop : 0;
+    box.__html = html;
     box.innerHTML = html;
-    if (!box.classList.contains('painted')) {
-      // 让首屏的逐条浮现播完再打标记，之后的重绘不再重播
-      setTimeout(function () { try { box.classList.add('painted'); } catch (e) {} }, 600);
-    }
+    if (scroller && keepScroll) scroller.scrollTop = keepScroll;
+    markPainted(box, 600);
   }
 
+  /* 首屏入场动画只播一次：播完打个 painted，之后重绘不再重播 */
+  function markPainted(el, delay) {
+    if (!el || el.classList.contains('painted')) return;
+    setTimeout(function () { try { el.classList.add('painted'); } catch (e) {} }, delay || 600);
+  }
   /* ---------------- 渲染：聊天页 ---------------- */
   function renderMsgs(force) {
     var rid = S.cur;
@@ -1073,6 +1082,7 @@
     setConn(connected);
     $('#chat').classList.remove('hidden');
     $('#tabbar').classList.add('hidden');
+    markPainted($('#msgs'), 500);
     syncPinBtn();
     syncComposer();
     renderMsgs(true);
@@ -3607,7 +3617,8 @@
     pill.__st = setTimeout(function () { pill.classList.remove('sheen'); }, 640);
   }
 
-  function showTab(name) {
+  function showTab(name, opts) {
+    var byUser = !!(opts && opts.user);
     S.tab = name;
     $('#chats').classList.toggle('hidden', name !== 'chats');
     $('#contacts').classList.toggle('hidden', name !== 'contacts');
@@ -3617,7 +3628,7 @@
      '#groupSheet', '#remarkSheet'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
-    var animate = (Date.now() - navBootAt) > 400;
+    var animate = byUser && (Date.now() - navBootAt) > 200;
     var items = document.querySelectorAll('#tabbar .tab-item');
     Array.prototype.forEach.call(items, function (b) {
       var on = b.getAttribute('data-tab') === name;
@@ -3630,6 +3641,9 @@
       }
     });
     $('#tabbar').classList.toggle('hidden', !$('#chat').classList.contains('hidden'));
+    markPainted($('#chats'), 400);
+    markPainted($('#contacts'), 400);
+    markPainted($('#mePage'), 400);
     try {
       requestAnimationFrame(function () { moveNavPill(animate); });
     } catch (e) { moveNavPill(animate); }
@@ -3739,6 +3753,7 @@
   function renderContacts() {
     var box = $('#friendList');
     if (!box) return;
+    markPainted(box, 600);
     var list = S.friends || [];
     box.innerHTML = list.length ? list.map(function (f) {
       var nm = nameOf('uid:' + f.uid, f.name || ('用户' + f.uid));
@@ -3823,6 +3838,12 @@
     loadRemarks();
     loadStickers();
     try { applySkin(); } catch (e) {}
+    try {
+      // 三个主页面：首屏动画播完就不再重播
+      setTimeout(function () {
+        ['#chats', '#contacts', '#mePage'].forEach(function (sel) { markPainted($(sel), 0); });
+      }, 700);
+    } catch (e) {}
     try {
       setTimeout(function () { moveNavPill(false); }, 80);
       window.addEventListener('resize', function () { moveNavPill(false); });
@@ -3913,7 +3934,7 @@
       if (window.WW) window.WW.open(); else toast('游戏模块没加载');
     });
     Array.prototype.forEach.call(document.querySelectorAll('#tabbar .tab-item'), function (b) {
-      b.addEventListener('click', function () { showTab(b.getAttribute('data-tab')); });
+      b.addEventListener('click', function () { showTab(b.getAttribute('data-tab'), { user: true }); });
     });
     on('#btnFlush', 'click', function () {
       save();

@@ -719,10 +719,12 @@ html[data-skin="m3e"] .tabs .tab.on { color: var(--m3e-on-surface); }
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-html[data-skin="m3e"] .room { animation: m3e-fade-up 240ms var(--m3e-emph) both; }
-html[data-skin="m3e"] .msg:last-of-type { animation: m3e-fade-up 200ms var(--m3e-emph) both; }
-html[data-skin="m3e"] .screen,
-html[data-skin="m3e"] .chat { animation-duration: 240ms; animation-timing-function: var(--m3e-emph); }
+/* 只在新渲染出来的那一批播，之后不重播（否则每次收到消息列表会整体闪一遍） */
+html[data-skin="m3e"] #roomList:not(.painted) .room { animation: m3e-fade-up 240ms var(--m3e-emph) both; }
+html[data-skin="m3e"] #friendList:not(.painted) .room { animation: m3e-fade-up 240ms var(--m3e-emph) both; }
+html[data-skin="m3e"] .msgs:not(.painted) .msg:last-of-type { animation: m3e-fade-up 200ms var(--m3e-emph) both; }
+html[data-skin="m3e"] .screen:not(.painted),
+html[data-skin="m3e"] .chat:not(.painted) { animation-duration: 240ms; animation-timing-function: var(--m3e-emph); }
 html[data-skin="m3e"] .badge { animation: none; }
 html[data-skin="m3e"] .fab { animation: none; }
 html[data-skin="m3e"] .tab-item.on .tab-ico { animation: none; }
@@ -931,11 +933,13 @@ html[data-skin] {
   --m3e-glass-hi: rgba(255, 255, 255, .38);
 }
 
-/* 底衬：让模糊有东西可模糊（否则透出的是纯色，看不出玻璃） */
-html[data-skin] .screen,
-html[data-skin] .me-page,
-html[data-skin] .chat { background: transparent; }
-html[data-skin] body {
+/* 底衬：让模糊有东西可模糊。
+   注意——页面透明化和背景光晕只属于安卓 16 皮肤；
+   小清新的背景（--list-wall / 相册图）不能被这里改掉，否则会闪、会丢背景。 */
+html[data-skin="m3e"] .screen,
+html[data-skin="m3e"] .me-page,
+html[data-skin="m3e"] .chat { background: transparent; }
+html[data-skin="m3e"] body {
   background:
     radial-gradient(120% 80% at 8% -10%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 58%),
     radial-gradient(100% 70% at 100% 8%, color-mix(in srgb, var(--accent-2, var(--accent)) 20%, transparent) 0%, transparent 62%),
