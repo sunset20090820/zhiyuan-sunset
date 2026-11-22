@@ -1534,3 +1534,11 @@ body.in-game #tabbar, body.in-game #fabNew, body.in-game #chats, body.in-game #c
   background: rgba(255,255,255,.09); color: #dbe8f2; border: 1px solid transparent; }
 .ww-mk-tag.on { background: linear-gradient(160deg, #4aa3e8, #2b7fc4); color: #fff; }
 .ww-mk-tag.clear { opacity: .7; }
+
+/* 本地用户 */
+.agent-row { justify-content: space-between; font-size: 14px; }
+.agent-input { width: 96px; padding: 6px 9px; border-radius: 9px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--text); font-size: 14px; text-align: right; }
+.agent-switch { width: 44px; height: 26px; }
+#agentSheet .hint { margin: 4px 16px 12px; }
+#agentSheet .primary { margin: 0 16px 10px; width: calc(100% - 32px); }

@@ -3,6 +3,8 @@
 (function () {
   'use strict';
 
+  var LOCAL_RID = 'dm:local';
+  var LOCAL_PEER = 'local';
   var ROOMS_DEFAULT = [
     { id: 'lobby', name: '公共大厅', emoji: '💬', color: '#3390ec' },
     { id: 'tech',  name: '技术交流', emoji: '🛠', color: '#4caf50' },
@@ -63,6 +65,7 @@
     online: {}, members: [], last: {}, unread: {},
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
+    localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '' },
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}
   };
   /* 备注：只改自己看到的称呼，存本地 */
@@ -185,7 +188,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -220,6 +223,7 @@
         S.myAvatar = o.myAvatar || '';
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
+        S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '' }, o.localAgent || {});
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -665,6 +669,76 @@
     if (d.t === 'error' && d.message) toast(d.message);
   }
 
+  /* ---------------- 本地用户（Agent 接入） ---------------- */
+  function localAgentOn() { return !!(window.PaperNative && window.PaperNative.agentEnable); }
+  function ensureLocalConv(on) {
+    if (on) {
+      if (!S.dms[LOCAL_PEER]) S.dms[LOCAL_PEER] = { name: '本地用户', roomId: LOCAL_RID, local: true };
+      S.dms[LOCAL_PEER].local = true;
+    } else if (S.dms[LOCAL_PEER]) {
+      delete S.dms[LOCAL_PEER];
+      if (S.cur === LOCAL_RID) { S.cur = null; $('#chat').classList.add('hidden'); }
+    }
+    try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
+    renderRooms();
+  }
+  function agentApply(on, port, lan) {
+    if (!localAgentOn()) { toast('这个版本不支持本地用户'); return; }
+    S.localAgent.on = !!on;
+    S.localAgent.port = Number(port) || 6721;
+    S.localAgent.lan = !!lan;
+    save();
+    try { window.PaperNative.agentEnable(!!on, S.localAgent.port, !!lan); } catch (e) {}
+    ensureLocalConv(!!on);
+    refreshAgentStatus();
+    toast(on ? ('本地用户已开启，端口 ' + S.localAgent.port) : '本地用户已关闭');
+  }
+  function refreshAgentStatus() {
+    var st = null;
+    try { if (window.PaperNative && window.PaperNative.agentStatus) st = JSON.parse(window.PaperNative.agentStatus() || '{}'); } catch (e) { st = null; }
+    if (st) {
+      S.localAgent.on = !!st.on;
+      S.localAgent.clients = Number(st.clients) || 0;
+      if (st.port) S.localAgent.port = Number(st.port);
+      S.localAgent.error = st.error || '';
+    }
+    var el = $('#agentStat');
+    if (el) {
+      el.textContent = S.localAgent.on
+        ? ('监听 ' + (S.localAgent.lan ? '0.0.0.0' : '127.0.0.1') + ':' + S.localAgent.port +
+           ' · ' + (S.localAgent.clients ? (S.localAgent.clients + ' 个 Agent 已连接') : '等待 Agent 连接') +
+           (S.localAgent.error ? (' · ' + S.localAgent.error) : ''))
+        : '未开启';
+    }
+    return st;
+  }
+  // Agent 发来的消息
+  window.__agentOnMessage = function (text) {
+    if (!text) return;
+    if (!S.dms[LOCAL_PEER]) return;
+    var m = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), from: LOCAL_PEER, name: '本地用户', text: text, ts: Date.now() };
+    addMsg(LOCAL_RID, m);
+    S.last[LOCAL_RID] = { id: m.id, text: text, name: '本地用户', ts: m.ts };
+    if (S.cur !== LOCAL_RID) {
+      markUnread(LOCAL_RID, m);
+      S.unread[LOCAL_RID] = (S.unread[LOCAL_RID] || 0) + 1;
+      notifyMessage(LOCAL_RID, m);
+    }
+    save(); renderRooms();
+    if (S.cur === LOCAL_RID) renderMsgs(false);
+  };
+  window.__agentOnStatus = function (json) {
+    try {
+      var st = typeof json === 'string' ? JSON.parse(json) : json;
+      if (!st) return;
+      S.localAgent.on = !!st.on;
+      S.localAgent.clients = Number(st.clients) || 0;
+      if (st.port) S.localAgent.port = Number(st.port);
+      S.localAgent.error = st.error || '';
+      refreshAgentStatus();
+    } catch (e) {}
+  };
+
   /* ---------------- 渲染：会话列表 ---------------- */
   function renderRooms() {
     var html = '';
@@ -918,6 +992,18 @@
     S.last[S.cur] = { id: tid, text: text, name: '', ts: m.ts }; save();
     clearReply(); renderMentionBox();
     renderMsgs(true); renderRooms();
+    if (S.cur === LOCAL_RID) {
+      // 本地用户：只交给本机 Agent，不走服务器
+      var sent = false;
+      try { if (window.PaperNative && window.PaperNative.agentSend) { window.PaperNative.agentSend(text); sent = true; } } catch (e) {}
+      var list0 = loadHist(LOCAL_RID);
+      var mine0 = null;
+      for (var li = list0.length - 1; li >= 0; li--) if (list0[li].id === tid) { mine0 = list0[li]; break; }
+      if (mine0) { mine0.pending = false; saveHist(LOCAL_RID); }
+      if (!sent) toast(S.localAgent.on ? 'Agent 还没连上，先启动你的 astrbot' : '本地用户没有开启');
+      renderMsgs(false);
+      return;
+    }
     var dmPeer = isDM(S.cur) ? dmPeerOf(S.cur) : null;
     var grp = isGroup(S.cur) ? groupOf(S.cur) : null;
     var outPayload = dmPeer ? { t: 'pm', to: dmPeer, text: text, tempId: tid, replyTo: quote }
@@ -1339,6 +1425,24 @@
         var item = S.stickers[Number(st.getAttribute('data-sticker'))];
         if (item) sendImage(null, item.w || 0, item.h || 0, true, item.ref);
       }
+    });
+    on('#btnLocalAgent', 'click', function () {
+      if ($('#agentOn')) {
+        $('#agentOn').checked = !!S.localAgent.on;
+        $('#agentPort').value = S.localAgent.port || 6721;
+        $('#agentLan').checked = !!S.localAgent.lan;
+        refreshAgentStatus();
+      }
+      $('#agentSheet').classList.remove('hidden');
+      requestAnimationFrame(function () { $('#agentSheet').classList.add('open'); });
+    });
+    on('#agentApply', 'click', function () {
+      agentApply($('#agentOn').checked, Number($('#agentPort').value) || 6721, $('#agentLan').checked);
+    });
+    on('#agentClose', 'click', function () {
+      var el = $('#agentSheet');
+      el.classList.remove('open');
+      setTimeout(function () { el.classList.add('hidden'); }, 200);
     });
     on('#btnStorage', 'click', function () { closeMeIfOpen(); openStorage(); });
     on('#storageBack', 'click', closeStorage);
@@ -2282,6 +2386,15 @@
   }
   // 删除：好友私聊=移除会话并解除好友；群聊=退群
   function removeRoom(rid) {
+    if (rid === LOCAL_RID) {
+      try { localStorage.removeItem(histKey(rid)); } catch (e) {}
+      delete S.last[rid]; delete S.unread[rid];
+      if (S.pins[rid]) delete S.pins[rid];
+      S.cur = null; $('#chat').classList.add('hidden');
+      save(); renderRooms(); showTab('chats');
+      toast('已清空本地聊天记录（会话保留）');
+      return;
+    }
     var peer = isDM(rid) ? dmPeerOf(rid) : null;
     var gid = rid.indexOf('g:') === 0 ? rid.slice(2) : null;
     var msg = '已删除';
@@ -2384,8 +2497,9 @@
       rm.classList.toggle('hidden', fixed);
       rm.innerHTML = gid ? '<span>🗑</span>退出群聊' : '<span>🗑</span>删除会话';
     }
+    var isLocalConv = (rid === LOCAL_RID);
     if (bk) {
-      bk.classList.toggle('hidden', fixed || (!dm && !gid));
+      bk.classList.toggle('hidden', fixed || isLocalConv || (!dm && !gid));
       bk.innerHTML = gid ? '<span>🚫</span>拉黑该群' : '<span>🚫</span>拉黑对方';
     }
     $('#roomSheet').classList.remove('hidden');

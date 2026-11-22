@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingMic;
     private android.webkit.ValueCallback<Uri[]> fileCallback;
     private String pendingJump = null;
+    private LocalAgentServer localAgent = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,6 +147,15 @@ public class MainActivity extends Activity {
             web.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
         } catch (Exception e) { }
         web.loadUrl("file:///android_asset/www/index.html");
+        // 本地用户（Agent 接入）：之前开过就自动拉起
+        try {
+            android.content.SharedPreferences sp = getSharedPreferences("paperlite", MODE_PRIVATE);
+            if (sp.getBoolean("agent_enabled", false)) {
+                int port = sp.getInt("agent_port", 6721);
+                boolean lan = sp.getBoolean("agent_lan", false);
+                startLocalAgent(port, lan);
+            }
+        } catch (Exception e) { }
     }
 
     @Override
@@ -272,6 +282,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean canNotify() {
             return act.notificationsAllowed();
+        }
+
+        @JavascriptInterface
+        public String agentStatus() {
+            return act.agentStatusJson();
+        }
+
+        @JavascriptInterface
+        public void agentEnable(boolean on, int port, boolean lan) {
+            act.toggleLocalAgent(on, port, lan);
+        }
+
+        @JavascriptInterface
+        public void agentSend(String text) {
+            act.sendToAgent(text);
         }
 
         @JavascriptInterface
@@ -498,6 +523,71 @@ public class MainActivity extends Activity {
                 });
     }
 
+    /* ---------------- 本地用户 / Agent 接入 ---------------- */
+    private void startLocalAgent(int port, boolean lan) {
+        stopLocalAgent();
+        localAgent = new LocalAgentServer(port, lan, new LocalAgentServer.Listener() {
+            @Override public void onAgentMessage(final String text, final String from) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            String js = "try{window.__agentOnMessage&&window.__agentOnMessage("
+                                + org.json.JSONObject.quote(text) + ")}catch(e){}";
+                            if (web != null) web.evaluateJavascript(js, null);
+                        } catch (Exception e) { }
+                    }
+                });
+            }
+            @Override public void onStatusChanged(final int clients, final String lastError) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            org.json.JSONObject o = new org.json.JSONObject();
+                            o.put("on", localAgent != null && localAgent.isRunning());
+                            o.put("clients", clients);
+                            o.put("port", localAgent == null ? 0 : localAgent.getPort());
+                            o.put("error", lastError == null ? "" : lastError);
+                            String js = "try{window.__agentOnStatus&&window.__agentOnStatus("
+                                + org.json.JSONObject.quote(o.toString()) + ")}catch(e){}";
+                            if (web != null) web.evaluateJavascript(js, null);
+                        } catch (Exception e) { }
+                    }
+                });
+            }
+        });
+        localAgent.start();
+    }
+
+    private void stopLocalAgent() {
+        if (localAgent != null) {
+            try { localAgent.stop(); } catch (Exception e) { }
+            localAgent = null;
+        }
+    }
+
+    private String agentStatusJson() {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            boolean on = localAgent != null && localAgent.isRunning();
+            o.put("on", on);
+            o.put("clients", localAgent == null ? 0 : localAgent.clientCount());
+            o.put("port", localAgent == null ? 0 : localAgent.getPort());
+            o.put("error", localAgent == null ? "" : localAgent.lastError());
+            return o.toString();
+        } catch (Exception e) { return "{}"; }
+    }
+
+    private void toggleLocalAgent(boolean on, int port, boolean lan) {
+        android.content.SharedPreferences sp = getSharedPreferences("paperlite", MODE_PRIVATE);
+        int p = port > 0 && port < 65536 ? port : 6721;
+        sp.edit().putBoolean("agent_enabled", on).putInt("agent_port", p).putBoolean("agent_lan", lan).commit();
+        if (on) startLocalAgent(p, lan); else stopLocalAgent();
+    }
+
+    private void sendToAgent(String text) {
+        if (localAgent != null) localAgent.broadcastMessage(text);
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -511,6 +601,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        stopLocalAgent();
         try { stopService(new Intent(this, KeepAliveService.class)); } catch (Exception e) { }
         if (web != null) {
             try { web.stopLoading(); } catch (Exception e) { }
