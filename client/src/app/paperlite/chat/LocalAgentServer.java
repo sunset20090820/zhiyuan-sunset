@@ -62,21 +62,24 @@ public class LocalAgentServer {
         if (running) return;
         try {
             Exception last = null;
-            for (int attempt = 0; attempt < 3 && !running; attempt++) {
+            boolean bound = false;
+            for (int attempt = 0; attempt < 3 && !bound; attempt++) {
+                ServerSocket ss = null;
                 try {
-                    server = new ServerSocket();
-                    server.setReuseAddress(true);
+                    ss = new ServerSocket();
+                    ss.setReuseAddress(true);
                     InetAddress addr = InetAddress.getByName(lanBind ? "0.0.0.0" : "127.0.0.1");
-                    server.bind(new InetSocketAddress(addr, port), 8);
+                    ss.bind(new InetSocketAddress(addr, port), 8);
+                    server = ss;
                     last = null;
+                    bound = true;           // 绑定成功就停手，绝不能再来一轮（会把自己顶掉）
                 } catch (Exception e) {
                     last = e;
-                    try { if (server != null) server.close(); } catch (Exception e2) { }
-                    server = null;
+                    try { if (ss != null) ss.close(); } catch (Exception e2) { }
                     try { Thread.sleep(400); } catch (Exception e3) { }
                 }
             }
-            if (last != null) throw last;
+            if (!bound || last != null) throw last != null ? last : new Exception("绑定失败");
             running = true;
             lastError = "";
             acceptThread = new Thread(new Runnable() {

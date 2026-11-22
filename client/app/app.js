@@ -708,7 +708,7 @@
         ? ('监听 ' + (S.localAgent.lan ? '0.0.0.0' : '127.0.0.1') + ':' + S.localAgent.port +
            ' · ' + (S.localAgent.clients ? (S.localAgent.clients + ' 个 Agent 已连接') : '等待 Agent 连接') +
            (S.localAgent.error ? (' · ' + S.localAgent.error) : ''))
-        : '未开启';
+        : (S.localAgent.error ? ('未开启 · ' + S.localAgent.error) : '未开启');
     }
     return st;
   }

@@ -123,22 +123,64 @@ public class KeepAliveService extends Service {
 
     private static synchronized void startServer(int port, boolean lan) {
         if (sServer != null && sServer.isRunning() && sServer.getPort() == port) return;
-        stopServer();
-        final int p = port;
-        sServer = new LocalAgentServer(port, lan, new LocalAgentServer.Listener() {
-            @Override public void onAgentMessage(String text, String from) { deliver(text, from); }
-            @Override public void onStatusChanged(int clients, String lastError) {
-                pushStatus();
-                KeepAliveService inst = sInst;
-                if (inst != null) inst.updateNotification();
+        // 先把新端口绑起来，绑成功再撤旧的：换端口失败时不至于把好的那条也关掉
+        final int p2 = port;
+        LocalAgentServer fresh = new LocalAgentServer(port, lan, LISTENER);
+        fresh.start();
+        if (fresh.isRunning()) {
+            LocalAgentServer old = sServer;
+            sServer = fresh;
+            if (old != null) { try { old.stop(); } catch (Exception e) { } }
+            afterServerUp(p2);
+            return;
+        }
+        if (sServer != null && sServer.isRunning()) {
+            Log.w(TAG, "新端口 " + port + " 没绑上，继续用原来的 " + sServer.getPort());
+            pushStatus();
+            return;
+        }
+        sServer = fresh;                  // 都没绑上：留着报错，并排队自愈
+        scheduleHeal(p2, lan, fresh.lastError());
+        pushStatus();
+    }
+
+    /** 端口可能还在 TIME_WAIT（刚关过/刚换过），隔几秒自己再试几次 */
+    private static void scheduleHeal(final int port, final boolean lan, final String err) {
+        if (err == null || err.indexOf("in use") < 0) return;
+        Thread t = new Thread(new Runnable() {
+            @Override public void run() {
+                for (int i = 0; i < 6; i++) {
+                    try { Thread.sleep(5000); } catch (Exception e) { return; }
+                    synchronized (KeepAliveService.class) {
+                        if (sServer != null && sServer.isRunning()) return;
+                    }
+                    Log.i(TAG, "端口 " + port + " 自愈重试第 " + (i + 1) + " 次");
+                    startServer(port, lan);
+                    synchronized (KeepAliveService.class) {
+                        if (sServer != null && sServer.isRunning()) return;
+                    }
+                }
             }
-        });
-        sServer.start();
-        Log.i(TAG, "本地用户端口 " + p + " 已重新托管在前台服务里");
+        }, "local-agent-heal");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void afterServerUp(int port) {
+        Log.i(TAG, "本地用户端口 " + port + " 已托管在前台服务");
         pushStatus();
         KeepAliveService inst = sInst;
         if (inst != null) inst.updateNotification();
     }
+
+    private static final LocalAgentServer.Listener LISTENER = new LocalAgentServer.Listener() {
+        @Override public void onAgentMessage(String text, String from) { deliver(text, from); }
+        @Override public void onStatusChanged(int clients, String lastError) {
+            pushStatus();
+            KeepAliveService inst = sInst;
+            if (inst != null) inst.updateNotification();
+        }
+    };
 
     private static synchronized void stopServer() {
         if (sServer != null) {
