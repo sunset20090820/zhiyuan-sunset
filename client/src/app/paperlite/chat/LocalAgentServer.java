@@ -31,7 +31,8 @@ import java.util.Set;
 public class LocalAgentServer {
 
     public interface Listener {
-        void onAgentMessage(String text, String from);
+        /** conv/peer/room 是「用户接入」用的会话提示；本地模式可忽略 */
+        void onAgentMessage(String text, String from, String conv, String peer, String room);
         void onStatusChanged(int clients, String lastError);
     }
 
@@ -45,6 +46,7 @@ public class LocalAgentServer {
     private Thread acceptThread;
     private volatile boolean running = false;
     private String lastError = "";
+    private String botName = "本地用户";
     private final Set<Handler> handlers = Collections.synchronizedSet(new LinkedHashSet<Handler>());
 
     public LocalAgentServer(int port, boolean lanBind, Listener listener) {
@@ -57,6 +59,9 @@ public class LocalAgentServer {
     public boolean isRunning() { return running; }
     public synchronized int clientCount() { return handlers.size(); }
     public synchronized String lastError() { return lastError == null ? "" : lastError; }
+    public synchronized void setBotName(String n) {
+        if (n != null && n.trim().length() > 0) botName = n.trim();
+    }
 
     public synchronized void start() {
         if (running) return;
@@ -109,6 +114,11 @@ public class LocalAgentServer {
         }
         notifyStatus();
         Log.i(TAG, "本地 Agent 端口已关闭");
+    }
+
+    /** 直接往所有已连接的 Agent 推一行 JSON（「用户接入」用它把服务器消息转给 astrbot） */
+    public void broadcastRaw(String line) {
+        if (line != null) broadcast(line);
     }
 
     /** 把 App 里用户说的话发给所有已连接的 Agent */
@@ -170,7 +180,7 @@ public class LocalAgentServer {
                 hello.put("type", "hello");
                 hello.put("app", "zhiyuan");
                 hello.put("conv", "local");
-                hello.put("botName", "本地用户");
+                hello.put("botName", botName);
                 send(hello.toString());
                 String line;
                 while ((line = in.readLine()) != null) {
@@ -193,8 +203,11 @@ public class LocalAgentServer {
                 if ("send".equals(type) || "message".equals(type)) {
                     String text = o.optString("text", "");
                     String from = o.optString("from", "");
+                    String conv = o.optString("conv", "");
+                    String peer = o.optString("peer", "");
+                    String room = o.optString("room", "");
                     if (listener != null && text.length() > 0) {
-                        try { listener.onAgentMessage(text, from); } catch (Exception e) {}
+                        try { listener.onAgentMessage(text, from, conv, peer, room); } catch (Exception e) {}
                     }
                 } else if ("ping".equals(type)) {
                     JSONObject pong = new JSONObject();

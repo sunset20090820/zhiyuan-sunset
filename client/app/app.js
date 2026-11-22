@@ -67,8 +67,8 @@
     online: {}, members: [], last: {}, unread: {},
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
-    localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '' },
-    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}
+    localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
+    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '' }
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -190,7 +190,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -225,7 +225,8 @@
         S.myAvatar = o.myAvatar || '';
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
-        S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '' }, o.localAgent || {});
+        S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
+        S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '' }, o.agentUser || {});
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -674,9 +675,23 @@
 
   /* ---------------- 本地用户（Agent 接入） ---------------- */
   function localAgentOn() { return !!(window.PaperNative && window.PaperNative.agentEnable); }
+  function localAgentName() { return (S.localAgent && S.localAgent.name) || '本地用户'; }
+  function localAgentAvatar() { return (S.localAgent && S.localAgent.avatar) || ''; }
+  // 把名称/头像落到会话列表和头像表里（本地会话，不走服务器）
+  function applyAgentProfile() {
+    var nm = localAgentName(), av = localAgentAvatar();
+    if (S.dms[LOCAL_PEER]) S.dms[LOCAL_PEER].name = nm;
+    if (!S.avatars) S.avatars = {};
+    if (av) S.avatars[LOCAL_PEER] = av; else delete S.avatars[LOCAL_PEER];
+    try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
+    try { if (window.PaperNative && window.PaperNative.agentName) window.PaperNative.agentName(nm); } catch (e) {}
+    renderRooms();
+    if (S.cur === LOCAL_RID) { try { renderMsgs(true); } catch (e) {} }
+  }
   function ensureLocalConv(on) {
     if (on) {
-      if (!S.dms[LOCAL_PEER]) S.dms[LOCAL_PEER] = { name: '本地用户', roomId: LOCAL_RID, local: true };
+      if (!S.dms[LOCAL_PEER]) S.dms[LOCAL_PEER] = { name: localAgentName(), roomId: LOCAL_RID, local: true };
+      S.dms[LOCAL_PEER].name = localAgentName();
       S.dms[LOCAL_PEER].local = true;
     } else if (S.dms[LOCAL_PEER]) {
       delete S.dms[LOCAL_PEER];
@@ -690,11 +705,65 @@
     S.localAgent.on = !!on;
     S.localAgent.port = Number(port) || 6721;
     S.localAgent.lan = !!lan;
+    var nmEl = $('#agentName');
+    if (nmEl) S.localAgent.name = (nmEl.value || '').trim().slice(0, 16) || '本地用户';
     save();
+    applyAgentProfile();
     try { window.PaperNative.agentEnable(!!on, S.localAgent.port, !!lan); } catch (e) {}
     ensureLocalConv(!!on);
     refreshAgentStatus();
     toast(on ? ('本地用户已开启，端口 ' + S.localAgent.port) : '本地用户已关闭');
+  }
+  /* ---------------- 用户接入（Agent 作为真账号） ---------------- */
+  function agentUserOn() { return !!(window.PaperNative && window.PaperNative.agentUserApply); }
+  function renderAgentUserPanel() {
+    var u = S.agentUser || {};
+    if ($('#agentUserOn')) $('#agentUserOn').checked = !!u.on;
+    if ($('#agentUserAcc')) $('#agentUserAcc').value = u.user || '';
+    if ($('#agentUserPass')) $('#agentUserPass').value = u.pass || '';
+    if ($('#agentUserNick')) $('#agentUserNick').value = u.nick || '';
+    var pv = $('#agentUserAvatarPrev');
+    if (pv) pv.innerHTML = u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : '🤖';
+    var st = $('#agentUserStat');
+    if (st) {
+      if (!u.on) st.textContent = u.error ? ('未开启 · ' + u.error) : '未开启';
+      else if (u.ready) st.textContent = '已上线：' + (u.nick || u.user) + ' · 私聊回私聊，群里 @ 才回';
+      else st.textContent = '连接中…' + (u.error ? (' · ' + u.error) : '');
+    }
+  }
+  function agentUserApplyFromPanel() {
+    if (!agentUserOn()) { toast('这个版本不支持用户接入'); return; }
+    var on = !!($('#agentUserOn') && $('#agentUserOn').checked);
+    var user = ($('#agentUserAcc') ? $('#agentUserAcc').value : '').trim();
+    var pass = ($('#agentUserPass') ? $('#agentUserPass').value : '').trim();
+    var nick = ($('#agentUserNick') ? $('#agentUserNick').value : '').trim();
+    if (on && (user.length < 2 || pass.length < 4)) { toast('账号至少 2 位、密码至少 4 位'); return; }
+    S.agentUser.on = on;
+    S.agentUser.user = user;
+    S.agentUser.pass = pass;
+    S.agentUser.nick = nick || user;
+    save();
+    try { window.PaperNative.agentUserApply(on, user, pass, S.agentUser.nick, S.agentUser.avatar || ''); } catch (e) {}
+    renderAgentUserPanel();
+    toast(on ? ('用户接入已开启：' + S.agentUser.nick) : '用户接入已关闭');
+  }
+  function refreshAgentUserStatus(st) {
+    if (!st) return;
+    var u = null;
+    try { u = typeof st.user === 'string' ? JSON.parse(st.user) : st.user; } catch (e) { u = null; }
+    if (!u) return;
+    S.agentUser.ready = !!u.ready;
+    S.agentUser.error = u.error || '';
+    if (u.user) S.agentUser.user = u.user;
+    if (u.nick) S.agentUser.nick = u.nick;
+    renderAgentUserPanel();
+  }
+
+  function renderAgentAvatarPreview() {
+    var el = $('#agentAvatarPrev');
+    if (!el) return;
+    var av = localAgentAvatar();
+    el.innerHTML = av ? '<img src="' + esc(av) + '" alt="">' : '👤';
   }
   function refreshAgentStatus() {
     var st = null;
@@ -719,7 +788,7 @@
   window.__agentOnMessage = function (text) {
     if (!text) return;
     if (!S.dms[LOCAL_PEER]) return;
-    var m = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), from: LOCAL_PEER, name: '本地用户', text: text, ts: Date.now() };
+    var m = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), from: LOCAL_PEER, name: localAgentName(), avatar: localAgentAvatar(), text: text, ts: Date.now() };
     addMsg(LOCAL_RID, m);
     S.last[LOCAL_RID] = { id: m.id, text: text, name: '本地用户', ts: m.ts };
     if (S.cur !== LOCAL_RID) {
@@ -739,6 +808,7 @@
       if (st.port) S.localAgent.port = Number(st.port);
       S.localAgent.error = st.error || '';
       refreshAgentStatus();
+      refreshAgentUserStatus(st);
     } catch (e) {}
   };
 
@@ -1436,10 +1506,77 @@
         $('#agentOn').checked = !!S.localAgent.on;
         $('#agentPort').value = S.localAgent.port || 6721;
         $('#agentLan').checked = !!S.localAgent.lan;
+        if ($('#agentName')) $('#agentName').value = localAgentName();
+        renderAgentAvatarPreview();
         refreshAgentStatus();
       }
       $('#agentSheet').classList.remove('hidden');
       requestAnimationFrame(function () { $('#agentSheet').classList.add('open'); });
+    });
+    on('#btnAgentUser', 'click', function () {
+      renderAgentUserPanel();
+      if (window.PaperNative && window.PaperNative.agentUserStatus) {
+        try { refreshAgentUserStatus(JSON.parse(window.PaperNative.agentUserStatus() || '{}')); } catch (e) {}
+      }
+      $('#agentUserSheet').classList.remove('hidden');
+      requestAnimationFrame(function () { $('#agentUserSheet').classList.add('open'); });
+    });
+    on('#agentUserClose', 'click', function () {
+      var el = $('#agentUserSheet');
+      el.classList.remove('open');
+      setTimeout(function () { el.classList.add('hidden'); }, 200);
+    });
+    on('#agentUserApply', 'click', agentUserApplyFromPanel);
+    on('#agentUserRand', 'click', function () {
+      var chars = 'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      var out = '';
+      for (var i = 0; i < 12; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
+      if ($('#agentUserPass')) $('#agentUserPass').value = out;
+    });
+    on('#agentUserAvatarBtn', 'click', function () {
+      var el = $('#agentUserAvatarInput');
+      if (el) { el.value = ''; el.click(); }
+    });
+    on('#agentUserAvatarInput', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var img = new Image(), url = URL.createObjectURL(f);
+      img.onload = function () {
+        var size = 256, c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        var side = Math.min(img.width, img.height);
+        c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+        try { S.agentUser.avatar = c.toDataURL('image/jpeg', 0.82); } catch (err) { toast('图片处理失败'); }
+        try { URL.revokeObjectURL(url); } catch (e2) {}
+        renderAgentUserPanel();
+        save();
+        if (S.agentUser.on) agentUserApplyFromPanel();   // 已开启就直接把新头像推上去
+      };
+      img.onerror = function () { toast('这张图打不开'); };
+      img.src = url;
+    });
+    on('#agentAvatarBtn', 'click', function () {
+      var el = $('#agentAvatarInput');
+      if (el) { el.value = ''; el.click(); }
+    });
+    on('#agentAvatarInput', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var img = new Image(), url = URL.createObjectURL(f);
+      img.onload = function () {
+        var size = 128, c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        var side = Math.min(img.width, img.height);
+        c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+        try { S.localAgent.avatar = c.toDataURL('image/jpeg', 0.82); } catch (err) { toast('图片处理失败'); }
+        try { URL.revokeObjectURL(url); } catch (e2) {}
+        renderAgentAvatarPreview();
+        applyAgentProfile();
+        save();
+        toast('头像已更新');
+      };
+      img.onerror = function () { toast('这张图打不开'); };
+      img.src = url;
     });
     on('#agentApply', 'click', function () {
       agentApply($('#agentOn').checked, Number($('#agentPort').value) || 6721, $('#agentLan').checked);
@@ -3048,7 +3185,17 @@
       if (line) line.textContent = '纸鸢 ' + ver + ' · 账号版';
     } catch (e) {}
     try { S.dms = JSON.parse(localStorage.getItem(LK('dms')) || '{}') || {}; } catch (e) { S.dms = {}; }
+    try { if (S.localAgent && S.localAgent.on) ensureLocalConv(true); } catch (e) {}
     bind();
+    try { applyAgentProfile(); } catch (e) {}
+    try { renderAgentUserPanel(); } catch (e) {}
+    // 上次开着「用户接入」的话，让原生把它拉起来（服务重启/更新后也能自动回来）
+    try {
+      if (S.agentUser && S.agentUser.on && S.agentUser.user && window.PaperNative && window.PaperNative.agentUserApply) {
+        window.PaperNative.agentUserApply(true, S.agentUser.user, S.agentUser.pass || '',
+                S.agentUser.nick || S.agentUser.user, S.agentUser.avatar || '');
+      }
+    } catch (e) {}
     bindViewer();
 
     on('#btnPinRoom', 'click', function () {

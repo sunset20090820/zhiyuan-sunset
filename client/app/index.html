@@ -176,10 +176,41 @@
       <input id="agentPort" class="agent-input" type="number" min="1" max="65535" inputmode="numeric" value="6721"></label>
     <label class="me-row agent-row"><span class="me-ico">🌐</span>允许局域网连接
       <input id="agentLan" type="checkbox" class="agent-switch"></label>
+    <label class="me-row agent-row"><span class="me-ico">🏷</span>名称
+      <input id="agentName" class="agent-input agent-name" type="text" maxlength="16" placeholder="本地用户"></label>
+    <div class="me-row agent-row"><span class="me-ico">🖼</span>头像
+      <button id="agentAvatarBtn" class="agent-ava" type="button"><span id="agentAvatarPrev">👤</span></button></div>
+    <input id="agentAvatarInput" type="file" accept="image/*" class="hidden">
     <p class="hint" id="agentStat">未开启</p>
     <p class="hint" id="agentHint">默认只监听 127.0.0.1:6721；协议为每行一个 JSON。这个端口是纸鸢自己监听的：Agent 只能连进来（connect），不能自己去占用 6721。若连不上，把纸鸢的省电策略设为「无限制」。</p>
     <button id="agentApply" class="primary" type="button">保存</button>
     <button id="agentClose" class="action-cancel" type="button">关闭</button>
+  </div>
+</div>
+
+<!-- 用户接入（Agent 作为真账号） -->
+<div id="agentUserSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="用户接入">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">用户接入</h3>
+    <p class="remark-sub">让 Agent 用真账号上线：别人能加它、私聊它，群里 @ 它才说话。消息同时进 astrbot 日志和服务器。</p>
+    <label class="me-row agent-row"><span class="me-ico">🛰</span>开启用户接入
+      <input id="agentUserOn" type="checkbox" class="agent-switch"></label>
+    <label class="me-row agent-row"><span class="me-ico">👤</span>账号
+      <input id="agentUserAcc" class="agent-input agent-name" type="text" maxlength="16" placeholder="如 my_agent"></label>
+    <label class="me-row agent-row"><span class="me-ico">🔑</span>密码
+      <input id="agentUserPass" class="agent-input agent-name" type="text" maxlength="64" placeholder="至少 4 位">
+      <button id="agentUserRand" class="agent-mini" type="button">随机</button></label>
+    <label class="me-row agent-row"><span class="me-ico">🏷</span>名称
+      <input id="agentUserNick" class="agent-input agent-name" type="text" maxlength="16" placeholder="别人看到的名字"></label>
+    <div class="me-row agent-row"><span class="me-ico">🖼</span>头像
+      <button id="agentUserAvatarBtn" class="agent-ava" type="button"><span id="agentUserAvatarPrev">🤖</span></button></div>
+    <input id="agentUserAvatarInput" type="file" accept="image/*" class="hidden">
+    <p class="hint" id="agentUserStat">未开启</p>
+    <p class="hint">账号第一次保存时会自动注册（密保答案＝密码）。密码存在本机，方便断线重连。</p>
+    <button id="agentUserApply" class="primary" type="button">保存</button>
+    <button id="agentUserClose" class="action-cancel" type="button">关闭</button>
   </div>
 </div>
 
@@ -332,6 +363,7 @@
       <button id="btnCheckUpdate" class="me-row" type="button"><span class="me-ico">🔄</span>检查更新<span class="me-arrow">›</span></button>
       <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
       <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
+      <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
       <button id="btnStorage" class="me-row" type="button"><span class="me-ico">🗂</span>存储管理<span class="me-arrow">›</span></button>
       <button id="btnNewChatRow" class="me-row" type="button"><span class="me-ico">✎</span>新建对话<span class="me-arrow">›</span></button>
     </div>

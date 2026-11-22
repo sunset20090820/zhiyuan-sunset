@@ -329,6 +329,21 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void agentName(String name) {
+            act.applyAgentName(name);
+        }
+
+        @JavascriptInterface
+        public void agentUserApply(boolean on, String user, String pass, String nick, String avatar) {
+            act.applyAgentUser(on, user, pass, nick, avatar);
+        }
+
+        @JavascriptInterface
+        public String agentUserStatus() {
+            return KeepAliveService.statusJson();
+        }
+
+        @JavascriptInterface
         public String takeJump() {
             String j = act.pendingJump;
             act.pendingJump = null;
@@ -593,6 +608,24 @@ public class MainActivity extends Activity {
 
     private void sendToAgent(String text) {
         KeepAliveService.sendToAgent(text);
+    }
+
+    /** 本地会话的显示名：agent 连上来时 hello 里就带这个名字 */
+    private void applyAgentName(String name) {
+        KeepAliveService.setAgentName(this, name);
+    }
+
+    /** 「用户接入」：Agent 用真账号登录服务器，和本地 astrbot 双向转发 */
+    private void applyAgentUser(boolean on, String user, String pass, String nick, String avatar) {
+        if (!on) { KeepAliveService.stopAgentUser(this); return; }
+        String server = "";
+        try {
+            server = getSharedPreferences("paperlite", MODE_PRIVATE).getString("state", "");
+            org.json.JSONObject o = new org.json.JSONObject(server);
+            server = o.optString("server", "");
+        } catch (Exception e) { }
+        if (server.length() == 0) server = "ws://114.55.230.190:8080";
+        KeepAliveService.startAgentUser(this, server, user, pass, nick, avatar);
     }
 
     @Override
