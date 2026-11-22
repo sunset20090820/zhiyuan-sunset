@@ -190,7 +190,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -941,7 +941,12 @@
       return 0;
     });
     list.forEach(function (x) { html += item(x.r, x.isDM, x.peerId); });
-    $('#roomList').innerHTML = html;
+    var box = $('#roomList');
+    box.innerHTML = html;
+    if (!box.classList.contains('painted')) {
+      // 让首屏的逐条浮现播完再打标记，之后的重绘不再重播
+      setTimeout(function () { try { box.classList.add('painted'); } catch (e) {} }, 600);
+    }
   }
 
   /* ---------------- 渲染：聊天页 ---------------- */
@@ -1192,10 +1197,70 @@
     if (t) document.documentElement.setAttribute('data-theme', t);
     else document.documentElement.removeAttribute('data-theme');
     try { localStorage.setItem('paperlite.theme', t || ''); } catch (e) {}
+    try { applyChatBg(); } catch (e) {}
   }
   function toggleTheme() {
     var cur = document.documentElement.getAttribute('data-theme');
     applyTheme(cur === 'dark' ? 'light' : 'dark');
+  }
+
+  /* ---------------- 聊天背景 / 液态玻璃 ---------------- */
+  var BG_PRESETS = [
+    { key: 'mist',   name: '晨雾', css: 'linear-gradient(165deg,#f3f2ff 0%,#fdf6fb 52%,#eef7f5 100%)' },
+    { key: 'peach',  name: '蜜桃', css: 'linear-gradient(165deg,#fff3ec 0%,#ffe9f2 55%,#f4ecff 100%)' },
+    { key: 'mint',   name: '薄荷', css: 'linear-gradient(165deg,#eefbf6 0%,#eef6ff 55%,#f7f0ff 100%)' },
+    { key: 'sakura', name: '樱花', css: 'radial-gradient(120% 90% at 18% 0%,#ffe6f1 0%,transparent 62%), linear-gradient(165deg,#fff7fa 0%,#f4f0ff 100%)' },
+    { key: 'cream',  name: '奶油', css: 'linear-gradient(165deg,#fffaf0 0%,#fdf2e6 55%,#f6f1ff 100%)' },
+    { key: 'dusk',   name: '暮色', css: 'linear-gradient(165deg,#1e2130 0%,#241f33 55%,#1b2430 100%)' }
+  ];
+  function bgPreset(key) {
+    for (var i = 0; i < BG_PRESETS.length; i++) if (BG_PRESETS[i].key === key) return BG_PRESETS[i];
+    return null;
+  }
+  function applyChatBg() {
+    var root = document.documentElement, bg = S.bg || {};
+    var dark = root.getAttribute('data-theme') === 'dark';
+    var wall = 'none';
+    if (bg.key === 'custom' && bg.image) wall = 'url("' + bg.image + '")';
+    else if (bg.key && bg.key !== 'none') {
+      var p = bgPreset(bg.key);
+      if (p) wall = p.css;
+    }
+    root.style.setProperty('--chat-wall', wall);
+    var d = Number(bg.dim);
+    if (isNaN(d)) d = 0.18;
+    var base = dark ? '12,14,24' : '255,255,255';
+    root.style.setProperty('--chat-wall-dim', 'rgba(' + base + ',' + d.toFixed(2) + ')');
+    root.classList.toggle('no-glass', !S.glass);
+  }
+  function setChatBg(key, image) {
+    S.bg.key = key;
+    S.bg.image = image || '';
+    applyChatBg();
+    save();
+    renderBgSheet();
+  }
+  function renderBgSheet() {
+    var grid = $('#bgGrid');
+    if (!grid) return;
+    var cur = (S.bg && S.bg.key) || 'mist';
+    var html = BG_PRESETS.map(function (p) {
+      return '<button class="bg-chip' + (cur === p.key ? ' on' : '') + '" type="button" data-bg="' + p.key +
+             '" style="background-image:' + p.css + '"><span>' + p.name + '</span></button>';
+    }).join('');
+    if (S.bg && S.bg.image) {
+      html += '<button class="bg-chip' + (cur === 'custom' ? ' on' : '') + '" type="button" data-bg="custom" ' +
+              'style="background-image:url(\'' + S.bg.image + '\')"><span>相册</span></button>';
+    }
+    html += '<button class="bg-chip' + (cur === 'none' ? ' on' : '') + '" type="button" data-bg="none" ' +
+            'style="background:var(--card-2)"><span>纯色</span></button>';
+    grid.innerHTML = html;
+    var dim = $('#bgDim');
+    if (dim) dim.value = String(Math.round((Number(S.bg && S.bg.dim) || 0.18) * 100));
+  }
+  function pickBgImage() {
+    var el = $('#bgInput');
+    if (el) { el.value = ''; el.click(); }
   }
 
   /* ---------------- 事件绑定 ---------------- */
@@ -1600,6 +1665,58 @@
       $('#agentSheet').classList.remove('hidden');
       requestAnimationFrame(function () { $('#agentSheet').classList.add('open'); });
     });
+    on('#btnChatBg', 'click', function () {
+      renderBgSheet();
+      $('#bgSheet').classList.remove('hidden');
+      requestAnimationFrame(function () { $('#bgSheet').classList.add('open'); });
+    });
+    on('#bgClose', 'click', function () {
+      var el = $('#bgSheet');
+      el.classList.remove('open');
+      setTimeout(function () { el.classList.add('hidden'); }, 200);
+    });
+    on('#bgGrid', 'click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-bg]') : null;
+      if (!b) return;
+      var key = b.getAttribute('data-bg');
+      if (key === 'custom') { pickBgImage(); return; }
+      setChatBg(key, '');
+    });
+    on('#bgPick', 'click', pickBgImage);
+    on('#bgInput', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var img = new Image(), url = URL.createObjectURL(f);
+      img.onload = function () {
+        var max = 1080, w = img.width, h = img.height;
+        if (w > max || h > max) { var sc = max / Math.max(w, h); w = Math.round(w * sc); h = Math.round(h * sc); }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        var q = 0.82, data = c.toDataURL('image/jpeg', q);
+        while (data.length > 600000 && q > 0.4) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
+        try { URL.revokeObjectURL(url); } catch (e2) {}
+        setChatBg('custom', data);
+        toast('聊天背景已更新');
+      };
+      img.onerror = function () { toast('这张图打不开'); };
+      img.src = url;
+    });
+    on('#bgDim', 'input', function (e) {
+      S.bg.dim = Math.max(0, Math.min(0.6, Number(e.target.value) / 100));
+      applyChatBg();
+    });
+    on('#bgDim', 'change', function () { save(); });
+    on('#bgReset', 'click', function () { setChatBg('mist', ''); S.bg.dim = 0.18; applyChatBg(); save(); renderBgSheet(); toast('已恢复默认背景'); });
+    on('#btnGlass', 'click', function () {
+      S.glass = !S.glass;
+      applyChatBg();
+      save();
+      var el = $('#glassState');
+      if (el) el.textContent = S.glass ? '开' : '关';
+      toast(S.glass ? '液态玻璃已开启' : '液态玻璃已关闭（更省电）');
+    });
+
     on('#btnAgentUser', 'click', function () {
       renderAgentUserPanel();
       if (window.PaperNative && window.PaperNative.agentUserStatus) {
@@ -3276,6 +3393,8 @@
     bind();
     try { applyAgentProfile(); } catch (e) {}
     try { renderAgentUserPanel(); } catch (e) {}
+    try { applyChatBg(); } catch (e) {}
+    try { var gs = $('#glassState'); if (gs) gs.textContent = S.glass ? '开' : '关'; } catch (e) {}
     // 上次开着「用户接入」的话，让原生把它拉起来（服务重启/更新后也能自动回来）
     try {
       if (S.agentUser && S.agentUser.on && S.agentUser.user && window.PaperNative && window.PaperNative.agentUserApply) {
