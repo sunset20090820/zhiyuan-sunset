@@ -1263,11 +1263,23 @@
     var n = parseInt(h, 16);
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   }
+  var M3_VARS = ['--bg','--bg-soft','--chat-bg','--card','--card-2','--in','--text','--in-text','--sub',
+    '--line','--stroke','--ring','--accent','--accent-ink','--accent-2','--accent-3',
+    '--out-a','--out-b','--out','--out-text','--out-meta','--out-who',
+    '--badge-bg','--badge-text','--chip-bg','--chip-text','--danger'];
+  function isM3Accent(key) { return String(key || '').indexOf('m3-') === 0; }
+  function clearM3Vars() {
+    var st = document.documentElement.style;
+    M3_VARS.forEach(function (n) { st.removeProperty(n); });
+  }
   function applyM3Scheme() {
+    var key = S.accent || 'periwinkle';
+    // 经典主题色：交给 CSS 里的预设，不覆盖
+    if (!isM3Accent(key)) { clearM3Vars(); return false; }
     var all = window.M3;
     if (!all) return false;
-    var key = S.accent || 'periwinkle';
-    var set = all[key] || all.periwinkle;
+    var base = key.slice(3);
+    var set = all[base] || all.periwinkle;
     if (!set) return false;
     var dark = document.documentElement.getAttribute('data-theme') === 'dark';
     var m = set[dark ? 'dark' : 'light'];
@@ -1275,39 +1287,32 @@
     var r = document.documentElement.style;
     var put = function (name, v) { if (v) r.setProperty(name, v); };
 
-    // 底色 / 表面
     put('--bg', m.surface);
     put('--bg-soft', m.surfaceContainerLow);
     put('--chat-bg', m.surfaceContainerLow);
     put('--card', m.surfaceContainerLow);
     put('--card-2', m.surfaceContainer);
     put('--in', m.surfaceContainerLow);
-    // 文字
     put('--text', m.onSurface);
     put('--in-text', m.onSurface);
     put('--sub', m.onSurfaceVariant);
-    // 描边
     put('--line', hexRgba(m.outlineVariant, dark ? 0.55 : 0.75));
     put('--stroke', hexRgba(m.outlineVariant, dark ? 0.5 : 0.7));
     put('--ring', hexRgba(m.primary, 0.28));
-    // 主色
     put('--accent', m.primary);
     put('--accent-ink', m.primary);
     put('--accent-2', m.tertiary);
     put('--accent-3', m.tertiaryContainer);
-    // 气泡：底色与前景成对，深色模式自动用深字
     put('--out-a', m.outA);
     put('--out-b', m.outB);
     put('--out', m.outA);
     put('--out-text', m.onPrimary);
     put('--out-meta', hexRgba(m.onPrimary, 0.8));
     put('--out-who', hexRgba(m.onPrimary, 0.92));
-    // 角标 / 日期
     put('--badge-bg', m.tertiaryContainer);
     put('--badge-text', m.onTertiaryContainer);
     put('--chip-bg', m.secondaryContainer);
     put('--chip-text', m.onSecondaryContainer);
-    // 语义
     put('--danger', m.error);
     return true;
   }
@@ -1357,7 +1362,8 @@
     if (gl && Number(gl.value) !== lv) gl.value = String(lv);
 
     root.classList.toggle('no-glass', !S.glass);
-    if (S.accent && S.accent !== 'periwinkle') root.setAttribute('data-accent', S.accent);
+    if (isM3Accent(S.accent)) root.removeAttribute('data-accent');
+    else if (S.accent && S.accent !== 'periwinkle') root.setAttribute('data-accent', S.accent);
     else root.removeAttribute('data-accent');
   }
 
@@ -1410,11 +1416,16 @@
   function renderAccentGrid() {
     var box = $('#accentGrid');
     if (!box) return;
-    box.innerHTML = ACCENTS.map(function (a) {
-      return '<button class="accent-chip' + ((S.accent || 'periwinkle') === a.key ? ' on' : '') +
-             '" type="button" data-accent="' + a.key + '" style="background-image:' + a.css +
-             '" aria-label="' + a.name + '"></button>';
-    }).join('');
+    var cur = S.accent || 'periwinkle';
+    function chip(a) {
+      return '<button class="accent-chip' + (cur === a.key ? ' on' : '') + '" type="button" data-accent="' + a.key +
+             '" style="background-image:' + a.css + '" aria-label="' + a.name + '" title="' + a.name + '"></button>';
+    }
+    var classic = ACCENTS.filter(function (a) { return !a.m3; });
+    var m3 = ACCENTS.filter(function (a) { return a.m3; });
+    box.innerHTML =
+      '<div class="accent-label">经典</div><div class="accent-row">' + classic.map(chip).join('') + '</div>' +
+      '<div class="accent-label">Material 3</div><div class="accent-row">' + m3.map(chip).join('') + '</div>';
   }
   function toggleBeautyPanel(force) {
     var panel = $('#beautyPanel'), arrow = $('#beautyArrow'), btn = $('#btnBeauty');
@@ -1447,7 +1458,13 @@
     { key: 'sakura',     name: '樱花',   css: 'linear-gradient(135deg,#ef6f97,#f58fb0)' },
     { key: 'peach',      name: '蜜桃',   css: 'linear-gradient(135deg,#f08a5d,#f5a06f)' },
     { key: 'mint',       name: '薄荷',   css: 'linear-gradient(135deg,#3fb39a,#57c9b3)' },
-    { key: 'cream',      name: '奶油',   css: 'linear-gradient(135deg,#d9a544,#e8bd6d)' }
+    { key: 'cream',      name: '奶油',   css: 'linear-gradient(135deg,#d9a544,#e8bd6d)' },
+    { key: 'm3-periwinkle', name: 'M3 长春花', m3: true, css: 'linear-gradient(135deg,#515b92,#dee0ff)' },
+    { key: 'm3-lavender',   name: 'M3 薰衣草', m3: true, css: 'linear-gradient(135deg,#625690,#e7deff)' },
+    { key: 'm3-sakura',     name: 'M3 樱花',   m3: true, css: 'linear-gradient(135deg,#8c4a5d,#ffd9e1)' },
+    { key: 'm3-peach',      name: 'M3 蜜桃',   m3: true, css: 'linear-gradient(135deg,#8e4d30,#ffdbcd)' },
+    { key: 'm3-mint',       name: 'M3 薄荷',   m3: true, css: 'linear-gradient(135deg,#0a6b59,#a1f2dc)' },
+    { key: 'm3-cream',      name: 'M3 奶油',   m3: true, css: 'linear-gradient(135deg,#7b580d,#ffdeaa)' }
   ];
   function setAccent(key) {
     S.accent = key || 'periwinkle';
