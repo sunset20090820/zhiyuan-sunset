@@ -540,6 +540,19 @@ function handleMessage(c, buf, opcode) {
     return;
   }
 
+  // 改昵称：账号名不变，只改显示名（用户接入用它把面板里的「名称」同步给账号）
+  if (d.t === 'nick') {
+    const nick = clean(d.nick, MAX_NAME);
+    if (!nick) { send(c, { t: 'error', message: '名称不能为空' }); return; }
+    const acc = c.account && accounts[c.account] ? ensureFriendFields(accounts[c.account]) : null;
+    if (acc) { acc.nick = nick; saveAccounts(); }
+    c.name = nick;
+    pressPeople();
+    pressPresence(c.room);
+    send(c, { t: 'nick_ok', nick });
+    return;
+  }
+
   if (d.t === 'join') {
     c.name = clean(d.name, MAX_NAME) || ('路人' + Math.floor(Math.random() * 900 + 100));
     c.deviceId = /^[a-f0-9]{32}$/i.test(d.device || '') ? d.device.toLowerCase() : null;

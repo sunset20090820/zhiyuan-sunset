@@ -46,7 +46,8 @@ public class KeepAliveService extends Service {
     private static LocalAgentServer sUser;       // 用户接入通道
     private static AgentUserRelay sRelay;        // 用户接入：Agent 的服务器账号
     private static String sAgentName = "本地用户";
-    private static String sUserName = "";
+    private static String sUserName = "";        // 显示名
+    private static String sUserAccount = "";     // 账号名（两者不再互相覆盖）
     private static Listener sListener;
     private static final ArrayList<String> sPending = new ArrayList<String>();
 
@@ -106,7 +107,8 @@ public class KeepAliveService extends Service {
                 .putInt("agent_user_port", port)
                 .putBoolean("agent_user_lan", lan).commit();
         ensureRunning(ctx);
-        sUserName = (nick == null || nick.trim().length() == 0) ? user : nick.trim();
+        sUserAccount = user == null ? "" : user.trim();
+        sUserName = (nick == null || nick.trim().length() == 0) ? sUserAccount : nick.trim();
         bringUp(true, port, lan, sUserName);     // 自己独立的 TCP 端口，不碰本地用户那条
 
         if (sRelay != null) { try { sRelay.stop(); } catch (Exception e) { } sRelay = null; }
@@ -168,7 +170,7 @@ public class KeepAliveService extends Service {
             u.put("clients", s == null ? 0 : s.clientCount());
             u.put("error", s == null ? "" : s.lastError());
             u.put("ready", r != null && r.isReady());
-            u.put("user", sUserName);
+            u.put("user", sUserAccount);
             u.put("nick", sUserName);
             if (r != null) u.put("relay", r.statusJson());
             return u.toString();
@@ -291,6 +293,7 @@ public class KeepAliveService extends Service {
             if (sp.getBoolean("agent_user_on", false)) {
                 String url = sp.getString("agent_user_url", "");
                 String u = sp.getString("agent_user_name", "");
+                sUserAccount = u;
                 if (url.length() > 0 && u.length() > 0 && sRelay == null) {
                     startAgentUser(ctx, url, u, sp.getString("agent_user_pass", ""),
                             sp.getString("agent_user_nick", ""), sp.getString("agent_user_avatar", ""),

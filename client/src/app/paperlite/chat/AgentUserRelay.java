@@ -149,6 +149,11 @@ public class AgentUserRelay {
             boolean ok = Boolean.TRUE.equals(okv) || "true".equals(String.valueOf(okv));
             if (ok) {
                 myUid = MiniJson.num(d, "uid", myUid);
+                String serverNick = MiniJson.str(d, "nick", "");
+                if (serverNick.length() > 0 && !serverNick.equals(nick)) {
+                    // 面板里的「名称」才是准的：把账号昵称同步过去（不改账号名）
+                    send(MiniJson.flat("t", "nick", "nick", nick));
+                }
                 afterLogin();
                 return;
             }
