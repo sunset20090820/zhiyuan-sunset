@@ -6,6 +6,18 @@
 <meta name="theme-color" content="#517da2">
 <title>纸鸢</title>
 <link rel="stylesheet" href="style-v48.css">
+<link rel="stylesheet" href="style-m3e.css">
+<script>
+/* 首帧就定好皮肤，避免「小清新」闪一下再变成安卓 16 */
+(function () {
+  try {
+    var s = localStorage.getItem('paperlite.skin');
+    document.documentElement.setAttribute('data-skin', s === 'classic' ? 'classic' : 'm3e');
+  } catch (e) {
+    document.documentElement.setAttribute('data-skin', 'm3e');
+  }
+})();
+</script>
 <script src="m3colors.js"></script>
 </head>
 <body>
@@ -397,6 +409,7 @@
           </div>
           <div class="beauty-block">
             <div class="beauty-title">其它</div>
+            <button id="btnSkin" class="me-row" type="button"><span class="me-ico">📱</span>安卓 16 风格<span class="me-arrow" id="skinState">开</span></button>
             <button id="btnTopbarText" class="me-row" type="button"><span class="me-ico">🔤</span>顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
             <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>液态玻璃<span class="me-arrow" id="glassState">开</span></button>
             <div class="bg-dim-row"><span class="hint">玻璃强度</span>

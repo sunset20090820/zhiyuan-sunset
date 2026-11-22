@@ -72,7 +72,7 @@
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
           list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
-    glass: true, glassLevel: 55, accent: 'periwinkle', topbarText: 'auto'
+    glass: true, glassLevel: 55, accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -194,7 +194,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, accent: S.accent, topbarText: S.topbarText, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -236,6 +236,7 @@
         if (typeof o.glassLevel === 'number') S.glassLevel = o.glassLevel;
         if (o.accent) S.accent = o.accent;
         if (o.topbarText) S.topbarText = o.topbarText;
+        if (o.skin) S.skin = o.skin;
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -1214,6 +1215,20 @@
     applyTheme(cur === 'dark' ? 'light' : 'dark');
   }
 
+  /* ---------------- 皮肤：安卓 16（Material 3 Expressive）/ 小清新 ---------------- */
+  function applySkin(k) {
+    if (k) S.skin = (k === 'classic') ? 'classic' : 'm3e';
+    var v = S.skin || 'm3e';
+    document.documentElement.setAttribute('data-skin', v);
+    try { localStorage.setItem('paperlite.skin', v); } catch (e) {}
+    try { var el = $('#skinState'); if (el) el.textContent = (v === 'm3e') ? '开' : '关'; } catch (e) {}
+  }
+  function toggleSkin() {
+    applySkin((S.skin || 'm3e') === 'm3e' ? 'classic' : 'm3e');
+    save();
+    toast((S.skin === 'm3e') ? '已切到安卓 16 风格' : '已切回小清新');
+  }
+
   /* ---------------- 聊天背景 / 液态玻璃 ---------------- */
   var BG_PRESETS = [
     { key: 'mist',   name: '晨雾', css: 'linear-gradient(165deg,#e9e7ff 0%,#f7e9f6 52%,#e2f4ef 100%)' },
@@ -1266,7 +1281,12 @@
   var M3_VARS = ['--bg','--bg-soft','--chat-bg','--card','--card-2','--in','--text','--in-text','--sub',
     '--line','--stroke','--ring','--accent','--accent-ink','--accent-2','--accent-3',
     '--out-a','--out-b','--out','--out-text','--out-meta','--out-who',
-    '--badge-bg','--badge-text','--chip-bg','--chip-text','--danger'];
+    '--badge-bg','--badge-text','--chip-bg','--chip-text','--danger',
+    /* 12.0 安卓 16 皮肤用的角色 */
+    '--m3e-primary','--m3e-on-primary','--m3e-primary-container','--m3e-on-primary-container',
+    '--m3e-secondary-container','--m3e-on-secondary-container',
+    '--m3e-surface','--m3e-surface-1','--m3e-surface-2','--m3e-surface-3',
+    '--m3e-on-surface','--m3e-on-variant','--m3e-outline'];
   function isM3Accent(key) { return String(key || '').indexOf('m3-') === 0; }
   function clearM3Vars() {
     var st = document.documentElement.style;
@@ -1314,6 +1334,21 @@
     put('--chip-bg', m.secondaryContainer);
     put('--chip-text', m.onSecondaryContainer);
     put('--danger', m.error);
+
+    /* 12.0 皮肤：直接给真实的 M3 角色，层次最准 */
+    put('--m3e-primary', m.primary);
+    put('--m3e-on-primary', m.onPrimary);
+    put('--m3e-primary-container', m.primaryContainer);
+    put('--m3e-on-primary-container', m.onPrimaryContainer);
+    put('--m3e-secondary-container', m.secondaryContainer);
+    put('--m3e-on-secondary-container', m.onSecondaryContainer);
+    put('--m3e-surface', m.surface);
+    put('--m3e-surface-1', m.surfaceContainerLow);
+    put('--m3e-surface-2', m.surfaceContainer);
+    put('--m3e-surface-3', m.surfaceContainerHigh);
+    put('--m3e-on-surface', m.onSurface);
+    put('--m3e-on-variant', m.onSurfaceVariant);
+    put('--m3e-outline', hexRgba(m.outlineVariant, dark ? 0.5 : 0.72));
     return true;
   }
 
@@ -2009,6 +2044,7 @@
       if (el) el.textContent = S.glass ? '开' : '关';
       toast(S.glass ? '液态玻璃已开启' : '液态玻璃已关闭（更省电）');
     });
+    on('#btnSkin', 'click', function () { toggleSkin(); });
     on('#accentGrid', 'click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-accent]') : null;
       if (!b) return;
@@ -3698,6 +3734,7 @@
     if (S.server && srvTagOf(S.server) !== srvTag) { setCurrentServer(S.server); load(); }
     loadRemarks();
     loadStickers();
+    try { applySkin(); } catch (e) {}
     try {
       var ver = window.APP_VERSION || '1.0';
       var line = $('#verLine');
