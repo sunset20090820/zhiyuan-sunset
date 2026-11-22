@@ -3596,6 +3596,12 @@
     try {
       pill.__anim = pill.animate(frames, { duration: 520, easing: 'linear', fill: 'none' });
     } catch (e) { pill.style.transform = 'translateX(' + toX + 'px)'; }
+    // 玻璃里扫过一道光
+    pill.classList.remove('sheen');
+    void pill.offsetWidth;
+    pill.classList.add('sheen');
+    clearTimeout(pill.__st);
+    pill.__st = setTimeout(function () { pill.classList.remove('sheen'); }, 640);
   }
 
   function showTab(name) {
