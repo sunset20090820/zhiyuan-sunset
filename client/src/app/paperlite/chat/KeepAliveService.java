@@ -17,17 +17,13 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 
 /**
- * 前台服务：让进程活着 + 托管「本地用户」的 TCP 服务。
+ * 前台服务：让进程活着，并托管两条**互不相干**的 Agent 通道。
  *
- * 之前 LocalAgentServer 建在 MainActivity 里，页面一销毁/退后台被系统冻结，端口虽然还
- * 被 bind 着（别的程序于是看到「端口被占用」），但 accept 线程冻住不跑，Agent 连上来
- * 永远收不到 hello —— 表现就是「接不进去」。
+ *   本地用户   : 自己的 TCP 端口（默认 6721），消息只在本机会话里
+ *   用户接入   : 自己的 TCP 端口（默认 6722） + Agent 的服务器真账号，消息走服务器
  *
- * 现在把 server 放在这个前台服务里：
- *   - 服务是前台服务，进程不会被当成 cached 进程冻结；
- *   - server 是进程级静态对象，页面销毁不影响；
- *   - 进程被杀后服务 START_STICKY 自动重建，并按 SharedPreferences 自动把端口重新拉起；
- *   - Agent 的消息在页面不在时进队列，页面回来后补发；同时发一条通知，免得漏消息。
+ * 两条通道各有各的 server 实例、端口、回调，互不影响：开一条不会改变另一条的收发走向。
+ * 前台服务保证进程不被冻结；进程被杀后 START_STICKY 重建，按 SharedPreferences 把两条通道拉回来。
  */
 public class KeepAliveService extends Service {
 
@@ -40,19 +36,21 @@ public class KeepAliveService extends Service {
 
     /** 给界面（WebView）回调用的接口 */
     public interface Listener {
-        /** 返回 false 表示页面还没准备好（比如 WebView 还没加载完），消息留在队列里 */ 
+        /** 返回 false 表示页面还没准备好（比如 WebView 还没加载完），消息留在队列里 */
         boolean onAgentMessage(String text, String from);
         void onAgentStatus(String json);
     }
 
-    private static KeepAliveService sInst;                 // 只为发通知方便
-    private static LocalAgentServer sServer;               // 进程级，页面销毁也活着
-    private static String sAgentName = "本地用户";           // 本地会话显示名（hello 里用）
-    private static AgentUserRelay sRelay;                  // 「用户接入」：Agent 的真账号通道
+    private static KeepAliveService sInst;
+    private static LocalAgentServer sLocal;      // 本地用户通道
+    private static LocalAgentServer sUser;       // 用户接入通道
+    private static AgentUserRelay sRelay;        // 用户接入：Agent 的服务器账号
+    private static String sAgentName = "本地用户";
+    private static String sUserName = "";
     private static Listener sListener;
     private static final ArrayList<String> sPending = new ArrayList<String>();
 
-    /* ---------------- 静态入口：给 MainActivity / Bridge 用 ---------------- */
+    /* ================= 静态入口 ================= */
 
     public static void ensureRunning(Context ctx) {
         try {
@@ -64,62 +62,72 @@ public class KeepAliveService extends Service {
         }
     }
 
+    /* ---------- 本地用户 ---------- */
+
+    public static synchronized void startAgent(Context ctx, int port, boolean lan) {
+        prefs(ctx).edit().putBoolean("agent_enabled", true)
+                .putInt("agent_port", port).putBoolean("agent_lan", lan).commit();
+        ensureRunning(ctx);
+        bringUp(false, port, lan, sAgentName);
+        pushStatus();
+    }
+
+    public static synchronized void stopAgent(Context ctx) {
+        prefs(ctx).edit().putBoolean("agent_enabled", false).commit();
+        if (sLocal != null) { try { sLocal.stop(); } catch (Exception e) { } sLocal = null; }
+        pushStatus();
+    }
+
     public static synchronized void setAgentName(Context ctx, String name) {
         if (name == null) return;
         String n = name.trim();
         if (n.length() == 0) n = "本地用户";
         if (n.length() > 16) n = n.substring(0, 16);
         sAgentName = n;
-        try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-               .edit().putString("agent_name", n).commit();
-        } catch (Exception e) { }
-        LocalAgentServer s = sServer;
-        if (s != null) s.setBotName(n);
-    }
-
-    public static synchronized void startAgent(Context ctx, int port, boolean lan) {
-        try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            sp.edit().putBoolean("agent_enabled", true)
-                     .putInt("agent_port", port)
-                     .putBoolean("agent_lan", lan).commit();
-        } catch (Exception e) { }
-        ensureRunning(ctx);
-        startServer(port, lan);
-    }
-
-    public static synchronized void stopAgent(Context ctx) {
-        try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            sp.edit().putBoolean("agent_enabled", false).commit();
-        } catch (Exception e) { }
-        stopServer();
-        pushStatus();
+        prefs(ctx).edit().putString("agent_name", n).commit();
+        if (sLocal != null) sLocal.setBotName(n);
     }
 
     public static void sendToAgent(String text) {
-        LocalAgentServer s = sServer;
-        if (s != null) {
-            try { s.broadcastMessage(text); } catch (Exception e) { }
-        }
+        LocalAgentServer s = sLocal;
+        if (s != null) { try { s.broadcastMessage(text); } catch (Exception e) { } }
     }
 
-    public static synchronized String statusJson() {
-        try {
-            JSONObject o = new JSONObject();
-            LocalAgentServer s = sServer;
-            o.put("on", s != null && s.isRunning());
-            o.put("clients", s == null ? 0 : s.clientCount());
-            o.put("port", s == null ? 0 : s.getPort());
-            o.put("error", s == null ? "" : s.lastError());
-            AgentUserRelay r = sRelay;
-            o.put("user", r == null ? "{}" : r.statusJson());
-            return o.toString();
-        } catch (Exception e) { return "{}"; }
+    /* ---------- 用户接入 ---------- */
+
+    public static synchronized void startAgentUser(Context ctx, String wsUrl, String user, String pass,
+                                                   String nick, String avatar, int port, boolean lan) {
+        prefs(ctx).edit().putBoolean("agent_user_on", true)
+                .putString("agent_user_url", wsUrl == null ? "" : wsUrl)
+                .putString("agent_user_name", user == null ? "" : user)
+                .putString("agent_user_pass", pass == null ? "" : pass)
+                .putString("agent_user_nick", nick == null ? "" : nick)
+                .putString("agent_user_avatar", avatar == null ? "" : avatar)
+                .putInt("agent_user_port", port)
+                .putBoolean("agent_user_lan", lan).commit();
+        ensureRunning(ctx);
+        sUserName = (nick == null || nick.trim().length() == 0) ? user : nick.trim();
+        bringUp(true, port, lan, sUserName);     // 自己独立的 TCP 端口，不碰本地用户那条
+
+        if (sRelay != null) { try { sRelay.stop(); } catch (Exception e) { } sRelay = null; }
+        sRelay = new AgentUserRelay(wsUrl, user, pass, nick, avatar, new AgentUserRelay.Sink() {
+            @Override public void pushToAgent(String json) {
+                LocalAgentServer s = sUser;      // 只发给「用户接入」那条通道
+                if (s != null) s.broadcastRaw(json);
+            }
+            @Override public void onStatus(String json) { pushStatus(); }
+        });
+        sRelay.start();
+        pushStatus();
     }
 
-    /** 页面(onResume)注册，onPause 注销；注册时把攒下的消息补发 */
+    public static synchronized void stopAgentUser(Context ctx) {
+        prefs(ctx).edit().putBoolean("agent_user_on", false).commit();
+        if (sRelay != null) { try { sRelay.stop(); } catch (Exception e) { } sRelay = null; }
+        if (sUser != null) { try { sUser.stop(); } catch (Exception e) { } sUser = null; }
+        pushStatus();
+    }
+
     public static synchronized void setListener(Listener l) {
         sListener = l;
         if (l != null && !sPending.isEmpty()) {
@@ -128,7 +136,7 @@ public class KeepAliveService extends Service {
             for (int i = 0; i < copy.size(); i++) {
                 boolean ok = false;
                 try { ok = l.onAgentMessage(copy.get(i), "local"); } catch (Exception e) { }
-                if (!ok) {                       // 还没准备好，剩下的下次再补
+                if (!ok) {
                     for (int j = i; j < copy.size(); j++) sPending.add(copy.get(j));
                     break;
                 }
@@ -137,163 +145,120 @@ public class KeepAliveService extends Service {
         pushStatus();
     }
 
-    /* ---------------- 内部 ---------------- */
+    public static synchronized String statusJson() {
+        try {
+            JSONObject o = new JSONObject();
+            LocalAgentServer l = sLocal;
+            o.put("on", l != null && l.isRunning());
+            o.put("clients", l == null ? 0 : l.clientCount());
+            o.put("port", l == null ? 0 : l.getPort());
+            o.put("error", l == null ? "" : l.lastError());
+            o.put("user", userStatusJson());
+            return o.toString();
+        } catch (Exception e) { return "{}"; }
+    }
 
-    private static synchronized void startServer(int port, boolean lan) {
-        if (sServer != null && sServer.isRunning() && sServer.getPort() == port) return;
-        // 先把新端口绑起来，绑成功再撤旧的：换端口失败时不至于把好的那条也关掉
-        final int p2 = port;
-        LocalAgentServer fresh = new LocalAgentServer(port, lan, LISTENER);
-        fresh.setBotName(sAgentName);
-        fresh.start();
-        if (fresh.isRunning()) {
-            LocalAgentServer old = sServer;
-            sServer = fresh;
-            if (old != null) { try { old.stop(); } catch (Exception e) { } }
-            afterServerUp(p2);
+    private static String userStatusJson() {
+        try {
+            JSONObject u = new JSONObject();
+            LocalAgentServer s = sUser;
+            AgentUserRelay r = sRelay;
+            u.put("on", s != null && s.isRunning());
+            u.put("port", s == null ? 0 : s.getPort());
+            u.put("clients", s == null ? 0 : s.clientCount());
+            u.put("error", s == null ? "" : s.lastError());
+            u.put("ready", r != null && r.isReady());
+            u.put("user", sUserName);
+            u.put("nick", sUserName);
+            if (r != null) u.put("relay", r.statusJson());
+            return u.toString();
+        } catch (Exception e) { return "{}"; }
+    }
+
+    /* ================= 两条通道的拉起/自愈 ================= */
+
+    private static synchronized void bringUp(boolean user, int port, boolean lan, String helloName) {
+        LocalAgentServer cur = user ? sUser : sLocal;
+        if (cur != null && cur.isRunning() && cur.getPort() == port) {
+            cur.setBotName(helloName);
             return;
         }
-        if (sServer != null && sServer.isRunning()) {
-            Log.w(TAG, "新端口 " + port + " 没绑上，继续用原来的 " + sServer.getPort());
+        LocalAgentServer fresh = new LocalAgentServer(port, lan, user ? LISTENER_USER : LISTENER_LOCAL);
+        fresh.setBotName(helloName);
+        fresh.start();
+        if (fresh.isRunning()) {
+            if (user) { LocalAgentServer old = sUser; sUser = fresh; if (old != null) { try { old.stop(); } catch (Exception e) { } } }
+            else { LocalAgentServer old = sLocal; sLocal = fresh; if (old != null) { try { old.stop(); } catch (Exception e) { } } }
+            Log.i(TAG, (user ? "用户接入" : "本地用户") + " 端口 " + port + " 已就绪");
+            pushStatus();
+            updateNotificationStatic();
+            return;
+        }
+        if (cur != null && cur.isRunning()) {
+            Log.w(TAG, "新端口 " + port + " 没绑上，继续用原来的 " + cur.getPort());
             pushStatus();
             return;
         }
-        sServer = fresh;                  // 都没绑上：留着报错，并排队自愈
-        scheduleHeal(p2, lan, fresh.lastError());
+        if (user) sUser = fresh; else sLocal = fresh;
+        scheduleHeal(user, port, lan, helloName, fresh.lastError());
         pushStatus();
     }
 
-    /** 端口可能还在 TIME_WAIT（刚关过/刚换过），隔几秒自己再试几次 */
-    private static void scheduleHeal(final int port, final boolean lan, final String err) {
+    private static void scheduleHeal(final boolean user, final int port, final boolean lan,
+                                     final String helloName, final String err) {
         if (err == null || err.indexOf("in use") < 0) return;
         Thread t = new Thread(new Runnable() {
             @Override public void run() {
                 for (int i = 0; i < 6; i++) {
                     try { Thread.sleep(5000); } catch (Exception e) { return; }
                     synchronized (KeepAliveService.class) {
-                        if (sServer != null && sServer.isRunning()) return;
+                        LocalAgentServer s = user ? sUser : sLocal;
+                        if (s != null && s.isRunning()) return;
                     }
-                    Log.i(TAG, "端口 " + port + " 自愈重试第 " + (i + 1) + " 次");
-                    startServer(port, lan);
-                    synchronized (KeepAliveService.class) {
-                        if (sServer != null && sServer.isRunning()) return;
-                    }
+                    Log.i(TAG, (user ? "用户接入" : "本地用户") + " 端口 " + port + " 自愈重试 " + (i + 1));
+                    bringUp(user, port, lan, helloName);
                 }
             }
-        }, "local-agent-heal");
+        }, "agent-heal");
         t.setDaemon(true);
         t.start();
     }
 
-    private static void afterServerUp(int port) {
-        Log.i(TAG, "本地用户端口 " + port + " 已托管在前台服务");
-        pushStatus();
-        KeepAliveService inst = sInst;
-        if (inst != null) inst.updateNotification();
-    }
-
-    private static final LocalAgentServer.Listener LISTENER = new LocalAgentServer.Listener() {
+    private static final LocalAgentServer.Listener LISTENER_LOCAL = new LocalAgentServer.Listener() {
         @Override public void onAgentMessage(String text, String from, String conv, String peer, String room) {
-            deliverFromAgent(text, from, conv, peer, room);
+            deliverLocal(text, from);            // 本地用户：只进本机会话
         }
         @Override public void onStatusChanged(int clients, String lastError) {
             pushStatus();
-            KeepAliveService inst = sInst;
-            if (inst != null) inst.updateNotification();
+            updateNotificationStatic();
         }
     };
 
-    private static synchronized void stopServer() {
-        if (sServer != null) {
-            try { sServer.stop(); } catch (Exception e) { }
-            sServer = null;
-        }
-    }
-
-    /** Agent 说的话：开了「用户接入」就发到服务器，否则显示在本地会话里 */
-    private static synchronized void deliverFromAgent(String text, String from,
-                                                     String conv, String peer, String room) {
-        AgentUserRelay r = sRelay;
-        if (r != null && r.isReady()) {
-            r.sendToServer(text, conv, peer, room);
-            return;
-        }
-        deliver(text, from);
-    }
-
-    /* ---------------- 用户接入（Agent 作为真账号） ---------------- */
-
-    public static synchronized void startAgentUser(Context ctx, String wsUrl, String user, String pass,
-                                                   String nick, String avatar) {
-        try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-               .putBoolean("agent_user_on", true)
-               .putString("agent_user_url", wsUrl == null ? "" : wsUrl)
-               .putString("agent_user_name", user == null ? "" : user)
-               .putString("agent_user_pass", pass == null ? "" : pass)
-               .putString("agent_user_nick", nick == null ? "" : nick)
-               .putString("agent_user_avatar", avatar == null ? "" : avatar)
-               .commit();
-        } catch (Exception e) { }
-        ensureRunning(ctx);
-        // 「用户接入」靠本地 TCP 跟 astrbot 通话，所以端口必须开着
-        try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            int port = sp.getInt("agent_port", 6721);
-            boolean lan = sp.getBoolean("agent_lan", false);
-            if (sServer == null || !sServer.isRunning()) startServer(port, lan);
-        } catch (Exception e) { }
-        stopRelay();
-        sRelay = new AgentUserRelay(wsUrl, user, pass, nick, avatar, new AgentUserRelay.Sink() {
-            @Override public void pushToAgent(String json) {
-                LocalAgentServer s = sServer;
-                if (s != null) s.broadcastRaw(json);
+    private static final LocalAgentServer.Listener LISTENER_USER = new LocalAgentServer.Listener() {
+        @Override public void onAgentMessage(String text, String from, String conv, String peer, String room) {
+            AgentUserRelay r = sRelay;
+            if (r != null && r.isReady()) {
+                r.sendToServer(text, conv, peer, room);   // 用户接入：只往服务器发
+            } else {
+                LocalAgentServer s = sUser;
+                if (s != null) s.broadcastRaw(MiniJson.flat("type", "error",
+                        "text", "用户接入还没连上服务器，这条没发出去"));
             }
-            @Override public void onStatus(String json) {
-                pushStatus();
-            }
-        });
-        sRelay.start();
-        pushStatus();
-    }
-
-    public static synchronized void stopAgentUser(Context ctx) {
-        try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-               .edit().putBoolean("agent_user_on", false).commit();
-        } catch (Exception e) { }
-        stopRelay();
-        pushStatus();
-    }
-
-    private static synchronized void stopRelay() {
-        if (sRelay != null) {
-            try { sRelay.stop(); } catch (Exception e) { }
-            sRelay = null;
         }
-    }
+        @Override public void onStatusChanged(int clients, String lastError) {
+            pushStatus();
+            updateNotificationStatic();
+        }
+    };
 
-    /** 服务重建时按保存的设置把「用户接入」也拉起来 */
-    private static synchronized void autoStartRelayIfEnabled(Context ctx) {
-        try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            if (!sp.getBoolean("agent_user_on", false)) return;
-            String url = sp.getString("agent_user_url", "");
-            String u = sp.getString("agent_user_name", "");
-            if (url.length() == 0 || u.length() == 0) return;
-            if (sRelay != null) return;
-            startAgentUser(ctx, url, u, sp.getString("agent_user_pass", ""),
-                    sp.getString("agent_user_nick", ""), sp.getString("agent_user_avatar", ""));
-        } catch (Exception e) { }
-    }
+    /* ================= 本地会话的消息投递 ================= */
 
-    private static synchronized void deliver(String text, String from) {
+    private static synchronized void deliverLocal(String text, String from) {
         if (sListener != null) {
             boolean ok = false;
             try { ok = sListener.onAgentMessage(text, from); } catch (Exception e) { }
             if (ok) return;
         }
-        // 页面不在：先存着，再发通知，别让人漏消息
         sPending.add(text);
         while (sPending.size() > 200) sPending.remove(0);
         KeepAliveService inst = sInst;
@@ -305,20 +270,37 @@ public class KeepAliveService extends Service {
         try { sListener.onAgentStatus(statusJson()); } catch (Exception e) { }
     }
 
-    /** 服务被系统重建时（进程重启过），按保存的设置自动把端口拉起来 */
-    private static synchronized void autoStartIfEnabled(Context ctx) {
+    private static void updateNotificationStatic() {
+        KeepAliveService inst = sInst;
+        if (inst != null) inst.updateNotification();
+    }
+
+    private static SharedPreferences prefs(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    /** 服务被系统重建时，把两条通道按保存的设置拉回来 */
+    private static synchronized void autoStartAll(Context ctx) {
         try {
-            SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            if (!sp.getBoolean("agent_enabled", false)) return;
-            int port = sp.getInt("agent_port", 6721);
-            boolean lan = sp.getBoolean("agent_lan", false);
-            String nm = sp.getString("agent_name", "");
-            if (nm != null && nm.length() > 0) sAgentName = nm;
-            if (sServer == null || !sServer.isRunning()) startServer(port, lan);
+            SharedPreferences sp = prefs(ctx);
+            if (sp.getBoolean("agent_enabled", false)) {
+                String nm = sp.getString("agent_name", "");
+                if (nm != null && nm.length() > 0) sAgentName = nm;
+                bringUp(false, sp.getInt("agent_port", 6721), sp.getBoolean("agent_lan", false), sAgentName);
+            }
+            if (sp.getBoolean("agent_user_on", false)) {
+                String url = sp.getString("agent_user_url", "");
+                String u = sp.getString("agent_user_name", "");
+                if (url.length() > 0 && u.length() > 0 && sRelay == null) {
+                    startAgentUser(ctx, url, u, sp.getString("agent_user_pass", ""),
+                            sp.getString("agent_user_nick", ""), sp.getString("agent_user_avatar", ""),
+                            sp.getInt("agent_user_port", 6722), sp.getBoolean("agent_user_lan", false));
+                }
+            }
         } catch (Exception e) { }
     }
 
-    /* ---------------- Service 生命周期 ---------------- */
+    /* ================= Service 生命周期 ================= */
 
     @Override
     public void onCreate() {
@@ -341,9 +323,8 @@ public class KeepAliveService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         updateNotification();
-        autoStartIfEnabled(this);
-        autoStartRelayIfEnabled(this);
-        return START_STICKY;   // 被系统杀掉后自动重建，端口跟着回来
+        autoStartAll(this);
+        return START_STICKY;
     }
 
     @Override
@@ -356,19 +337,25 @@ public class KeepAliveService extends Service {
     }
 
     private void updateNotification() {
-        String text = "保持在线，随时收消息";
+        StringBuilder sb = new StringBuilder();
         try {
-            LocalAgentServer s = sServer;
-            if (s != null && s.isRunning()) {
-                text = "本地用户 · 监听 " + (s.getPort()) + " · "
-                        + (s.clientCount() > 0 ? (s.clientCount() + " 个 Agent 已连接") : "等待 Agent");
+            LocalAgentServer l = sLocal;
+            if (l != null && l.isRunning()) {
+                sb.append("本地用户 :").append(l.getPort());
+            }
+            LocalAgentServer u = sUser;
+            if (u != null && u.isRunning()) {
+                if (sb.length() > 0) sb.append(" · ");
+                sb.append("用户接入 :").append(u.getPort());
             }
         } catch (Exception e) { }
+        String text = sb.length() > 0 ? sb.toString() : "保持在线，随时收消息";
+
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CH)
                 : new Notification.Builder(this);
         b.setContentTitle("纸鸢").setContentText(text)
-         .setSmallIcon(R.mipmap.ic_launcher).setOngoing(true);
+                .setSmallIcon(R.mipmap.ic_launcher).setOngoing(true);
         Notification n = b.build();
         try {
             if (Build.VERSION.SDK_INT >= 29) {
@@ -394,8 +381,8 @@ public class KeepAliveService extends Service {
                     ? new Notification.Builder(this, CH_MSG)
                     : new Notification.Builder(this);
             b.setContentTitle("本地用户").setContentText(text)
-             .setSmallIcon(R.mipmap.ic_launcher).setContentIntent(pi)
-             .setAutoCancel(true);
+                    .setSmallIcon(R.mipmap.ic_launcher).setContentIntent(pi)
+                    .setAutoCancel(true);
             nm.notify(ID_MSG, b.build());
         } catch (Exception e) { }
     }

@@ -334,8 +334,9 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void agentUserApply(boolean on, String user, String pass, String nick, String avatar) {
-            act.applyAgentUser(on, user, pass, nick, avatar);
+        public void agentUserApply(boolean on, String user, String pass, String nick, String avatar,
+                                   int port, boolean lan) {
+            act.applyAgentUser(on, user, pass, nick, avatar, port, lan);
         }
 
         @JavascriptInterface
@@ -616,7 +617,8 @@ public class MainActivity extends Activity {
     }
 
     /** 「用户接入」：Agent 用真账号登录服务器，和本地 astrbot 双向转发 */
-    private void applyAgentUser(boolean on, String user, String pass, String nick, String avatar) {
+    private void applyAgentUser(boolean on, String user, String pass, String nick, String avatar,
+                                int port, boolean lan) {
         if (!on) { KeepAliveService.stopAgentUser(this); return; }
         String server = "";
         try {
@@ -625,7 +627,8 @@ public class MainActivity extends Activity {
             server = o.optString("server", "");
         } catch (Exception e) { }
         if (server.length() == 0) server = "ws://114.55.230.190:8080";
-        KeepAliveService.startAgentUser(this, server, user, pass, nick, avatar);
+        int p = (port > 0 && port < 65536) ? port : 6722;
+        KeepAliveService.startAgentUser(this, server, user, pass, nick, avatar, p, lan);
     }
 
     @Override

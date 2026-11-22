@@ -68,7 +68,7 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
-    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '' }
+    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -226,7 +226,7 @@
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
-        S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '' }, o.agentUser || {});
+        S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -747,12 +747,14 @@
     if ($('#agentUserAcc')) $('#agentUserAcc').value = u.user || '';
     if ($('#agentUserPass')) $('#agentUserPass').value = u.pass || '';
     if ($('#agentUserNick')) $('#agentUserNick').value = u.nick || '';
+    if ($('#agentUserPort')) $('#agentUserPort').value = u.port || 6722;
+    if ($('#agentUserLan')) $('#agentUserLan').checked = !!u.lan;
     var pv = $('#agentUserAvatarPrev');
     if (pv) pv.innerHTML = u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : '🤖';
     var st = $('#agentUserStat');
     if (st) {
       if (!u.on) st.textContent = u.error ? ('未开启 · ' + u.error) : '未开启';
-      else if (u.ready) st.textContent = '已上线：' + (u.nick || u.user) + ' · 私聊回私聊，群里 @ 才回';
+      else if (u.ready) st.textContent = '已上线：' + (u.nick || u.user) + ' · 监听 ' + (u.port || 6722) + ' · 私聊回私聊，群里 @ 才回';
       else st.textContent = '连接中…' + (u.error ? (' · ' + u.error) : '');
     }
   }
@@ -767,8 +769,14 @@
     S.agentUser.user = user;
     S.agentUser.pass = pass;
     S.agentUser.nick = nick || user;
+    var port = Number($('#agentUserPort') ? $('#agentUserPort').value : 0) || 6722;
+    var lan = !!($('#agentUserLan') && $('#agentUserLan').checked);
+    S.agentUser.port = port;
+    S.agentUser.lan = lan;
     save();
-    try { window.PaperNative.agentUserApply(on, user, pass, S.agentUser.nick, S.agentUser.avatar || ''); } catch (e) {}
+    try {
+      window.PaperNative.agentUserApply(on, user, pass, S.agentUser.nick, S.agentUser.avatar || '', port, lan);
+    } catch (e) {}
     renderAgentUserPanel();
     toast(on ? ('用户接入已开启：' + S.agentUser.nick) : '用户接入已关闭');
   }
@@ -781,6 +789,7 @@
     S.agentUser.error = u.error || '';
     if (u.user) S.agentUser.user = u.user;
     if (u.nick) S.agentUser.nick = u.nick;
+    if (u.port) S.agentUser.port = Number(u.port) || 6722;
     renderAgentUserPanel();
   }
 
@@ -3261,7 +3270,8 @@
     try {
       if (S.agentUser && S.agentUser.on && S.agentUser.user && window.PaperNative && window.PaperNative.agentUserApply) {
         window.PaperNative.agentUserApply(true, S.agentUser.user, S.agentUser.pass || '',
-                S.agentUser.nick || S.agentUser.user, S.agentUser.avatar || '');
+                S.agentUser.nick || S.agentUser.user, S.agentUser.avatar || '',
+                S.agentUser.port || 6722, !!S.agentUser.lan);
       }
     } catch (e) {}
     bindViewer();

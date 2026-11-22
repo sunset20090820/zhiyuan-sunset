@@ -204,11 +204,15 @@
       <button id="agentUserRand" class="agent-mini" type="button">随机</button></label>
     <label class="me-row agent-row"><span class="me-ico">🏷</span>名称
       <input id="agentUserNick" class="agent-input agent-name" type="text" maxlength="16" placeholder="别人看到的名字"></label>
+    <label class="me-row agent-row"><span class="me-ico">🔌</span>端口
+      <input id="agentUserPort" class="agent-input" type="number" min="1" max="65535" inputmode="numeric" value="6722"></label>
+    <label class="me-row agent-row"><span class="me-ico">🌐</span>允许局域网连接
+      <input id="agentUserLan" type="checkbox" class="agent-switch"></label>
     <div class="me-row agent-row"><span class="me-ico">🖼</span>头像
       <button id="agentUserAvatarBtn" class="agent-ava" type="button"><span id="agentUserAvatarPrev">🤖</span></button></div>
     <input id="agentUserAvatarInput" type="file" accept="image/*" class="hidden">
     <p class="hint" id="agentUserStat">未开启</p>
-    <p class="hint">账号第一次保存时会自动注册（密保答案＝密码）。密码存在本机，方便断线重连。</p>
+    <p class="hint">账号第一次保存时会自动注册（密保答案＝密码）。密码存在本机，方便断线重连。这条通道用自己的端口（默认 6722），和「本地用户」的 6721 互不影响。</p>
     <button id="agentUserApply" class="primary" type="button">保存</button>
     <button id="agentUserClose" class="action-cancel" type="button">关闭</button>
   </div>
