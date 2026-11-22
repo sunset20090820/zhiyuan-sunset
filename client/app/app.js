@@ -68,7 +68,9 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
-    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' }
+    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' },
+    bg: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
+    glass: true, accent: 'periwinkle', topbarText: 'auto'
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -190,7 +192,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, accent: S.accent, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, accent: S.accent, topbarText: S.topbarText, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -227,6 +229,10 @@
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
+        S.bg = Object.assign({ key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false }, o.bg || {});
+        if (typeof o.glass === 'boolean') S.glass = o.glass;
+        if (o.accent) S.accent = o.accent;
+        if (o.topbarText) S.topbarText = o.topbarText;
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -1218,7 +1224,8 @@
     return null;
   }
   function applyChatBg() {
-    var root = document.documentElement, bg = S.bg || {};
+    if (!S.bg) S.bg = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
+    var root = document.documentElement, bg = S.bg;
     var dark = root.getAttribute('data-theme') === 'dark';
     var wall = 'none';
     var isImage = false;
@@ -1248,7 +1255,11 @@
       var pp = bgPreset(bg.key);
       wallDark = !!(pp && pp.dark);
     }
-    if (bg.key && bg.key !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
+    // 顶栏文字：auto 跟背景走，也可以手动钉死成黑/白
+    var mode = S.topbarText || 'auto';
+    if (mode === 'light') root.setAttribute('data-wall', 'dark');        // 白字
+    else if (mode === 'dark') root.setAttribute('data-wall', 'light');   // 黑字
+    else if (bg.key && bg.key !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
     else root.removeAttribute('data-wall');
 
     root.classList.toggle('no-glass', !S.glass);
@@ -1256,6 +1267,7 @@
     else root.removeAttribute('data-accent');
   }
   function setChatBg(key, image) {
+    if (!S.bg) S.bg = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
     S.bg.key = key;
     S.bg.image = image || '';
     if (!image) S.bg.imageDark = false;
@@ -1820,6 +1832,17 @@
     });
     on('#bgDim', 'change', function () { save(); });
     on('#bgReset', 'click', function () { setChatBg('mist', ''); S.bg.dim = 0.18; applyChatBg(); save(); renderBgSheet(); toast('已恢复默认背景'); });
+    on('#btnTopbarText', 'click', function () {
+      var order = ['auto', 'light', 'dark'];
+      var names = { auto: '自动', light: '白字', dark: '黑字' };
+      var i = order.indexOf(S.topbarText || 'auto');
+      S.topbarText = order[(i + 1) % order.length];
+      applyChatBg();
+      save();
+      var el = $('#topbarTextState');
+      if (el) el.textContent = names[S.topbarText];
+      toast('顶栏文字：' + names[S.topbarText]);
+    });
     on('#btnGlass', 'click', function () {
       S.glass = !S.glass;
       applyChatBg();
@@ -3507,6 +3530,11 @@
     try { renderAgentUserPanel(); } catch (e) {}
     try { applyChatBg(); } catch (e) {}
     try { var gs = $('#glassState'); if (gs) gs.textContent = S.glass ? '开' : '关'; } catch (e) {}
+    try {
+      var ts = $('#topbarTextState');
+      var nm = { auto: '自动', light: '白字', dark: '黑字' };
+      if (ts) ts.textContent = nm[S.topbarText || 'auto'];
+    } catch (e) {}
     // 上次开着「用户接入」的话，让原生把它拉起来（服务重启/更新后也能自动回来）
     try {
       if (S.agentUser && S.agentUser.on && S.agentUser.user && window.PaperNative && window.PaperNative.agentUserApply) {
