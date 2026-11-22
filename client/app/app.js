@@ -1255,7 +1255,65 @@
     }
     return { wall: 'none', dark: false, image: false };
   }
+  /* ---------------- M3 角色 → CSS 变量 ---------------- */
+  function hexRgba(hex, a) {
+    if (!hex || hex.charAt(0) !== '#') return hex;
+    var h = hex.slice(1);
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var n = parseInt(h, 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function applyM3Scheme() {
+    var all = window.M3;
+    if (!all) return false;
+    var key = S.accent || 'periwinkle';
+    var set = all[key] || all.periwinkle;
+    if (!set) return false;
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var m = set[dark ? 'dark' : 'light'];
+    if (!m) return false;
+    var r = document.documentElement.style;
+    var put = function (name, v) { if (v) r.setProperty(name, v); };
+
+    // 底色 / 表面
+    put('--bg', m.surface);
+    put('--bg-soft', m.surfaceContainerLow);
+    put('--chat-bg', m.surfaceContainerLow);
+    put('--card', m.surfaceContainerLow);
+    put('--card-2', m.surfaceContainer);
+    put('--in', m.surfaceContainerLow);
+    // 文字
+    put('--text', m.onSurface);
+    put('--in-text', m.onSurface);
+    put('--sub', m.onSurfaceVariant);
+    // 描边
+    put('--line', hexRgba(m.outlineVariant, dark ? 0.55 : 0.75));
+    put('--stroke', hexRgba(m.outlineVariant, dark ? 0.5 : 0.7));
+    put('--ring', hexRgba(m.primary, 0.28));
+    // 主色
+    put('--accent', m.primary);
+    put('--accent-ink', m.primary);
+    put('--accent-2', m.tertiary);
+    put('--accent-3', m.tertiaryContainer);
+    // 气泡：底色与前景成对，深色模式自动用深字
+    put('--out-a', m.outA);
+    put('--out-b', m.outB);
+    put('--out', m.outA);
+    put('--out-text', m.onPrimary);
+    put('--out-meta', hexRgba(m.onPrimary, 0.8));
+    put('--out-who', hexRgba(m.onPrimary, 0.92));
+    // 角标 / 日期
+    put('--badge-bg', m.tertiaryContainer);
+    put('--badge-text', m.onTertiaryContainer);
+    put('--chip-bg', m.secondaryContainer);
+    put('--chip-text', m.onSecondaryContainer);
+    // 语义
+    put('--danger', m.error);
+    return true;
+  }
+
   function applyChatBg() {
+    try { applyM3Scheme(); } catch (e) {}
     S.bg = normalizeBg(S.bg);
     var root = document.documentElement;
 
@@ -1899,6 +1957,16 @@
       else S.bg.chat = { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false };
       applyChatBg(); save(); renderBeautyPanel();
       toast('已恢复默认背景');
+    });
+    // 深色 / 浅色：自动 → 深色 → 浅色 循环（这一行之前没绑事件，点了没反应）
+    on('#btnTheme', 'click', function () {
+      var cur = document.documentElement.getAttribute('data-theme') || '';
+      var next = cur === '' ? 'dark' : (cur === 'dark' ? 'light' : '');
+      applyTheme(next);
+      save();
+      var names = { '': '跟随系统', dark: '深色', light: '浅色' };
+      toast('主题：' + names[next]);
+      try { renderBeautyPanel(); } catch (e) {}
     });
     on('#btnTopbarText', 'click', function () {
       var order = ['auto', 'light', 'dark'];

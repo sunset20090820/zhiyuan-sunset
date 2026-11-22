@@ -2834,3 +2834,29 @@ html[data-wall="dark"] .topbar .brand,
 html[data-wall="dark"] .chat-name {
   text-shadow: 0 1px 2px rgba(31, 34, 51, .45);
 }
+
+
+/* =========================================================
+   11.0 M3 角色体系：前景色与底色成对（深色不再硬压白字）
+   ========================================================= */
+.msg.out .bubble { color: var(--out-text, #fff); }
+.msg.out .bubble .who { color: var(--out-who, rgba(255,255,255,.92)); }
+.msg.out .bubble .meta { color: var(--out-meta, rgba(255,255,255,.8)); opacity: 1; }
+.msg.out .bubble .ticks { color: var(--out-meta, rgba(255,255,255,.95)); }
+
+.badge {
+  background: var(--badge-bg, linear-gradient(135deg, var(--accent-3), #ffb3cf));
+  background-image: none;
+  color: var(--badge-text, #fff);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .12);
+}
+.day, .msgs .day {
+  background: var(--chip-bg, rgba(124,139,250,.12));
+  color: var(--chip-text, var(--accent-ink));
+}
+/* 主按钮 / 发送键 用 primary → tertiary 的 M3 配对 */
+.send, .fab, .primary, .mini-btn.ok {
+  background-image: linear-gradient(135deg, var(--out-a, var(--accent)), var(--out-b, var(--accent-2)));
+}
+/* 气泡里图片说明文字跟着前景色 */
+.msg.out .bubble .caption { color: var(--out-text, #fff); opacity: .92; }
