@@ -48,6 +48,8 @@ public class LocalAgentServer {
     private String lastError = "";
     private String botName = "本地用户";
     private String channel = "local";      // local / user，hello 里带上，方便同一个 Agent 区分两条通道
+    private String lastClient = "";        // 最近连上来的 Agent：来源地址 + 时间
+    private String lastClientName = "";    // Agent 自报的名字（如果它发了 hello/client）
     private final Set<Handler> handlers = Collections.synchronizedSet(new LinkedHashSet<Handler>());
 
     public LocalAgentServer(int port, boolean lanBind, Listener listener) {
@@ -62,6 +64,12 @@ public class LocalAgentServer {
     public synchronized String lastError() { return lastError == null ? "" : lastError; }
     public synchronized void setBotName(String n) {
         if (n != null && n.trim().length() > 0) botName = n.trim();
+    }
+
+    /** 最近连上来的 Agent 是谁（来源地址 + 它自报的名字） */
+    public synchronized String lastClientInfo() {
+        if (lastClient.length() == 0) return "";
+        return lastClientName.length() > 0 ? (lastClientName + " @ " + lastClient) : lastClient;
     }
 
     public synchronized void setChannel(String c) {
@@ -147,6 +155,11 @@ public class LocalAgentServer {
         while (running) {
             try {
                 Socket sock = server.accept();
+                try {
+                    java.net.InetAddress ra = sock.getInetAddress();
+                    lastClient = (ra == null ? "?" : ra.getHostAddress()) + ":" + sock.getPort()
+                            + " · " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+                } catch (Exception e) { }
                 Handler h = new Handler(sock);
                 handlers.add(h);
                 Thread t = new Thread(h, "local-agent-client");
@@ -206,6 +219,14 @@ public class LocalAgentServer {
             try {
                 JSONObject o = new JSONObject(line);
                 String type = o.optString("type", "");
+                if ("hello".equals(type) || "identify".equals(type)) {
+                    String who = o.optString("client", o.optString("name", ""));
+                    if (who.length() > 0) {
+                        lastClientName = who.length() > 24 ? who.substring(0, 24) : who;
+                        notifyStatus();
+                    }
+                    return;
+                }
                 if ("send".equals(type) || "message".equals(type)) {
                     String text = o.optString("text", "");
                     String from = o.optString("from", "");

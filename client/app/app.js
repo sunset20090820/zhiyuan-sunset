@@ -68,7 +68,7 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
-    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }
+    unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' }
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -754,7 +754,13 @@
     var st = $('#agentUserStat');
     if (st) {
       if (!u.on) st.textContent = u.error ? ('未开启 · ' + u.error) : '未开启';
-      else if (u.ready) st.textContent = '已上线：' + (u.nick || u.user) + ' · 监听 ' + (u.port || 6722) + ' · 私聊回私聊，群里 @ 才回';
+      else if (u.ready) {
+        var cnt = Number(u.clients) || 0;
+        st.textContent = '已上线：' + (u.nick || u.user) + '（账号 ' + (u.user || '-') + '）'
+          + ' · 监听 ' + (u.port || 6722)
+          + ' · ' + (cnt ? (cnt + ' 个 Agent 已连接') : '等待 Agent 连接')
+          + (u.last ? ('（最近：' + u.last + '）') : '');
+      }
       else st.textContent = '连接中…' + (u.error ? (' · ' + u.error) : '');
     }
   }
@@ -786,6 +792,8 @@
     try { u = typeof st.user === 'string' ? JSON.parse(st.user) : st.user; } catch (e) { u = null; }
     if (!u) return;
     S.agentUser.ready = !!u.ready;
+    S.agentUser.clients = Number(u.clients) || 0;
+    S.agentUser.last = u.last || '';
     S.agentUser.error = u.error || '';
     if (u.user) S.agentUser.user = u.user;
     if (u.nick) S.agentUser.nick = u.nick;
@@ -813,6 +821,7 @@
       el.textContent = S.localAgent.on
         ? ('监听 ' + (S.localAgent.lan ? '0.0.0.0' : '127.0.0.1') + ':' + S.localAgent.port +
            ' · ' + (S.localAgent.clients ? (S.localAgent.clients + ' 个 Agent 已连接') : '等待 Agent 连接') +
+           (S.localAgent.last ? ('（最近：' + S.localAgent.last + '）') : '') +
            (S.localAgent.error ? (' · ' + S.localAgent.error) : ''))
         : (S.localAgent.error ? ('未开启 · ' + S.localAgent.error) : '未开启');
     }
@@ -841,6 +850,7 @@
       S.localAgent.clients = Number(st.clients) || 0;
       if (st.port) S.localAgent.port = Number(st.port);
       S.localAgent.error = st.error || '';
+      if (st.last) S.localAgent.last = st.last;
       refreshAgentStatus();
       refreshAgentUserStatus(st);
     } catch (e) {}

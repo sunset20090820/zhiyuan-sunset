@@ -155,6 +155,7 @@ public class KeepAliveService extends Service {
             o.put("clients", l == null ? 0 : l.clientCount());
             o.put("port", l == null ? 0 : l.getPort());
             o.put("error", l == null ? "" : l.lastError());
+            o.put("last", l == null ? "" : l.lastClientInfo());
             o.put("user", userStatusJson());
             return o.toString();
         } catch (Exception e) { return "{}"; }
@@ -169,6 +170,7 @@ public class KeepAliveService extends Service {
             u.put("port", s == null ? 0 : s.getPort());
             u.put("clients", s == null ? 0 : s.clientCount());
             u.put("error", s == null ? "" : s.lastError());
+            u.put("last", s == null ? "" : s.lastClientInfo());
             u.put("ready", r != null && r.isReady());
             u.put("user", sUserAccount);
             u.put("nick", sUserName);
