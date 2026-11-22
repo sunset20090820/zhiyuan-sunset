@@ -615,8 +615,14 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        // 注意：不要停 KeepAliveService，也不要停本地用户端口 —— 退出界面后 Agent 还要能连
+        // 本地用户开着就别停服务：退出界面后 Agent 还要能连进来。
+        // 没开的话保持老行为——关掉界面就不留后台服务。
         KeepAliveService.setListener(null);
+        try {
+            boolean agentOn = getSharedPreferences("paperlite", MODE_PRIVATE)
+                    .getBoolean("agent_enabled", false);
+            if (!agentOn) stopService(new Intent(this, KeepAliveService.class));
+        } catch (Exception e) { }
         if (web != null) {
             try { web.stopLoading(); } catch (Exception e) { }
             web.destroy();
