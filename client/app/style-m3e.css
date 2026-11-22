@@ -1045,7 +1045,7 @@ html[data-skin="m3e"] .nav-pill {
   pointer-events: none;
   z-index: 0;
   transform: translateX(var(--pill-x, 0px));
-  transition: transform 420ms cubic-bezier(.34, 1.56, .64, 1);
+  transition: none;
   will-change: transform;
 }
 html[data-skin="m3e"] .nav-pill i {
@@ -1055,25 +1055,16 @@ html[data-skin="m3e"] .nav-pill i {
   background: inherit;
   transform-origin: center;
 }
-/* 滑动时先拉长、到位再回弹 —— 果冻感来源 */
-html[data-skin="m3e"] .nav-pill.jelly { transition-duration: 460ms; }
-html[data-skin="m3e"] .nav-pill.jelly i { animation: m3e-jelly 560ms cubic-bezier(.3, .9, .4, 1) both; }
-@keyframes m3e-jelly {
-  0%   { transform: scaleX(1) scaleY(1); }
-  18%  { transform: scaleX(1.34) scaleY(.86); }
-  46%  { transform: scaleX(.88) scaleY(1.08); }
-  68%  { transform: scaleX(1.08) scaleY(.96); }
-  84%  { transform: scaleX(.98) scaleY(1.02); }
-  100% { transform: scaleX(1) scaleY(1); }
-}
+
 /* 点中的图标也抖一下 */
-html[data-skin="m3e"] .tab-item.pop .tab-ico { animation: m3e-ico-pop 520ms cubic-bezier(.34, 1.56, .64, 1) both; }
+html[data-skin="m3e"] .tab-item.pop .tab-ico { animation: m3e-ico-pop 620ms cubic-bezier(.3, .95, .35, 1) both; }
 @keyframes m3e-ico-pop {
-  0%   { transform: scale(1) translateY(0); }
-  24%  { transform: scale(.82) translateY(2px); }
-  58%  { transform: scale(1.16) translateY(-2px); }
-  78%  { transform: scale(.96) translateY(1px); }
-  100% { transform: scale(1) translateY(0); }
+  0%   { transform: scale(1) scaleY(1) translateY(0); }
+  16%  { transform: scale(.72) scaleY(.92) translateY(3px); }
+  42%  { transform: scale(1.28) scaleY(1.14) translateY(-3px); }
+  62%  { transform: scale(.92) scaleY(.96) translateY(1px); }
+  80%  { transform: scale(1.07) scaleY(1.03) translateY(-1px); }
+  100% { transform: scale(1) scaleY(1) translateY(0); }
 }
 /* 文字也跟着轻轻一晃 */
 html[data-skin="m3e"] .tab-item.pop { animation: m3e-label-pop 480ms cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -1100,4 +1091,16 @@ html[data-skin="m3e"] .me-page.tab-switch { animation: m3e-tab-in 380ms cubic-be
   html[data-skin="m3e"] .tab-item.pop .tab-ico,
   html[data-skin="m3e"] .screen.tab-switch,
   html[data-skin="m3e"] .me-page.tab-switch { animation: none !important; transition: none !important; }
+}
+
+/* 底栏整条随切换轻弹一下（很小，但让「果冻」是整块的而不是只有一个圆） */
+html[data-skin="m3e"] .tabbar.bar-pop { animation: m3e-bar-pop 420ms cubic-bezier(.3, .95, .35, 1) both; }
+@keyframes m3e-bar-pop {
+  0%   { transform: translateY(0) scaleY(1); }
+  22%  { transform: translateY(2px) scaleY(.988); }
+  58%  { transform: translateY(-1.5px) scaleY(1.006); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="m3e"] .tabbar.bar-pop { animation: none !important; }
 }

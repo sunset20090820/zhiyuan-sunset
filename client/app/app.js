@@ -3572,13 +3572,30 @@
     pill.style.top = (y + bar.scrollTop) + 'px';
     pill.style.transform = 'translateX(' + x + 'px)';
     pill.__x = x;
-    if (animate && typeof prev === 'number' && Math.abs(prev - x) > 1) {
-      pill.classList.remove('jelly');
-      void pill.offsetWidth;
-      pill.classList.add('jelly');
-      clearTimeout(pill.__jt);
-      pill.__jt = setTimeout(function () { pill.classList.remove('jelly'); }, 660);
-    }
+    if (animate && typeof prev === 'number' && Math.abs(prev - x) > 1) runJelly(pill, prev, x);
+  }
+
+  /* 果冻：按滑行距离算拉伸量，带过冲与二次回弹，方向朝哪边就往哪边抻 */
+  function runJelly(pill, fromX, toX) {
+    var dist = toX - fromX;
+    var dir = dist > 0 ? 1 : -1;
+    var far = Math.abs(dist);
+    var stretch = Math.min(1.62, 1 + far / 150);        // 走得越远拉得越长
+    var squash = Math.max(0.82, 1 - (stretch - 1) * 0.34);
+    var over = Math.min(16, far * 0.16);                // 过冲像素
+    pill.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
+    try { if (pill.__anim) pill.__anim.cancel(); } catch (e) {}
+    var frames = [
+      { transform: 'translateX(' + fromX + 'px) scaleX(1) scaleY(1)', offset: 0 },
+      { transform: 'translateX(' + (fromX + dist * 0.28) + 'px) scaleX(' + stretch + ') scaleY(' + squash + ')', offset: 0.2 },
+      { transform: 'translateX(' + (toX + dir * over) + 'px) scaleX(' + (1 - (stretch - 1) * 0.42) + ') scaleY(' + (1 + (stretch - 1) * 0.24) + ')', offset: 0.58 },
+      { transform: 'translateX(' + (toX - dir * over * 0.42) + 'px) scaleX(' + (1 + (stretch - 1) * 0.22) + ') scaleY(' + (1 - (stretch - 1) * 0.12) + ')', offset: 0.78 },
+      { transform: 'translateX(' + (toX + dir * over * 0.12) + 'px) scaleX(' + (1 - (stretch - 1) * 0.06) + ') scaleY(1)', offset: 0.91 },
+      { transform: 'translateX(' + toX + 'px) scaleX(1) scaleY(1)', offset: 1 }
+    ];
+    try {
+      pill.__anim = pill.animate(frames, { duration: 520, easing: 'linear', fill: 'none' });
+    } catch (e) { pill.style.transform = 'translateX(' + toX + 'px)'; }
   }
 
   function showTab(name) {
@@ -3608,6 +3625,13 @@
       requestAnimationFrame(function () { moveNavPill(animate); });
     } catch (e) { moveNavPill(animate); }
     if (animate) {
+      var barEl = $('#tabbar');
+      if (barEl) {
+        barEl.classList.remove('bar-pop');
+        void barEl.offsetWidth;
+        barEl.classList.add('bar-pop');
+        setTimeout(function () { barEl.classList.remove('bar-pop'); }, 480);
+      }
       var page = name === 'me' ? $('#mePage') : (name === 'contacts' ? $('#contacts') : $('#chats'));
       if (page) {
         page.classList.remove('tab-switch');
