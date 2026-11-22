@@ -954,13 +954,14 @@ html[data-skin] {
 html[data-skin="m3e"] .screen,
 html[data-skin="m3e"] .me-page,
 html[data-skin="m3e"] .chat { background: transparent; }
+/* 背景光晕：不要用 background-attachment: fixed —— Android WebView 对固定背景
+   支持差，滚动时容易出现灰条纹/残影（看起来像界面在乱刷）。App 本身不滚动文档，
+   普通背景就够用，还省一次重绘。 */
 html[data-skin="m3e"] body {
   background:
-    radial-gradient(120% 80% at 8% -10%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 58%),
-    radial-gradient(100% 70% at 100% 8%, color-mix(in srgb, var(--accent-2, var(--accent)) 20%, transparent) 0%, transparent 62%),
-    radial-gradient(90% 60% at 50% 108%, color-mix(in srgb, var(--accent-3, var(--accent)) 16%, transparent) 0%, transparent 60%),
+    radial-gradient(120% 80% at 8% -10%, color-mix(in srgb, var(--accent) 24%, transparent) 0%, transparent 58%),
+    radial-gradient(100% 70% at 100% 8%, color-mix(in srgb, var(--accent-2, var(--accent)) 18%, transparent) 0%, transparent 62%),
     var(--m3e-surface);
-  background-attachment: fixed;
 }
 
 /* 玻璃通用外观 */
@@ -1268,3 +1269,12 @@ html[data-skin][data-theme="dark"] #friendList {
       color-mix(in srgb, var(--accent) 55%, transparent) 50%,
       rgba(255, 255, 255, .22) 100%);
 }
+
+/* 流体铺满整个按钮：按钮内容（图标+文字）要压在玻璃之上，否则会被盖住 */
+html[data-skin] .tab-item {
+  position: relative;
+  z-index: 1;
+}
+html[data-skin] #navPill { z-index: 0; }
+html[data-skin] .tab-item .tab-ico,
+html[data-skin] .tab-item { background-color: transparent; }

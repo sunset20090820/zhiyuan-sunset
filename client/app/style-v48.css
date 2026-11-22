@@ -1601,7 +1601,7 @@ body {
     radial-gradient(58vw 40vh at 102% 2%, rgba(255, 158, 196, .22), transparent 72%),
     radial-gradient(72vw 52vh at 50% 110%, rgba(127, 216, 196, .18), transparent 70%),
     linear-gradient(180deg, #fbf9ff 0%, #f8f7ff 46%, #fbf8fc 100%);
-  background-attachment: fixed;
+  /* 不用 fixed：Android WebView 对固定背景支持差，会留灰条纹/残影 */
 }
 html[data-theme="dark"] body {
   background-image:

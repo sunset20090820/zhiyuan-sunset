@@ -3569,14 +3569,13 @@
     }
     pill.style.display = '';
     var on = bar.querySelector('.tab-item.on');
-    var ico = on && on.querySelector('.tab-ico');
-    if (!ico) return;
-    var br = bar.getBoundingClientRect(), ir = ico.getBoundingClientRect();
+    if (!on) return;
+    var br = bar.getBoundingClientRect(), ir = on.getBoundingClientRect();
     if (!ir.width) return;
-    // 安卓 16 皮肤的图标是 64×32 的矢量底托；小清新是 16px 左右的 emoji，药丸要跟着缩
-    var isM3E = document.documentElement.getAttribute('data-skin') === 'm3e';
-    var w = isM3E ? 64 : Math.max(46, Math.round(ir.width + 24));
-    var h = isM3E ? 32 : Math.max(26, Math.round(ir.height + 12));
+    // 流体铺满整个按钮（略内缩一点，留出按钮之间的缝）
+    var inset = 8;
+    var w = Math.max(48, Math.round(ir.width - inset));
+    var h = Math.max(30, Math.round(ir.height - inset));
     var x = (ir.left - br.left) + (ir.width - w) / 2;
     var y = (ir.top - br.top) + (ir.height - h) / 2;
     var prev = pill.__x;
@@ -3593,9 +3592,9 @@
     var dist = toX - fromX;
     var dir = dist > 0 ? 1 : -1;
     var far = Math.abs(dist);
-    var stretch = Math.min(1.62, 1 + far / 150);        // 走得越远拉得越长
+    var stretch = Math.min(1.34, 1 + far / 300);        // 块变大了，拉伸幅度相应收一点
     var squash = Math.max(0.82, 1 - (stretch - 1) * 0.34);
-    var over = Math.min(16, far * 0.16);                // 过冲像素
+    var over = Math.min(14, far * 0.14);                // 过冲像素
     pill.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
     try { if (pill.__anim) pill.__anim.cancel(); } catch (e) {}
     var frames = [
