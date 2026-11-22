@@ -2415,8 +2415,10 @@ html[data-theme="dark"] .seg-item.on { background: rgba(255, 255, 255, .12); col
    ========================================================= */
 
 /* ---------- 1) 背景覆盖：会话列表 / 联系人 / 我的 / 黑名单 ---------- */
+/* 注意：#mePage / #blockPage 是 .me-page（position: fixed），
+   这里再写 relative 会把它们顶到视口下方，整个「我的」页看不见。 */
+#chats, #contacts { position: relative; }
 #chats, #contacts, #mePage, #blockPage {
-  position: relative;
   isolation: isolate;
   background-image: var(--list-wall, none);
   background-size: cover;
