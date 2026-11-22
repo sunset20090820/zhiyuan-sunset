@@ -2526,3 +2526,73 @@ html[data-theme="dark"] .tabbar::after {
 /* 关闭液态玻璃时彻底关掉模糊与颗粒 */
 html.no-glass .topbar::before, html.no-glass .chat-top::before,
 html.no-glass .tabbar::before, html.no-glass .composer::before { display: none; }
+
+/* =========================================================
+   9.9 会话列表 / 联系人列表：胶囊玻璃
+   ========================================================= */
+#roomList .room,
+#friendList .room {
+  position: relative;
+  border-radius: 999px;
+  margin: 6px 4px;
+  padding: 10px 46px 10px 12px;
+  border: 1px solid rgba(255, 255, 255, .68);
+  background: rgba(255, 255, 255, .56);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 0 rgba(255, 255, 255, .35),
+    0 10px 24px rgba(124, 139, 250, .12);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  backdrop-filter: blur(16px) saturate(170%);
+  transition: transform .2s cubic-bezier(.2,.9,.2,1), box-shadow .2s ease, background-color .2s ease;
+}
+#roomList .room:active,
+#friendList .room:active {
+  transform: scale(.975);
+  background: rgba(255, 255, 255, .72);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 1),
+    0 6px 16px rgba(124, 139, 250, .16);
+}
+/* 置顶：带一点蜜桃色的胶囊 */
+#roomList .room.pinned {
+  background: rgba(255, 236, 244, .62);
+  border-color: rgba(255, 255, 255, .75);
+}
+html[data-theme="dark"] #roomList .room.pinned { background: rgba(72, 54, 68, .55); }
+
+/* 深色玻璃 */
+html[data-theme="dark"] #roomList .room,
+html[data-theme="dark"] #friendList .room {
+  background: rgba(52, 56, 78, .55);
+  border-color: rgba(255, 255, 255, .12);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(255, 255, 255, .04),
+    0 10px 24px rgba(0, 0, 0, .34);
+}
+html[data-theme="dark"] #roomList .room:active,
+html[data-theme="dark"] #friendList .room:active {
+  background: rgba(62, 67, 92, .66);
+}
+
+/* 关闭液态玻璃时退回实色卡片，避免糊成一片 */
+html.no-glass #roomList .room,
+html.no-glass #friendList .room {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--card);
+  border-color: var(--stroke);
+}
+html.no-glass #roomList .room.pinned { background: rgba(255, 236, 244, .9); }
+
+/* 胶囊里的小细节 */
+#roomList .room .room-name,
+#friendList .room .room-name { font-weight: 650; }
+#roomList .room .room-more { right: 8px; }
+#roomList .room .ava,
+#friendList .room .ava { margin-left: 2px; }
+
+/* 分隔线在胶囊卡片里就不需要了 */
+#roomList .room, #friendList .room, .friend-list .friend-row { border-bottom: none; }
+#roomList .room + .room { margin-top: 6px; }
