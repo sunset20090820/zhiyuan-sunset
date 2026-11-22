@@ -3553,7 +3553,7 @@
   function moveNavPill(animate) {
     var bar = $('#tabbar'), pill = $('#navPill');
     if (!bar || !pill) return;
-    if (document.documentElement.getAttribute('data-skin') !== 'm3e' || bar.classList.contains('hidden')) {
+    if (bar.classList.contains('hidden')) {
       pill.style.display = 'none';
       return;
     }
@@ -3563,7 +3563,10 @@
     if (!ico) return;
     var br = bar.getBoundingClientRect(), ir = ico.getBoundingClientRect();
     if (!ir.width) return;
-    var w = 64, h = 32;
+    // 安卓 16 皮肤的图标是 64×32 的矢量底托；小清新是 16px 左右的 emoji，药丸要跟着缩
+    var isM3E = document.documentElement.getAttribute('data-skin') === 'm3e';
+    var w = isM3E ? 64 : Math.max(46, Math.round(ir.width + 24));
+    var h = isM3E ? 32 : Math.max(26, Math.round(ir.height + 12));
     var x = (ir.left - br.left) + (ir.width - w) / 2;
     var y = (ir.top - br.top) + (ir.height - h) / 2;
     var prev = pill.__x;
