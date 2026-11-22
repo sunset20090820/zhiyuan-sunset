@@ -255,6 +255,15 @@
   }
   function addMsg(rid, m) {
     ownMsg(m);
+    try {
+      if (m && m.avatar && m.from) {
+        if (!S.avatars) S.avatars = {};
+        S.avatars[m.from] = m.avatar;
+        if (m.name) S.avatars[m.name] = m.avatar;
+        if (m.fromUid) S.avatars['uid:' + m.fromUid] = m.avatar;
+        if (S.dms && S.dms[m.from]) S.dms[m.from].avatar = m.avatar;
+      }
+    } catch (e) {}
     var arr = loadHist(rid);
     if (m.id) {
       for (var i = 0; i < arr.length; i++) {
@@ -426,6 +435,7 @@
     if (d.t === 'avatar') {
       S.avatars[d.user] = d.avatar;
       if (d.nick) S.avatars[d.nick] = d.avatar;
+      if (d.uid) S.avatars['uid:' + d.uid] = d.avatar;
       save();
       if (S.cur) renderMsgs(false);
       renderRooms();
@@ -553,11 +563,17 @@
       if (S.last[d.room] && S.last[d.room].id === d.id) { S.last[d.room].retracted = true; S.last[d.room].text = ''; }
       renderRooms(); return;
     }
-    if (d.t === 'members') { if (d.room === S.cur) { S.members = d.members || []; renderMentionBox(); } return; }
-    if (d.t === 'people') { S.people = d.list || []; return; }
+    if (d.t === 'members') {
+      if (d.room === S.cur) { S.members = d.members || []; renderMentionBox(); }
+      learnAvatars(d.members);
+      return;
+    }
+    if (d.t === 'people') { S.people = d.list || []; learnAvatars(S.people); return; }
     if (d.t === 'uid') { S.uid = d.uid || 0; if (S.tab === 'me') fillMe(); return; }
     if (d.t === 'contacts') {
       S.friends = d.friends || [];
+      learnAvatars(S.friends);
+      try { (S.friends || []).forEach(function (f) { if (f.avatar) S.avatars['uid:' + f.uid] = f.avatar; }); } catch (e) {}
       S.pendingIn = d.pendingIn || d.pending_in || [];
       S.pendingOut = d.pendingOut || d.pending_out || [];
       if (d.uid) S.uid = d.uid;
@@ -649,6 +665,15 @@
       return;
     }
     if (d.t === 'pm') {
+      try {
+        if (d.msg && d.msg.avatar) {
+          if (!S.avatars) S.avatars = {};
+          if (d.msg.from) S.avatars[d.msg.from] = d.msg.avatar;
+          if (d.msg.name) S.avatars[d.msg.name] = d.msg.avatar;
+          if (d.msg.fromUid) S.avatars['uid:' + d.msg.fromUid] = d.msg.avatar;
+          if (d.with) S.avatars[d.with] = d.msg.avatar;
+        }
+      } catch (e) {}
       addMsg(d.room, d.msg);
       var mineMsg = d.msg.deviceId === S.deviceId;
       var peerId = mineMsg ? d.with
@@ -813,6 +838,38 @@
   };
 
   /* ---------------- 渲染：会话列表 ---------------- */
+  // 从 members/people/contacts 这类列表里把头像记下来
+  function learnAvatars(list) {
+    try {
+      if (!list || !list.length) return;
+      if (!S.avatars) S.avatars = {};
+      list.forEach(function (it) {
+        if (!it || !it.avatar) return;
+        if (it.id) S.avatars[it.id] = it.avatar;
+        if (it.name) S.avatars[it.name] = it.avatar;
+        if (it.uid) S.avatars['uid:' + it.uid] = it.avatar;
+      });
+      renderRooms();
+      if (S.tab === 'contacts') renderContacts();
+    } catch (e) {}
+  }
+
+  // 会话列表/联系人列表用的头像：能拿到图就用图，拿不到退回首字
+  function peerAvatarUrl(keys) {
+    if (!S.avatars) return '';
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (!k) continue;
+      var v = S.avatars[k];
+      if (v) return /^(data:|https?:)/.test(v) ? v : httpBase() + v;
+    }
+    return '';
+  }
+  function avaBox(url, text, bg, cls) {
+    if (url) return '<div class="ava has-img' + (cls ? ' ' + cls : '') + '"><img src="' + esc(url) + '" alt=""></div>';
+    return '<div class="ava' + (cls ? ' ' + cls : '') + '" style="background:' + esc(bg) + '">' + esc(text) + '</div>';
+  }
+
   function renderRooms() {
     var html = '';
     function item(r, isDM, peerId) {
@@ -820,8 +877,18 @@
       var preview = last ? (last.name ? last.name + '：' : '') + (last.retracted ? '消息已撤回' : last.text) : (isDM ? '开始私聊吧' : '还没有消息，打个招呼吧');
       var un = S.unread[r.id] || 0;
       var cls = 'room' + (isDM ? ' room-dm' : '') + (S.pins[r.id] ? ' pinned' : '');
+      var avaUrl = '';
+      var avaText = r.emoji, avaBg = r.color;
+      if (isDM) {
+        var dd = (S.dms && S.dms[peerId]) || {};
+        avaUrl = peerAvatarUrl([peerId, dd.peerId, dd.name, r.name]);
+        avaText = String(dd.name || r.name || '?').trim().slice(0, 1).toUpperCase() || '👤';
+        avaBg = colorOf(peerId || r.name || '');
+      } else if (r.avatar) {
+        avaUrl = /^(data:|https?:)/.test(r.avatar) ? r.avatar : httpBase() + r.avatar;
+      }
       return '<li class="' + cls + '" data-room="' + esc(r.id) + '"' + (peerId ? ' data-peer="' + esc(peerId) + '"' : '') + '>' +
-        '<div class="ava" style="background:' + esc(isDM ? '#6b7d8f' : r.color) + '">' + esc(isDM ? '👤' : r.emoji) + '</div>' +
+        avaBox(avaUrl, avaText, avaBg) +
         '<div class="room-main">' +
           '<div class="room-line1"><div class="room-name">' + (S.pins[r.id] ? '<span class="pin-ico">📌</span>' : '') + (S.mutes[r.id] ? '<span class="mute-ico">🔕</span>' : '') + esc(r.name) + '</div>' +
             '<div class="room-time">' + (last ? esc(fmtTime(last.ts)) : '') + '</div></div>' +
@@ -835,7 +902,8 @@
     var list = [];
     Object.keys(S.dms).forEach(function (peerId) {
       var d = S.dms[peerId];
-      list.push({ r: { id: d.roomId, name: nameOf(peerId, d.name || '私信'), emoji: '👤', color: '#6b7d8f' }, isDM: true, peerId: peerId });
+      list.push({ r: { id: d.roomId, name: nameOf(peerId, d.name || '私信'), emoji: '👤', color: '#6b7d8f',
+        avatar: d.avatar || '' }, isDM: true, peerId: peerId });
     });
     Object.keys(S.groups).forEach(function (gid) {
       var g = S.groups[gid];
@@ -3100,7 +3168,7 @@
     box.innerHTML = list.length ? list.map(function (f) {
       var nm = nameOf('uid:' + f.uid, f.name || ('用户' + f.uid));
       return '<li class="room friend-row" data-uid="' + esc(f.uid) + '">' +
-        '<div class="ava" style="background:' + colorOf('uid:' + f.uid) + '">' + esc(nm.slice(0, 1)) + '</div>' +
+        avaBox(peerAvatarUrl(['uid:' + f.uid, f.name, nm]), nm.slice(0, 1), colorOf('uid:' + f.uid)) +
         '<div class="room-main"><div class="room-line1"><div class="room-name">' + esc(nm) + '</div></div>' +
         '<div class="room-line2"><div class="room-last">ID ' + esc(f.uid) + (f.online ? ' · 在线' : '') + '</div></div></div></li>';
     }).join('') : '<li class="empty-hint">还没有好友，点右上角 ＋ 按 ID 添加</li>';

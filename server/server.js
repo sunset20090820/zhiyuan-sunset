@@ -150,16 +150,22 @@ function send(c, obj) {
 function broadcast(roomId, obj) {
   for (const c of clients) if (c.room === roomId) send(c, obj);
 }
+function avatarOfConn(c) {
+  const acc = c && c.account ? accounts[c.account] : null;
+  return (acc && acc.avatar) || '';
+}
 function membersIn(roomId) {
   return Array.from(clients)
     .filter(c => c.room === roomId)
-    .map(c => ({ id: c.deviceId || c.id, name: c.name }));
+    .map(c => ({ id: c.deviceId || c.id, name: c.name, avatar: avatarOfConn(c),
+      uid: (c.account && accounts[c.account] && accounts[c.account].uid) || 0 }));
 }
 function peopleList() {
   const seen = new Map();
   for (const c of clients) {
     const id = c.deviceId || c.id;
-    if (!seen.has(id)) seen.set(id, { id, name: c.name });
+    if (!seen.has(id)) seen.set(id, { id, name: c.name, avatar: avatarOfConn(c),
+      uid: (c.account && accounts[c.account] && accounts[c.account].uid) || 0 });
   }
   return Array.from(seen.values());
 }
@@ -651,6 +657,7 @@ function handleMessage(c, buf, opcode) {
     const key = dmKey(me, other);
     const msg = {
       id: uid(), room: key, from: me, name: c.name, text, ts: now(),
+      avatar: (myAcc && myAcc.avatar) || '',
       tempId: d.tempId ? clean(d.tempId, 40) : null,
       deviceId: me, fromUid: myAcc ? myAcc.uid : 0, replyTo: null, mentions: []
     };
