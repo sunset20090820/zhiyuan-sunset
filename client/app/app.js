@@ -1215,11 +1215,11 @@
 
   /* ---------------- 聊天背景 / 液态玻璃 ---------------- */
   var BG_PRESETS = [
-    { key: 'mist',   name: '晨雾', css: 'linear-gradient(165deg,#f3f2ff 0%,#fdf6fb 52%,#eef7f5 100%)' },
-    { key: 'peach',  name: '蜜桃', css: 'linear-gradient(165deg,#fff3ec 0%,#ffe9f2 55%,#f4ecff 100%)' },
-    { key: 'mint',   name: '薄荷', css: 'linear-gradient(165deg,#eefbf6 0%,#eef6ff 55%,#f7f0ff 100%)' },
-    { key: 'sakura', name: '樱花', css: 'radial-gradient(120% 90% at 18% 0%,#ffe6f1 0%,transparent 62%), linear-gradient(165deg,#fff7fa 0%,#f4f0ff 100%)' },
-    { key: 'cream',  name: '奶油', css: 'linear-gradient(165deg,#fffaf0 0%,#fdf2e6 55%,#f6f1ff 100%)' },
+    { key: 'mist',   name: '晨雾', css: 'linear-gradient(165deg,#e9e7ff 0%,#f7e9f6 52%,#e2f4ef 100%)' },
+    { key: 'peach',  name: '蜜桃', css: 'linear-gradient(165deg,#ffe6d6 0%,#ffdbe8 55%,#eee0ff 100%)' },
+    { key: 'mint',   name: '薄荷', css: 'linear-gradient(165deg,#ddf7ee 0%,#dfedff 55%,#f0e6ff 100%)' },
+    { key: 'sakura', name: '樱花', css: 'radial-gradient(120% 90% at 18% 0%,#ffd7e8 0%,transparent 62%), linear-gradient(165deg,#fff0f6 0%,#eee7ff 100%)' },
+    { key: 'cream',  name: '奶油', css: 'linear-gradient(165deg,#fff3dd 0%,#ffe6cc 55%,#f2e8ff 100%)' },
     { key: 'dusk',   name: '暮色', dark: true, css: 'linear-gradient(165deg,#1e2130 0%,#241f33 55%,#1b2430 100%)' }
   ];
   function bgPreset(key) {
@@ -1263,9 +1263,9 @@
     root.style.setProperty('--chat-wall', cw.wall);
     var cd = Number(chat.dim); if (isNaN(cd)) cd = 0.18;
     var cDark = root.getAttribute('data-theme') === 'dark';
-    if (cDark && cw.image) cd = Math.min(0.72, cd + 0.16);
+    if (cDark && cw.image) cd = Math.min(0.9, cd + 0.16);
     root.style.setProperty('--chat-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + cd.toFixed(2) + ')');
-    var cblur = cw.image ? (Number(chat.blur) || 0) : 0;
+    var cblur = cw.image ? Math.min(40, Number(chat.blur) || 0) : 0;
     root.style.setProperty('--chat-wall-blur', cblur + 'px');
     root.classList.toggle('wall-blur', cblur > 0);
 
@@ -1273,7 +1273,7 @@
     var list = S.bg.list, lw = wallFor(list);
     root.style.setProperty('--list-wall', lw.wall);
     var ld = Number(list.dim); if (isNaN(ld)) ld = 0.12;
-    if (cDark && lw.image) ld = Math.min(0.72, ld + 0.16);
+    if (cDark && lw.image) ld = Math.min(0.9, ld + 0.16);
     root.style.setProperty('--list-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + ld.toFixed(2) + ')');
 
     // 顶栏文字：auto 跟背景走，也可以手动钉死成黑/白
@@ -1868,13 +1868,13 @@
     });
     on('#bgDim', 'input', function (e) {
       var cfg = bgOf();
-      cfg.dim = Math.max(0, Math.min(0.6, Number(e.target.value) / 100));
+      cfg.dim = Math.max(0, Math.min(0.9, Number(e.target.value) / 100));
       applyChatBg();
     });
     on('#bgDim', 'change', function () { save(); });
     on('#bgBlur', 'input', function (e) {
       var cfg = bgOf();
-      cfg.blur = Number(e.target.value) || 0;
+      cfg.blur = Math.min(40, Number(e.target.value) || 0);
       applyChatBg();
     });
     on('#bgBlur', 'change', function () { save(); });

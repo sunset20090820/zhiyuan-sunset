@@ -2413,3 +2413,116 @@ html[data-theme="dark"] .seg-item.on { background: rgba(255, 255, 255, .12); col
   .beauty-panel, .beauty-arrow, .seg-item { transition: none !important; }
   .beauty-panel.open .beauty-block { animation: none !important; }
 }
+
+/* =========================================================
+   9.8 液态玻璃加强 · 背景覆盖所有非聊天界面 · 更大的浓度/模糊范围
+   ========================================================= */
+
+/* ---------- 1) 背景覆盖：会话列表 / 联系人 / 我的 / 黑名单 ---------- */
+#chats, #contacts, #mePage, #blockPage {
+  position: relative;
+  isolation: isolate;
+  background-image: var(--list-wall, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-image .3s ease;
+}
+#chats::before, #contacts::before, #mePage::before, #blockPage::before {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--list-wall-dim, rgba(255, 255, 255, .2));
+  transition: background .3s ease;
+}
+/* 这些页面里的列表/分组别再是实底 */
+#contacts .list, #mePage .me-body, #blockPage .me-body { background: transparent; }
+#mePage .me-group, #blockPage .me-group {
+  background: rgba(255, 255, 255, .62);
+  border: 1px solid rgba(255, 255, 255, .5);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+html[data-theme="dark"] #mePage .me-group,
+html[data-theme="dark"] #blockPage .me-group {
+  background: rgba(36, 39, 56, .55);
+  border-color: rgba(255, 255, 255, .08);
+}
+html.no-glass #mePage .me-group, html.no-glass #blockPage .me-group {
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  background: var(--card);
+}
+
+/* ---------- 2) 液态玻璃：更厚、更透亮、有颗粒感 ---------- */
+:root { --glass-blur: 34px; --glass-sat: 190%; }
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar, .chat-top, .tabbar, .composer, .action-card {
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
+    background-image: linear-gradient(180deg,
+      rgba(255, 255, 255, .70) 0%,
+      rgba(255, 255, 255, .46) 46%,
+      rgba(255, 255, 255, .34) 100%);
+    border: 1px solid rgba(255, 255, 255, .78);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 0 rgba(255, 255, 255, .42),
+      inset 0 0 22px rgba(255, 255, 255, .30),
+      0 16px 40px rgba(124, 139, 250, .20);
+  }
+  html[data-theme="dark"] .topbar,
+  html[data-theme="dark"] .chat-top,
+  html[data-theme="dark"] .tabbar,
+  html[data-theme="dark"] .composer,
+  html[data-theme="dark"] .action-card {
+    background-image: linear-gradient(180deg,
+      rgba(58, 62, 86, .72) 0%,
+      rgba(42, 46, 66, .58) 50%,
+      rgba(32, 35, 52, .48) 100%);
+    border-color: rgba(255, 255, 255, .16);
+    box-shadow:
+      inset 0 1.5px 0 rgba(255, 255, 255, .20),
+      inset 0 -1px 0 rgba(255, 255, 255, .06),
+      inset 0 0 24px rgba(255, 255, 255, .05),
+      0 16px 40px rgba(0, 0, 0, .45);
+  }
+}
+
+/* 玻璃上的颗粒感（SVG 噪声，很淡） */
+.topbar::before, .chat-top::before, .tabbar::before, .composer::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+  mix-blend-mode: overlay;
+}
+html[data-theme="dark"] .topbar::before,
+html[data-theme="dark"] .chat-top::before,
+html[data-theme="dark"] .tabbar::before,
+html[data-theme="dark"] .composer::before { opacity: .08; }
+
+/* 镜面高光更明显（斜向一道） */
+.topbar::after, .chat-top::after, .tabbar::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, .55) 0%, rgba(255, 255, 255, .08) 32%, transparent 55%),
+    radial-gradient(120% 90% at 12% -30%, rgba(255, 255, 255, .6), transparent 62%);
+  opacity: .95;
+}
+html[data-theme="dark"] .topbar::after,
+html[data-theme="dark"] .chat-top::after,
+html[data-theme="dark"] .tabbar::after {
+  background: linear-gradient(115deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .03) 34%, transparent 58%);
+}
+
+/* 关闭液态玻璃时彻底关掉模糊与颗粒 */
+html.no-glass .topbar::before, html.no-glass .chat-top::before,
+html.no-glass .tabbar::before, html.no-glass .composer::before { display: none; }
