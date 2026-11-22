@@ -2177,3 +2177,144 @@ html.wall-blur .msgs::after {
 }
 .accent-chip.on { border-color: rgba(31, 34, 51, .35); transform: translateY(-2px); }
 html[data-theme="dark"] .accent-chip.on { border-color: rgba(255, 255, 255, .55); }
+
+/* =========================================================
+   9.4 背景真正生效 · 顶栏自动黑/白 · 设置页过渡 · 按钮统一
+   ========================================================= */
+
+/* ---------- 1) 背景修正：ID 选择器优先级高于 .msgs，之前被旧规则盖掉了 ---------- */
+#msgs, .msgs {
+  background-image: var(--chat-wall, none) !important;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ---------- 2) 顶栏按背景明暗自动切黑/白 ---------- */
+html[data-wall="dark"] .topbar,
+html[data-wall="dark"] .chat-top {
+  color: #f6f7ff;
+}
+html[data-wall="dark"] .topbar .brand,
+html[data-wall="dark"] .chat-name { color: #f6f7ff; }
+html[data-wall="dark"] .topbar .conn-txt,
+html[data-wall="dark"] .chat-sub { color: rgba(246, 247, 255, .78); }
+html[data-wall="dark"] .icon-btn,
+html[data-wall="dark"] .pin-btn {
+  background: rgba(255, 255, 255, .16);
+  color: #f6f7ff;
+  border-color: rgba(255, 255, 255, .22);
+}
+html[data-wall="dark"] .topbar,
+html[data-wall="dark"] .chat-top {
+  background-image: linear-gradient(180deg, rgba(24, 26, 40, .55), rgba(24, 26, 40, .32));
+  border-bottom-color: rgba(255, 255, 255, .12);
+}
+html[data-wall="light"] .topbar,
+html[data-wall="light"] .chat-top { color: var(--text); }
+
+/* ---------- 3) 设置页 / 屏幕切换过渡 ---------- */
+@keyframes page-in-right {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes page-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(28px) scale(.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.me-page, .screen.me-page { animation: page-in-right .3s cubic-bezier(.22,.9,.3,1) both; }
+.screen { animation: page-in-up .26s cubic-bezier(.22,.9,.3,1) both; }
+.action-card { animation: sheet-up .32s cubic-bezier(.22,.9,.28,1.04) both; }
+.me-body .me-group { animation: page-in-up .32s cubic-bezier(.22,.9,.3,1) both; }
+.me-body .me-group:nth-child(1) { animation-delay: .02s; }
+.me-body .me-group:nth-child(2) { animation-delay: .06s; }
+.me-body .me-group:nth-child(3) { animation-delay: .10s; }
+.me-body .me-group:nth-child(4) { animation-delay: .14s; }
+.me-body .me-group:nth-child(n+5) { animation-delay: .18s; }
+.me-row { animation: page-in-up .28s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .me-page, .screen, .action-card, .me-body .me-group, .me-row { animation: none !important; }
+}
+
+/* ---------- 4) 按钮统一成圆润、轻描边、可按的风格 ---------- */
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(124, 139, 250, .10);
+  border: 1px solid rgba(124, 139, 250, .14);
+  color: var(--accent-ink);
+  transition: transform .16s cubic-bezier(.2,.9,.3,1.2), background-color .16s ease;
+}
+.icon-btn:active { transform: scale(.92); background: rgba(124, 139, 250, .18); }
+html[data-theme="dark"] .icon-btn {
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(255, 255, 255, .1);
+  color: var(--text);
+}
+
+.pin-btn, .room-more {
+  width: 32px; height: 32px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(124, 139, 250, .08);
+  border: 1px solid rgba(124, 139, 250, .12);
+  color: var(--sub);
+  transition: transform .16s ease, background-color .16s ease;
+}
+.pin-btn:active, .room-more:active { transform: scale(.9); background: rgba(124, 139, 250, .16); }
+
+.flat {
+  border-radius: 14px; padding: 10px 14px;
+  background: rgba(124, 139, 250, .08);
+  border: 1px solid rgba(124, 139, 250, .12);
+  color: var(--accent-ink); font-weight: 600;
+  transition: transform .16s ease, background-color .16s ease;
+}
+.flat:active { transform: scale(.97); background: rgba(124, 139, 250, .14); }
+
+.mini-btn {
+  border-radius: 12px; padding: 6px 12px;
+  background: rgba(124, 139, 250, .12); color: var(--accent-ink);
+  border: 1px solid rgba(124, 139, 250, .16);
+}
+.mini-btn.ok {
+  background-image: linear-gradient(135deg, var(--out-a), var(--out-b));
+  color: #fff; border-color: transparent;
+}
+
+.action-item {
+  border-radius: 16px; padding: 12px 14px;
+  background: rgba(124, 139, 250, .06);
+  border: 1px solid rgba(124, 139, 250, .10);
+  margin: 6px 0;
+  transition: transform .16s ease, background-color .16s ease;
+}
+.action-item:active { transform: scale(.98); background: rgba(124, 139, 250, .12); }
+
+.action-cancel {
+  border-radius: 16px; padding: 12px 14px; margin-top: 8px;
+  background: rgba(127, 127, 127, .10);
+  color: var(--sub); font-weight: 600;
+  transition: transform .16s ease, background-color .16s ease;
+}
+.action-cancel:active { transform: scale(.98); background: rgba(127, 127, 127, .18); }
+
+.logout-chip {
+  border-radius: 14px; padding: 8px 14px;
+  background: rgba(239, 91, 118, .12);
+  border: 1px solid rgba(239, 91, 118, .18);
+  color: var(--danger); font-weight: 600;
+}
+
+.mention-btn {
+  background: rgba(124, 139, 250, .08);
+  border: 1px solid rgba(124, 139, 250, .10);
+  color: var(--accent-ink);
+}
+.mention-btn:active { transform: scale(.9); background: rgba(124, 139, 250, .16); }
+
+.me-arrow { color: var(--sub); opacity: .8; }
+.me-ico { filter: saturate(1.05); }

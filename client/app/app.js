@@ -1211,7 +1211,7 @@
     { key: 'mint',   name: '薄荷', css: 'linear-gradient(165deg,#eefbf6 0%,#eef6ff 55%,#f7f0ff 100%)' },
     { key: 'sakura', name: '樱花', css: 'radial-gradient(120% 90% at 18% 0%,#ffe6f1 0%,transparent 62%), linear-gradient(165deg,#fff7fa 0%,#f4f0ff 100%)' },
     { key: 'cream',  name: '奶油', css: 'linear-gradient(165deg,#fffaf0 0%,#fdf2e6 55%,#f6f1ff 100%)' },
-    { key: 'dusk',   name: '暮色', css: 'linear-gradient(165deg,#1e2130 0%,#241f33 55%,#1b2430 100%)' }
+    { key: 'dusk',   name: '暮色', dark: true, css: 'linear-gradient(165deg,#1e2130 0%,#241f33 55%,#1b2430 100%)' }
   ];
   function bgPreset(key) {
     for (var i = 0; i < BG_PRESETS.length; i++) if (BG_PRESETS[i].key === key) return BG_PRESETS[i];
@@ -1241,6 +1241,16 @@
     root.style.setProperty('--chat-wall-blur', blur + 'px');
     root.classList.toggle('wall-blur', blur > 0);
 
+    // 顶栏文字跟着背景走：暗底白字、亮底黑字
+    var wallDark = false;
+    if (bg.key === 'custom' && bg.image) wallDark = !!bg.imageDark;
+    else if (bg.key && bg.key !== 'none') {
+      var pp = bgPreset(bg.key);
+      wallDark = !!(pp && pp.dark);
+    }
+    if (bg.key && bg.key !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
+    else root.removeAttribute('data-wall');
+
     root.classList.toggle('no-glass', !S.glass);
     if (S.accent && S.accent !== 'periwinkle') root.setAttribute('data-accent', S.accent);
     else root.removeAttribute('data-accent');
@@ -1248,6 +1258,7 @@
   function setChatBg(key, image) {
     S.bg.key = key;
     S.bg.image = image || '';
+    if (!image) S.bg.imageDark = false;
     applyChatBg();
     save();
     renderBgSheet();
@@ -1760,9 +1771,22 @@
         var c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
+        // 采样上半部分，判断顶栏该用黑字还是白字
+        var dark = false;
+        try {
+          var ctx = c.getContext('2d');
+          var sample = ctx.getImageData(0, 0, w, Math.max(1, Math.round(h * 0.3))).data;
+          var sum = 0, n = 0;
+          for (var i = 0; i < sample.length; i += 4 * 7) {
+            sum += (0.2126 * sample[i] + 0.7152 * sample[i + 1] + 0.0722 * sample[i + 2]) / 255;
+            n++;
+          }
+          dark = n > 0 && (sum / n) < 0.56;
+        } catch (err) { dark = false; }
         var q = 0.82, data = c.toDataURL('image/jpeg', q);
         while (data.length > 600000 && q > 0.4) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
         try { URL.revokeObjectURL(url); } catch (e2) {}
+        S.bg.imageDark = dark;
         setChatBg('custom', data);
         toast('聊天背景已更新');
       };
