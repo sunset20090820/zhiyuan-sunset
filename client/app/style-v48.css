@@ -2201,15 +2201,11 @@ html[data-wall="dark"] .topbar .conn-txt,
 html[data-wall="dark"] .chat-sub { color: rgba(246, 247, 255, .78); }
 html[data-wall="dark"] .icon-btn,
 html[data-wall="dark"] .pin-btn {
-  background: rgba(255, 255, 255, .16);
   color: #f6f7ff;
-  border-color: rgba(255, 255, 255, .22);
+  border-color: rgba(255, 255, 255, .28);
+  background: rgba(255, 255, 255, .10);
 }
-html[data-wall="dark"] .topbar,
-html[data-wall="dark"] .chat-top {
-  background-image: linear-gradient(180deg, rgba(24, 26, 40, .55), rgba(24, 26, 40, .32));
-  border-bottom-color: rgba(255, 255, 255, .12);
-}
+/* 注意：只改文字/图标颜色，标题栏本身的玻璃底不动 */
 html[data-wall="light"] .topbar,
 html[data-wall="light"] .chat-top { color: var(--text); }
 
@@ -2808,4 +2804,33 @@ html[data-theme="dark"] #friendList .room {
       rgba(48, 52, 74, calc(var(--row-alpha, .58) * .8)) 52%,
       rgba(38, 41, 60, calc(var(--row-alpha, .58) * .68)) 100%),
     linear-gradient(135deg, rgba(154, 168, 255, var(--row-tint, .10)) 0%, rgba(255, 158, 196, calc(var(--row-tint, .10) * .7)) 100%);
+}
+
+/* ---------- 10.1 标题栏文字：默认跟随主题，只换文字不换底 ---------- */
+.topbar .brand,
+.chat-name { color: var(--text); }
+.topbar .conn-txt,
+.chat-sub { color: var(--sub); }
+.topbar .icon-btn,
+.topbar .logout-chip,
+.pin-btn { color: var(--accent-ink); }
+
+html[data-wall="light"] .topbar .brand,
+html[data-wall="light"] .chat-name { color: var(--text); }
+html[data-wall="light"] .topbar .conn-txt,
+html[data-wall="light"] .chat-sub { color: var(--sub); }
+html[data-wall="light"] .topbar .icon-btn,
+html[data-wall="light"] .pin-btn { color: var(--accent-ink); }
+
+/* 白字模式：只把文字/图标刷白，玻璃底一点不动 */
+html[data-wall="dark"] .topbar .brand,
+html[data-wall="dark"] .chat-name { color: #ffffff; }
+html[data-wall="dark"] .topbar .conn-txt,
+html[data-wall="dark"] .chat-sub { color: rgba(255, 255, 255, .82); }
+html[data-wall="dark"] .topbar .icon-btn,
+html[data-wall="dark"] .pin-btn { color: #ffffff; }
+/* 白字压白玻璃时给标题一点描边，保证还看得清 */
+html[data-wall="dark"] .topbar .brand,
+html[data-wall="dark"] .chat-name {
+  text-shadow: 0 1px 2px rgba(31, 34, 51, .45);
 }
