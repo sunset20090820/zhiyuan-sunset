@@ -28,8 +28,10 @@
   }
   function LK(name) { return 'pl.' + srvTag + '.' + name; }
   function setCurrentServer(s) {
+    var before = srvTag;
     try { localStorage.setItem(CUR_SRV_KEY, s || ''); } catch (e) {}
     srvTag = srvTagOf(s);
+    if (before !== srvTag) { try { S.msgs = {}; } catch (e) {} }   // 前缀变了，缓存作废
   }
   function currentServer() {
     try { return localStorage.getItem(CUR_SRV_KEY) || ''; } catch (e) { return ''; }
@@ -188,7 +190,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -227,12 +229,13 @@
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
+        if (o.cur) S.cur = o.cur;
       }
     } catch (e) {}
   }
   function histKey(id) { return LK('hist.' + id); }
   function loadHist(id) {
-    if (S.msgs[id]) return S.msgs[id];
+    if (S.msgs[id] && S.msgs[id].length) return S.msgs[id];   // 只缓存非空的；空的重新读盘
     var arr = [];
     try { arr = JSON.parse(localStorage.getItem(histKey(id)) || '[]') || []; } catch (e) {}
     S.msgs[id] = arr;
@@ -3192,6 +3195,8 @@
     } else {
       $('#setup').classList.add('hidden');
       connect();
+      // 回到上次那个会话：记录先在本地渲染出来，连上后再由服务端历史补齐
+      if (S.cur) { try { openRoom(S.cur); } catch (e) {} }
     }
     setConn(false);
     setTimeout(function () {
@@ -3216,7 +3221,17 @@
     // 从通知点进来的跳转
     if (window.PaperOnJump) setTimeout(function () { window.PaperOnJump(); }, 400);
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) return;
+      if (document.hidden) {
+        try { save(); } catch (e) {}          // 切后台先落盘，别等 5 秒定时器
+        return;
+      }
+      // 回到前台：先按本地存储重画一次（WebView 被回收/列表没刷新时，这一步能救回来）
+      try {
+        if (S.auth) {
+          renderRooms();
+          if (S.cur) { renderMsgs(true); showJumpButton(S.cur); }
+        }
+      } catch (e) {}
       if (!connected) { connect(); return; }
       // 回到前台顺手确认是否有新版本（自动提醒，可关闭；正在检查就不重复）
       if (!checkJob) setTimeout(function () { if (!checkJob) runVersionCheck(false); }, 600);
