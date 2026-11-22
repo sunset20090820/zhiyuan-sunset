@@ -1278,3 +1278,58 @@ html[data-skin] .tab-item {
 html[data-skin] #navPill { z-index: 0; }
 html[data-skin] .tab-item .tab-ico,
 html[data-skin] .tab-item { background-color: transparent; }
+
+/* ---------------------------------------------------------
+   13) 头像圆环彻底清理
+   Android WebView 里，圆形 + overflow:hidden + 半透明父底 偶尔会在
+   边缘合成出一圈杂色。这里让头像自己画圆、自己裁图，不依赖父级裁切。
+   --------------------------------------------------------- */
+html[data-skin] .ava,
+html[data-skin] .mini-ava,
+html[data-skin] .chat-top .ava,
+html[data-skin] .pick-ava,
+html[data-skin] .peer-ava,
+html[data-skin] .me-avatar,
+html[data-skin] .mention-avatar {
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  /* 不用 mask：部分 WebView 会把圆形遮罩的边缘羽化，反而在深色头像外
+     混出一圈浅色。overflow:hidden + border-radius 是最稳的裁圆方式。 */
+}
+/* 头像里的图片：自己圆角裁切，不留方角 */
+html[data-skin] .ava img,
+html[data-skin] .mini-ava img,
+html[data-skin] .chat-top .ava img,
+html[data-skin] .pick-ava img,
+html[data-skin] .peer-ava img,
+html[data-skin] .me-avatar img {
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 0;
+}
+/* 有图片的头像：底色彻底透明，避免底色在图片边缘露出来 */
+html[data-skin] .ava.has-img,
+html[data-skin] .mini-ava.has-img,
+html[data-skin] .chat-top .ava.has-img,
+html[data-skin] .me-avatar.has-img {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* 私聊头像的渐变底在圆形抗锯齿边缘会透出一圈色边，改成纯色 */
+html[data-skin] .room-dm .ava,
+html[data-skin] #roomList .room-dm .ava,
+html[data-skin] #friendList .room-dm .ava {
+  background-image: none !important;
+  background-color: var(--accent) !important;
+}
+
+/* 行本身不需要裁切（内容都在行内），但 overflow:hidden 会和头像的圆形裁切叠加，
+   在 WebView 里可能在头像边缘露一圈杂色 */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room { overflow: visible; }
