@@ -158,24 +158,39 @@ html[data-skin="m3e"] #friendList .room {
   overflow: hidden;
   transition: background-color var(--m3e-fast) var(--m3e-emph);
 }
+/* 9.9 那套胶囊玻璃给行加了「柔光 + 内阴影描边」，换成方角行之后这些边会
+   错位、还会在圆头像边上透出一圈彩色——这里全部关掉。 */
+html[data-skin="m3e"] #roomList .room::before,
+html[data-skin="m3e"] #friendList .room::before,
 html[data-skin="m3e"] #roomList .room::after,
 html[data-skin="m3e"] #friendList .room::after {
-  content: '';
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  background: var(--m3e-primary);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms linear;
+  content: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  display: none !important;
 }
-html[data-skin="m3e"] #roomList .room:active::after,
-html[data-skin="m3e"] #friendList .room:active::after { opacity: .10; }
+/* 按下反馈：用行自己的背景色，不再叠伪元素 */
+html[data-skin="m3e"] #roomList .room,
+html[data-skin="m3e"] #friendList .room {
+  background-color: transparent;
+  transition: background-color 120ms linear;
+}
+html[data-skin="m3e"] #roomList .room:active,
+html[data-skin="m3e"] #friendList .room:active {
+  background-color: color-mix(in srgb, var(--m3e-primary) 10%, transparent) !important;
+}
 
 html[data-skin="m3e"] .room .ava {
   width: 48px; height: 48px;
+  min-width: 48px; max-width: 48px;
+  flex: 0 0 48px;
   font-size: 21px;
+  border: 0;
   border-radius: var(--m3e-full);
   box-shadow: none;
+  overflow: hidden;
+  background-clip: padding-box;
+  outline: none;
 }
 html[data-skin="m3e"] .room-name { font-size: 16px; font-weight: 500; }
 html[data-skin="m3e"] .room-time { font-size: 12px; color: var(--m3e-on-variant); }
@@ -1171,4 +1186,85 @@ html[data-skin] .tabbar.bar-pop { animation: m3e-bar-pop 420ms cubic-bezier(.3, 
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-skin] .tabbar.bar-pop { animation: none !important; }
+}
+
+/* ---------------------------------------------------------
+   12) 头像：清掉 9.x 那圈「白环 + 紫色外发光」
+   在玻璃底上它会变成头像边缘一圈莫名的彩色
+   --------------------------------------------------------- */
+html[data-skin] .room .ava,
+html[data-skin] #roomList .room .ava,
+html[data-skin] #friendList .room .ava,
+html[data-skin] .chat-top .ava,
+html[data-skin] .mini-ava,
+html[data-skin] .pick-ava,
+html[data-skin] .me-avatar {
+  box-shadow: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background-clip: padding-box;
+}
+html[data-skin] .room .ava,
+html[data-skin] #roomList .room .ava,
+html[data-skin] #friendList .room .ava,
+html[data-skin] .chat-top .ava { overflow: hidden; }
+/* 头像里的图片裁成圆形，别让方形图片的四角露出来 */
+html[data-skin] .room .ava img,
+html[data-skin] .chat-top .ava img,
+html[data-skin] .mini-ava img { border-radius: inherit; object-fit: cover; }
+
+/* 头像尺寸统一锁成正方形（小清新那边底层的 54px/49px 不一致，
+   圆角 50% 的椭圆会在边缘露出底色，看着像一圈怪色） */
+html[data-skin] #roomList .room .ava,
+html[data-skin] #friendList .room .ava,
+html[data-skin] .room .ava {
+  width: 48px; height: 48px;
+  min-width: 48px; max-width: 48px;
+  min-height: 48px; max-height: 48px;
+  flex: 0 0 48px;
+  border-radius: 999px !important;
+  aspect-ratio: 1 / 1;
+}
+html[data-skin] .chat-top .ava {
+  width: 40px; height: 40px;
+  flex: 0 0 40px;
+  min-width: 40px; min-height: 40px;
+  border-radius: 999px !important;
+  aspect-ratio: 1 / 1;
+}
+html[data-skin] .mini-ava {
+  width: 28px; height: 28px;
+  flex: 0 0 28px;
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+}
+
+/* 列表容器的边框：白边框压在浅底上会「半边亮半边看不见」，看起来像边框移位。
+   改用上亮下带色的渐变边框，四条边亮度稳定。 */
+html[data-skin] #roomList,
+html[data-skin] #friendList {
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent),
+                    color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent)),
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .95) 0%,
+      color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, .45)) 46%,
+      color-mix(in srgb, var(--accent) 38%, transparent) 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .85),
+    inset 0 -1px 0 color-mix(in srgb, var(--accent) 22%, transparent),
+    0 8px 24px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+html[data-skin][data-theme="dark"] #roomList,
+html[data-skin][data-theme="dark"] #friendList {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent),
+                    color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent)),
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .42) 0%,
+      color-mix(in srgb, var(--accent) 55%, transparent) 50%,
+      rgba(255, 255, 255, .22) 100%);
 }
