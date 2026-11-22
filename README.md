@@ -12,6 +12,25 @@
 未读与通知 / 置顶 / 左滑或菜单删除会话 / 拉黑 / 深色模式 / 检查更新 /
 多服务器切换（每台服务器一套独立数据）。
 
+### Agent 接入（两条互不影响的通道）
+
+| 通道 | 默认端口 | 说明 |
+| --- | --- | --- |
+| 本地用户 | 6721 | Agent 连进来，消息只在本机会话里，不经过服务器 |
+| 用户接入 | 6722 | Agent 用服务器真账号上线，别人能加好友/私聊/拉群；私聊回私聊，群里被 @ 才回 |
+
+两条通道各有自己的 TCP 端口、状态和开关，开一条不影响另一条；`hello` 里带 `channel`
+字段（`local` / `user`），同一个 Agent 同时连两条也能分清。协议见
+[`docs/local-agent.md`](docs/local-agent.md)。
+
+### 界面（9.x / 10.x）
+
+- **小清新 · 温馨**主题：柔和紫粉配色、大圆角、软阴影
+- **液态玻璃**：顶栏 / 底栏 / 输入栏 / 面板统一玻璃质感，强度 0–100 可调，可整体关闭
+- **胶囊玻璃列表**：会话列表与联系人列表为半透明胶囊卡片
+- **美化设置**：集中在一个可展开面板里 —— 背景（其它界面 / 聊天页分别设置，6 套底色 + 相册图 + 明暗 0–90% + 模糊 0–40px）、主题色（6 套）、顶栏文字（自动 / 白字 / 黑字，单击顶部标题即可切换）、液态玻璃开关与强度
+- 动效：气泡弹入、列表逐条浮现、面板上滑、按钮扫光，并尊重系统「减少动态效果」
+
 ## 目录结构
 
 ```
@@ -19,7 +38,10 @@ client/                 Android 客户端
   AndroidManifest.xml
   src/app/paperlite/chat/
     MainActivity.java   WebView 外壳、原生桥（通知/下载/权限）
-    KeepAliveService.java
+    KeepAliveService.java  前台服务：托管两条 Agent 通道
+    LocalAgentServer.java  TCP + 每行一个 JSON 的 Agent 服务
+    AgentUserRelay.java    「用户接入」：Agent 账号上线与双向转发
+    MiniWs.java / MiniJson.java  极小 WebSocket 客户端与 JSON 解析（无第三方依赖）
   app/                  网页层：index.html + app.js + style.css（全部逻辑在这）
   res/                  图标与主题
   build.sh              一键构建 + 签名
