@@ -187,6 +187,7 @@ public class KeepAliveService extends Service {
         }
         LocalAgentServer fresh = new LocalAgentServer(port, lan, user ? LISTENER_USER : LISTENER_LOCAL);
         fresh.setBotName(helloName);
+        fresh.setChannel(user ? "user" : "local");
         fresh.start();
         if (fresh.isRunning()) {
             if (user) { LocalAgentServer old = sUser; sUser = fresh; if (old != null) { try { old.stop(); } catch (Exception e) { } } }

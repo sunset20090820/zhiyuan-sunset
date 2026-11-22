@@ -47,6 +47,7 @@ public class LocalAgentServer {
     private volatile boolean running = false;
     private String lastError = "";
     private String botName = "本地用户";
+    private String channel = "local";      // local / user，hello 里带上，方便同一个 Agent 区分两条通道
     private final Set<Handler> handlers = Collections.synchronizedSet(new LinkedHashSet<Handler>());
 
     public LocalAgentServer(int port, boolean lanBind, Listener listener) {
@@ -61,6 +62,10 @@ public class LocalAgentServer {
     public synchronized String lastError() { return lastError == null ? "" : lastError; }
     public synchronized void setBotName(String n) {
         if (n != null && n.trim().length() > 0) botName = n.trim();
+    }
+
+    public synchronized void setChannel(String c) {
+        if (c != null && c.trim().length() > 0) channel = c.trim();
     }
 
     public synchronized void start() {
@@ -181,6 +186,7 @@ public class LocalAgentServer {
                 hello.put("app", "zhiyuan");
                 hello.put("conv", "local");
                 hello.put("botName", botName);
+                hello.put("channel", channel);
                 send(hello.toString());
                 String line;
                 while ((line = in.readLine()) != null) {

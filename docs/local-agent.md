@@ -130,3 +130,9 @@ astrbot 回复时把 `conv` / `peer` / `room` 原样带回来即可（不带就�
 | 用户接入 | 6722 | 走服务器（Agent 的真账号） |
 
 astrbot 想用哪个功能就连哪个端口；两个都想用就连两条连接。端口可以在各自面板里改。
+
+两条通道的 `hello` 里带 `channel` 字段（`local` / `user`），同一个 Agent 同时连两条时靠它区分：
+
+```json
+{"type":"hello","app":"zhiyuan","conv":"local","botName":"小助手","channel":"user"}
+```
