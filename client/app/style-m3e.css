@@ -150,7 +150,6 @@ html[data-skin="m3e"] #friendList .room {
   border-radius: 20px;
   margin: 0;
   padding: 10px 44px 10px 10px;
-  background: transparent !important;
   box-shadow: none !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
@@ -943,7 +942,9 @@ html[data-skin] {
   --m3e-glass-blur: var(--row-blur, 26px);
   --m3e-glass-sat: var(--row-sat, 200%);
   --m3e-glass-a: var(--row-alpha, 0.55);
-  --m3e-glass-a-container: .88;   /* 列表/卡片用更厚的底，避免头像边缘透色 */
+  /* 列表/卡片：底更厚（压住头像边缘的透色），但**仍跟随玻璃强度滑块**：
+     --row-alpha 0.18–0.86 → 0.80–0.94，滑块拉到头也不会完全实心 */
+  --m3e-glass-a-container: calc(0.78 + var(--row-alpha, 0.55) * 0.18);
   --m3e-glass-line: rgba(255, 255, 255, .55);
   --m3e-glass-line-dark: rgba(255, 255, 255, .12);
   --m3e-glass-hi: rgba(255, 255, 255, .38);
@@ -979,8 +980,8 @@ html[data-skin] .me-group {
   background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent);
   /* 保守配方：只用模糊 + 适度饱和。brightness() 会跟着背景整体提亮，
      在 Android WebView 上容易出现发灰/发脏的观感。 */
-  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(1.35);
-  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(1.35);
+  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35));
+  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35));
   border: 1px solid var(--m3e-glass-line);
   box-shadow:
     inset 0 1px 0 var(--m3e-glass-hi),
@@ -1056,9 +1057,9 @@ html[data-skin].no-glass .me-group {
   html[data-skin] #friendList { background: var(--m3e-surface); }
 }
 
-/* 列表行压在玻璃上时别再自己叠一层底 */
+/* 列表行压在玻璃上时不再自己叠一层底（只清底色，别把胶囊的渐变边框也清掉） */
 html[data-skin] #roomList .room,
-html[data-skin] #friendList .room { background: transparent !important; }
+html[data-skin] #friendList .room { background-color: transparent; }
 
 /* ---------------------------------------------------------
    11) 底栏果冻药丸：滑动 + 拉伸 + 图标弹跳
@@ -1365,7 +1366,52 @@ html[data-skin] #friendList .room,
 html[data-skin] .friend-list .friend-row {
   box-shadow: none !important;
   border-width: 1px !important;
-  border-color: color-mix(in srgb, var(--m3e-surface) 70%, transparent) !important;
+  border-color: transparent !important;   /* 让渐变边框透出来 */
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* ---------------------------------------------------------
+   14) 会话卡片：胶囊 + 玻璃边框（跟着玻璃强度走）
+   注意：只用「半透明底 + 1px 边 + 内高光」，不用偏移外发光，
+   否则在 WebView 上又会拖出光带。
+   --------------------------------------------------------- */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room,
+html[data-skin] .friend-list .friend-row {
+  position: relative;
+  border-radius: var(--m3e-full) !important;
+  margin: 3px 6px !important;
+  padding-left: 12px !important;
+  /* 不要用 background 简写 + !important —— 它会把 background-image 一起重置掉，
+     下面的渐变边框就永远画不出来。 */
+  /* 白边框在浅底上会隐形，用「上亮下带色」的渐变边框，四边都看得出来 */
+  border: 1px solid transparent !important;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 62%), transparent),
+                    color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 62%), transparent)),
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .95) 0%,
+      color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, .45)) 50%,
+      color-mix(in srgb, var(--accent) 58%, transparent) 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .62),
+    inset 0 -1px 0 rgba(255, 255, 255, .14) !important;
+  overflow: hidden;
+}
+html[data-skin][data-theme="dark"] #roomList .room,
+html[data-skin][data-theme="dark"] #friendList .room,
+html[data-skin][data-theme="dark"] .friend-list .friend-row {
+  border-color: transparent !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 -1px 0 rgba(255, 255, 255, .05) !important;
+}
+/* 卡片之间的缝不要用外边距叠出双倍间距 */
+html[data-skin] #roomList,
+html[data-skin] #friendList,
+html[data-skin] .friend-list { padding: 6px; }
+html[data-skin] #roomList .room + .room,
+html[data-skin] #friendList .room + .room { margin-top: 3px !important; }
