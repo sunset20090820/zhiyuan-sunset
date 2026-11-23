@@ -76,7 +76,7 @@
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
           list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
-    glass: true, glassLevel: 55, accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
+    glass: true, glassLevel: 55, glassMul: 100, glassCard: 100, glassThin: 100, accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
   };
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
@@ -198,7 +198,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -240,6 +240,9 @@
         S.bg = normalizeBg(o.bg);
         if (typeof o.glass === 'boolean') S.glass = o.glass;
         if (typeof o.glassLevel === 'number') S.glassLevel = o.glassLevel;
+        if (typeof o.glassMul === 'number') S.glassMul = o.glassMul;
+        if (typeof o.glassCard === 'number') S.glassCard = o.glassCard;
+        if (typeof o.glassThin === 'number') S.glassThin = o.glassThin;
         if (o.accent) S.accent = o.accent;
         if (o.topbarText) S.topbarText = o.topbarText;
         if (o.skin) S.skin = o.skin;
@@ -2291,7 +2294,13 @@
     var alpha = 0.14 + lv * 0.0068;
     var tint = 0.02 + lv * 0.0018;
     var sat = 165 + lv * 1.1;              // 165% – 275%
+    var mul = (typeof S.glassMul === 'number' ? S.glassMul : 100) / 100;   // 0.4 – 1.8
+    var cardK = (typeof S.glassCard === 'number' ? S.glassCard : 100) / 100; // 卡片层倍数
+    var thinK = (typeof S.glassThin === 'number' ? S.glassThin : 100) / 100; // 控件层倍数
+    blur = blur * mul;
     root.style.setProperty('--row-blur', blur.toFixed(1) + 'px');
+    root.style.setProperty('--glass-card-k', cardK.toFixed(2));
+    root.style.setProperty('--glass-thin-k', thinK.toFixed(2));
     root.style.setProperty('--row-sat', sat.toFixed(0) + '%');
     root.style.setProperty('--row-alpha', alpha.toFixed(3));
     root.style.setProperty('--row-tint', tint.toFixed(3));
@@ -2338,9 +2347,19 @@
     }
 
     var dim = $('#bgDim');
-    if (dim) dim.value = String(Math.round((Number(cfg.dim) || (scope === 'chat' ? 0.18 : 0.12)) * 100));
+    if (dim) {
+      var dv = Number(cfg.dim);
+      if (isNaN(dv)) dv = scope === 'chat' ? 0.18 : 0.12;   // 0 是合法值，别被 || 吃掉
+      dim.value = String(Math.round(dv * 100));
+    }
     var bl = $('#bgBlur');
-    if (bl) bl.value = String(Number(cfg.blur) || 0);
+    if (bl) { var bv = Number(cfg.blur); bl.value = String(isNaN(bv) ? 0 : bv); }
+    var cs2 = $('#bgDimBoth');
+    if (cs2) cs2.checked = S.bgDimBoth !== false;
+    var gMul = $('#glassMul'), gCard = $('#glassCard'), gThin = $('#glassThin');
+    if (gMul) gMul.value = String(typeof S.glassMul === 'number' ? S.glassMul : 100);
+    if (gCard) gCard.value = String(typeof S.glassCard === 'number' ? S.glassCard : 100);
+    if (gThin) gThin.value = String(typeof S.glassThin === 'number' ? S.glassThin : 100);
 
     var segs = document.querySelectorAll('#bgScope .seg-item');
     Array.prototype.forEach.call(segs, function (b) {
@@ -3096,9 +3115,19 @@
       img.src = url;
     });
     on('#bgDim', 'input', function (e) {
+      var v = Math.max(0, Math.min(0.9, Number(e.target.value) / 100));
       var cfg = bgOf();
-      cfg.dim = Math.max(0, Math.min(0.9, Number(e.target.value) / 100));
+      cfg.dim = v;
+      if (S.bgDimBoth !== false) {
+        var other = (S.bg.scope === 'list') ? S.bg.chat : S.bg.list;
+        if (other) other.dim = v;
+      }
       applyChatBg();
+    });
+    on('#bgDimBoth', 'change', function (e) {
+      S.bgDimBoth = !!e.target.checked;
+      save();
+      toast(S.bgDimBoth ? '明暗两个页面一起调' : '明暗只调当前范围的页面');
     });
     on('#bgDim', 'change', function () { save(); });
     on('#bgBlur', 'input', function (e) {
@@ -3136,6 +3165,21 @@
       if (el) el.textContent = names[S.topbarText];
       toast('顶栏文字：' + names[S.topbarText]);
     });
+    on('#glassMul', 'input', function (e) {
+      S.glassMul = Math.max(40, Math.min(180, Number(e.target.value) || 100));
+      applyChatBg();
+    });
+    on('#glassMul', 'change', function () { save(); });
+    on('#glassCard', 'input', function (e) {
+      S.glassCard = Math.max(0, Math.min(140, Number(e.target.value)));
+      applyChatBg();
+    });
+    on('#glassCard', 'change', function () { save(); });
+    on('#glassThin', 'input', function (e) {
+      S.glassThin = Math.max(0, Math.min(140, Number(e.target.value)));
+      applyChatBg();
+    });
+    on('#glassThin', 'change', function () { save(); });
     on('#glassLevel', 'input', function (e) {
       S.glassLevel = Math.max(0, Math.min(100, Number(e.target.value) || 0));
       applyChatBg();
