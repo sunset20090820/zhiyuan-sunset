@@ -469,18 +469,32 @@
         <span id="meUid" class="me-uid">我的 ID：--</span></div>
     </div>
 
-    <div class="me-group">
-      <button id="btnNewGroup" class="me-row" type="button"><span class="me-ico">👥</span>新建群聊<span class="me-arrow">›</span></button>
-      <button id="btnTheme" class="me-row" type="button"><span class="me-ico">🌗</span>深色 / 浅色<span class="me-arrow">›</span></button>
-      <button id="btnAvatar" class="me-row" type="button"><span class="me-ico">🖼</span>更换头像<span class="me-arrow">›</span></button>
-      <button id="btnCheckUpdate" class="me-row" type="button"><span class="me-ico">🔄</span>检查更新<span class="me-arrow">›</span></button>
-      <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
-      <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
-      <button id="btnAi" class="me-row" type="button"><span class="me-ico">🤖</span>AI 助手<span class="me-arrow">›</span></button>
-      <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
-      <button id="btnBeauty" class="me-row" type="button" aria-expanded="false">
+    <div class="me-sec" data-sec="talk">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">💬</span>聊天与联系人<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <button id="btnNewGroup" class="me-row" type="button"><span class="me-ico">👥</span>新建群聊<span class="me-arrow">›</span></button>
+        <button id="btnNewChatRow" class="me-row" type="button"><span class="me-ico">✎</span>新建对话<span class="me-arrow">›</span></button>
+        <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
+        <button id="btnAvatar" class="me-row" type="button"><span class="me-ico">🖼</span>更换头像<span class="me-arrow">›</span></button>
+      </div>
+    </div>
+
+    <div class="me-sec" data-sec="access">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🔌</span>接入与助手<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <button id="btnAi" class="me-row" type="button"><span class="me-ico">🤖</span>AI 助手<span class="me-arrow">›</span></button>
+        <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
+        <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
+      </div>
+    </div>
+
+    <div class="me-sec" data-sec="look">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🎨</span>外观与玻璃<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <button id="btnTheme" class="me-row" type="button"><span class="me-ico">🌗</span>深色 / 浅色<span class="me-arrow">›</span></button>
+        <button id="btnBeauty" class="me-row" type="button" aria-expanded="false">
         <span class="me-ico">🎨</span>美化设置<span class="me-arrow beauty-arrow" id="beautyArrow">›</span></button>
-      <div id="beautyPanel" class="beauty-panel">
+<div id="beautyPanel" class="beauty-panel">
         <div class="beauty-inner">
           <div class="beauty-block">
             <div class="beauty-title">背景范围</div>
@@ -521,8 +535,27 @@
           </div>
         </div>
       </div>
-      <button id="btnStorage" class="me-row" type="button"><span class="me-ico">🗂</span>存储管理<span class="me-arrow">›</span></button>
-      <button id="btnNewChatRow" class="me-row" type="button"><span class="me-ico">✎</span>新建对话<span class="me-arrow">›</span></button>
+      </div>
+    </div>
+
+    <div class="me-sec" data-sec="care">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🧰</span>存储与维护<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <button id="btnStorage" class="me-row" type="button"><span class="me-ico">🗂</span>存储管理<span class="me-arrow">›</span></button>
+        <button id="btnCheckUpdate" class="me-row" type="button"><span class="me-ico">🔄</span>检查更新<span class="me-arrow">›</span></button>
+      </div>
+    </div>
+
+    <div class="me-sec" data-sec="about">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">📮</span>反馈与关于<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <button id="btnFeedback" class="me-row" type="button"><span class="me-ico">📮</span>反馈箱<span class="me-arrow">›</span></button>
+        <div class="me-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <span style="font-size:14px">登录状态诊断</span>
+          <span id="meDiag" style="font-size:12px;color:var(--tg-sub);line-height:1.6">-</span>
+        </div>
+        <!-- missing btnFlush -->
+      </div>
     </div>
 
     <div class="me-group">

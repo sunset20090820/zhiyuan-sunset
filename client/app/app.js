@@ -7,6 +7,10 @@
   var LOCAL_PEER = 'local';
   var AI_RID = 'dm:ai';
   var lastSendPath = '';
+  var FEEDBACK_PEER = 'feedback';
+  var FEEDBACK_RID = 'dm:feedback';
+  var DEV_UID = 'uid:100002';
+  var isDeveloper = false;   // 自己就是开发者时，反馈只在本地留档
   var AI_PEER = 'ai';
   var ROOMS_DEFAULT = [
     { id: 'lobby', name: '公共大厅', emoji: '💬', color: '#3390ec' },
@@ -198,7 +202,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -250,6 +254,8 @@
         S.last = o.last || {};
         S.unread = o.unread || {};
         if (o.cur) S.cur = o.cur;
+        if (o.meSec && typeof o.meSec === 'object') S.meSec = o.meSec;
+        if (typeof o.bgDimBoth === 'boolean') S.bgDimBoth = o.bgDimBoth;
       }
     } catch (e) {}
   }
@@ -395,6 +401,7 @@
         wsSend({ t: 'groups' });
         wsSend({ t: 'contacts' });
         refreshDMs();
+    try { flushFeedback(); } catch (e) {}
         flushQueue();
         return;
       }
@@ -536,6 +543,8 @@
       refreshDMs();
       checkVersion();
       flushQueue();
+      try { isDeveloper = (S.uid === 100002); } catch (e) {}
+      try { flushFeedback(); } catch (e) {}
       toast((d.action === 'register' ? '注册成功，' : d.action === 'reset' ? '密码已重置，' : '登录成功，') + '欢迎 ' + S.nick);
       return;
     }
@@ -712,6 +721,14 @@
       return;
     }
     if (d.t === 'pm') {
+      // 开发者（uid:100002）的回信直接进反馈箱，不单开一个「开发者」私信
+      try {
+        var fbPeer = (d.msg && d.msg.fromUid ? ('uid:' + d.msg.fromUid) : (d.with || ''));
+        if (fbPeer === DEV_UID || d.with === DEV_UID || (d.msg && d.msg.deviceId === DEV_UID) || d.room === FEEDBACK_RID) {
+          d.room = FEEDBACK_RID;
+          d.with = FEEDBACK_PEER;
+        }
+      } catch (e) {}
       try {
         if (d.msg && d.msg.avatar) {
           if (!S.avatars) S.avatars = {};
@@ -721,6 +738,10 @@
           if (d.with) S.avatars[d.with] = d.msg.avatar;
         }
       } catch (e) {}
+      if (d.room === FEEDBACK_RID && d.msg && d.msg.fromUid === 100002) {
+        d.msg.name = '开发者';
+        d.msg.feedbackReply = true;
+      }
       addMsg(d.room, d.msg);
       var mineMsg = d.msg.deviceId === S.deviceId;
       var peerId = mineMsg ? d.with
@@ -812,6 +833,8 @@
   function dmRoomOf(peerId) {
     if (peerId === AI_PEER) return AI_RID;
     if (peerId === LOCAL_PEER) return LOCAL_RID;
+    if (peerId === FEEDBACK_PEER) return FEEDBACK_RID;
+    if (peerId === DEV_UID) return FEEDBACK_RID;      // 开发者回信就落在反馈箱里
     var d = (S.dms && S.dms[peerId]) || {};
     return d.roomId || ('dm:' + peerId);
   }
@@ -861,8 +884,10 @@
       if (!d) { delete S.dms[peerId]; changed = true; return; }
       var want = dmRoomOf(peerId);
       var isAi = (peerId === AI_PEER) || d.ai === true;
-      var isLocal = (peerId === LOCAL_PEER) || d.local === true && !isAi;
+      var isFb = (peerId === FEEDBACK_PEER) || d.feedback === true;   // 反馈箱不是本地用户，别被 local 标记带偏
+      var isLocal = !isFb && ((peerId === LOCAL_PEER) || (d.local === true && !isAi));
       if (isAi) { want = AI_RID; }
+      else if (isFb) { want = FEEDBACK_RID; }
       else if (isLocal) { want = LOCAL_RID; }
       var old = d.roomId;
       // 假条目占了真房间（大厅/群聊）的房间号：它不是会话，直接删掉，否则列表里多一行
@@ -874,6 +899,10 @@
       if (old !== want) { d.roomId = want; changed = true; }
       if (isAi && d.ai !== true) { d.ai = true; changed = true; }
       if ((isAi || isLocal) && d.local !== true) { d.local = true; changed = true; }
+      if (isFb) {
+        if (d.feedback !== true) { d.feedback = true; changed = true; }
+        if (d.local === true) { d.local = false; changed = true; }
+      }
       if (old && old !== want) {
         // 旧房间号可能正被大厅/群聊占着，只有它不属于真房间时才搬历史
         try {
@@ -888,7 +917,7 @@
       var rid = dmRoomOf(peerId);
       if (!byRoom[rid]) { byRoom[rid] = peerId; return; }
       var cur = byRoom[rid];
-      var score = function (p) { return (p === AI_PEER ? 3 : 0) + (p === LOCAL_PEER ? 2 : 0) + ((S.dms[p].avatar) ? 1 : 0); };
+      var score = function (p) { return (p === AI_PEER ? 3 : (p === FEEDBACK_PEER ? 2 : (p === LOCAL_PEER ? 2 : 0))) + ((S.dms[p].avatar) ? 1 : 0); };
       var loser = score(peerId) > score(cur) ? cur : peerId;
       var win = loser === cur ? peerId : cur;
       byRoom[rid] = win;
@@ -922,6 +951,22 @@
       if (!S.dms[LOCAL_PEER]) { S.dms[LOCAL_PEER] = { name: localAgentName(), roomId: LOCAL_RID, local: true }; changed = true; }
       else if (S.dms[LOCAL_PEER].roomId !== LOCAL_RID) { S.dms[LOCAL_PEER].roomId = LOCAL_RID; changed = true; }
     }
+    // 3.5) 反馈箱：常驻一条（反馈发给开发者 uid:100002）
+    Object.keys(S.dms).forEach(function (peerId) {
+      if (peerId === FEEDBACK_PEER) return;
+      var d2 = S.dms[peerId];
+      if (d2 && dmRoomOf(peerId) === FEEDBACK_RID) { delete S.dms[peerId]; changed = true; }
+    });
+    if (!S.dms[FEEDBACK_PEER]) {
+      S.dms[FEEDBACK_PEER] = { name: '反馈箱', roomId: FEEDBACK_RID, local: true, feedback: true };
+      changed = true;
+    } else {
+      var fb = S.dms[FEEDBACK_PEER];
+      if (fb.roomId !== FEEDBACK_RID) { fb.roomId = FEEDBACK_RID; changed = true; }
+      if (fb.feedback !== true) { fb.feedback = true; changed = true; }
+      if (fb.local !== true) { fb.local = true; changed = true; }
+    }
+
     // 4) 房间列表按 id 去重（服务器偶尔会重复下发）
     if (S.rooms && S.rooms.length) {
       var seenRoom = {};
@@ -1089,6 +1134,10 @@
       el.textContent = '本地通路 · dm:local';
       return true;
     }
+    if (S.cur === FEEDBACK_RID) {
+      el.textContent = '反馈箱 · 发出去会直接到开发者那';
+      return true;
+    }
     if (S.cur === 'lobby') {
       el.textContent = '服务器通路 · lobby';
       return true;
@@ -1147,6 +1196,43 @@
     } catch (e) { done([], e.message); }
   }
   /* ---------- 测试连接：把真实的 HTTP 结果摊开给人看 ---------- */
+  /* ---------- 反馈箱 ---------- */
+  var fbQueue = [];
+  function rememberFeedback(text) {
+    try {
+      var arr = JSON.parse(localStorage.getItem(LK('fbQueue')) || '[]') || [];
+      arr.push({ text: text, ts: Date.now(), sent: false });
+      if (arr.length > 50) arr = arr.slice(-50);
+      localStorage.setItem(LK('fbQueue'), JSON.stringify(arr));
+      fbQueue = arr;
+    } catch (e) {}
+  }
+  function flushFeedback() {
+    try {
+      var arr = JSON.parse(localStorage.getItem(LK('fbQueue')) || '[]') || [];
+      var left = [];
+      for (var i = 0; i < arr.length; i++) {
+        var it = arr[i];
+        if (!it || it.sent) continue;
+        var head = '【反馈】' + (window.APP_VERSION || '') + ' · ' + (S.nick || '匿名') + ' · uid:' + (S.uid || 0);
+        if (wsSend({ t: 'pm', to: DEV_UID, text: head + '\n' + it.text })) it.sent = true;
+        else left.push(it);
+      }
+      if (left.length !== arr.filter(function (x) { return x && !x.sent; }).length) {
+        localStorage.setItem(LK('fbQueue'), JSON.stringify(arr));
+      }
+    } catch (e) {}
+  }
+  function openFeedback() {
+    aiNormalize();
+    if (!S.dms[FEEDBACK_PEER]) {
+      S.dms[FEEDBACK_PEER] = { name: '反馈箱', roomId: FEEDBACK_RID, local: true, feedback: true };
+      save();
+    }
+    renderRooms();
+    openRoom(FEEDBACK_RID);
+  }
+
   function aiDiag() {
     var lines = [];
     try {
@@ -2060,6 +2146,27 @@
       renderMsgs(false);
       return;
     }
+    if (S.cur === FEEDBACK_RID) {
+      // 反馈箱：本地留一份，同时把它作为私信发给开发者（uid:100002）
+      rememberFeedback(text);
+      var mineFb = null, listF = loadHist(FEEDBACK_RID);
+      for (var fi = listF.length - 1; fi >= 0; fi--) if (listF[fi].id === tid) { mineFb = listF[fi]; break; }
+      if (mineFb) { mineFb.pending = false; saveHist(FEEDBACK_RID); }
+      var myUid = 'uid:' + (S.uid || 0);
+      var toDev = myUid !== DEV_UID;
+      if (toDev) {
+        var head = '【反馈】' + (window.APP_VERSION || '') + ' · ' + (S.nick || '匿名') + ' · ' + myUid;
+        var sentFb = false;
+        try { sentFb = wsSend({ t: 'pm', to: DEV_UID, text: head + '\n' + text }); } catch (e) {}
+        if (!sentFb) toast('网络没连上，反馈先存在本机，连上后会自动补发');
+        else toast('反馈已发送给开发者');
+        try { if (ws) ws.send(''); } catch (e) {}
+      } else {
+        toast('你就是开发者，反馈只在本地留档');
+      }
+      renderMsgs(false); renderRooms();
+      return;
+    }
     lastSendPath = (S.cur === AI_RID || aiIsRoom(S.cur)) ? 'ai' : (S.cur === LOCAL_RID ? 'local' : 'server');
     noteSend(lastSendPath, 'cur=' + S.cur, text);
     if (S.cur === AI_RID || aiIsRoom(S.cur)) {
@@ -2775,6 +2882,15 @@
       if ($('#setServer')) $('#setServer').value = S.server || '';
       if ($('#verLine')) $('#verLine').textContent = '纸鸢 ' + (window.APP_VERSION || '') + ' · ' + (S.user ? ('账号 ' + S.user) : '未登录');
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      try {
+        var map = S.meSec || {};
+        Array.prototype.forEach.call(document.querySelectorAll('#mePage .me-sec'), function (sec) {
+          var on = !!map[sec.getAttribute('data-sec')];
+          sec.classList.toggle('open', on);
+          var h = sec.querySelector('.me-sec-head');
+          if (h) h.setAttribute('aria-expanded', on ? 'true' : 'false');
+        });
+      } catch (e) {}
       $('#mePage').classList.remove('hidden');
     }
     function backToTab() {
@@ -5179,6 +5295,25 @@
     Array.prototype.forEach.call(document.querySelectorAll('#tabbar .tab-item'), function (b) {
       b.addEventListener('click', function () { showTab(b.getAttribute('data-tab'), { user: true }); });
     });
+    // 「我的」页：分组折叠（按钮太多，收起来只留一行标题）
+    (function bindMeSecs() {
+      var secs = document.querySelectorAll('#mePage .me-sec');
+      Array.prototype.forEach.call(secs, function (sec) {
+        var head = sec.querySelector('.me-sec-head');
+        if (!head) return;
+        head.addEventListener('click', function (e) {
+          e.preventDefault();
+          var open = !sec.classList.contains('open');
+          sec.classList.toggle('open', open);
+          head.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if (!S.meSec) S.meSec = {};
+          S.meSec[sec.getAttribute('data-sec')] = open;
+          save();
+        });
+      });
+    })();
+    on('#btnFeedback', 'click', function (e) { e.preventDefault(); openFeedback(); });
+
     on('#btnFlush', 'click', function () {
       save();
       try { if (window.PaperNative && window.PaperNative.saveState) window.PaperNative.saveState(JSON.stringify({ nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, ts: Date.now() })); } catch (e) {}
