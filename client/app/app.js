@@ -1980,11 +1980,24 @@
       list.addEventListener('touchmove', function (e) {
         if (!pulling || !e.touches || !e.touches[0]) return;
         dy = e.touches[0].clientY - startY;
-        if (dy <= 0) { dy = 0; list.style.transform = ''; return; }
-        var pull = Math.min(96, Math.pow(dy, 0.86) * 1.6);
-        list.style.transform = 'translateY(' + pull + 'px)';
+        if (dy <= 0) {
+          dy = 0;
+          list.style.transform = '';
+          list.classList.remove('pulling');
+          list.style.setProperty('--pull', '0');
+          return;
+        }
+        // 橡皮筋：越拉越沉，最大 110px
+        var pull = Math.min(110, Math.pow(dy, 0.85) * 1.7);
+        list.style.transform = 'translateY(' + pull.toFixed(1) + 'px)';
         list.classList.add('pulling');
-        list.style.setProperty('--pull', String(pull));
+        list.style.setProperty('--pull', pull.toFixed(1));
+        // 卡片随拉动整体轻微下沉，越靠下越明显（被往下拽开的感觉）
+        var rows = list.querySelectorAll('.room');
+        for (var i = 0; i < rows.length; i++) {
+          var k = Math.min(i, 8);
+          rows[i].style.setProperty('--pull-y', (pull * (1 - k * 0.055)).toFixed(1) + 'px');
+        }
       }, { passive: true });
       list.addEventListener('touchend', function () {
         if (!pulling) return;
@@ -1993,10 +2006,14 @@
         list.style.transform = '';
         // 卡片先弹回原状，再撤掉拉伸状态
         list.style.setProperty('--pull', '0');
+        Array.prototype.forEach.call(list.querySelectorAll('.room'), function (r) {
+          r.style.setProperty('--pull-y', '0px');
+        });
         setTimeout(function () {
           list.classList.remove('pulling');
           list.style.setProperty('--pull', '0');
         }, 340);
+        if (dy > 64) toast('正在重新连接…');
         if (dy > 64) {
           toast('正在重新连接…');
           try { if (ws) ws.close(); } catch (e) {}

@@ -1148,9 +1148,9 @@ html[data-skin] .nav-pill.sheen i::after {
   22%  { opacity: .9; }
   100% { opacity: 0; transform: translateX(320%) skewX(-16deg); }
 }
-/* 点下的瞬间先浮一层淡淡的色块，再滑过去 */
-html[data-skin] .tab-item { transition: background-color 140ms var(--m3e-emph); }
-html[data-skin] .tab-item:active { background: color-mix(in srgb, var(--m3e-on-surface) 8%, transparent); border-radius: var(--m3e-md); }
+/* 点击瞬间不再浮出色块——只保留果冻玻璃药丸的滑动 */
+html[data-skin] .tab-item,
+html[data-skin] .tab-item:active { background: transparent !important; }
 
 /* 点中的图标也抖一下 */
 html[data-skin] .tab-item.pop .tab-ico { animation: m3e-ico-pop 620ms cubic-bezier(.3, .95, .35, 1) both; }
@@ -1448,11 +1448,18 @@ html[data-skin] #roomList .room:active .ava,
 html[data-skin] #friendList .room:active .ava { transform: scale(.94); }
 
 /* 下拉时的橡皮筋：列表被平移时，卡片纵向轻微拉伸 */
+/* 下拉：卡片跟着往下沉一点点（越靠下越少），并轻微纵向拉伸 */
 html[data-skin] #roomList.pulling .room {
   /* 入场动画用了 fill: both，会一直占着 transform，这里必须关掉动画才能拉得动 */
   animation: none !important;
-  transform: scaleY(calc(1 + var(--pull, 0) * 0.0016));
-  transition: transform 60ms linear;
+  transform:
+    translateY(var(--pull-y, 0px))
+    scaleY(calc(1 + var(--pull, 0) * 0.0013));
+  transition: transform 70ms cubic-bezier(.3, .8, .4, 1);
+}
+/* 松手回弹：卡片带一点过冲地弹回原位 */
+html[data-skin] #roomList .room {
+  transition: transform 320ms cubic-bezier(.2, .9, .25, 1.15);
 }
 
 /* 界面切换：按方向滑入 + 回弹 */
