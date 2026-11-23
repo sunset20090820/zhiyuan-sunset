@@ -355,7 +355,19 @@
   }
   // 给游戏模块用的发送通道
   window.__zySend = function (obj) { return wsSend(obj); };
+  var sendLog = [];
+  function noteSend(kind, detail, text) {
+    try {
+      sendLog.push({ kind: kind, detail: detail, text: String(text || '').slice(0, 24), ts: Date.now() });
+      if (sendLog.length > 30) sendLog.shift();
+    } catch (e) {}
+  }
+
   function wsSend(obj) {
+    try {
+      if (obj && obj.t === 'msg') noteSend('server', 'room=' + (obj.room || '(空)'), obj.text);
+      else if (obj && obj.t === 'pm') noteSend('server', 'pm→' + (obj.to || '(空)'), obj.text);
+    } catch (e) {}
     if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
     return false;
   }
@@ -419,6 +431,19 @@
       }
     }, 9000);
     return true;
+  }
+
+  function dropFakeQueue() {
+    try {
+      var before = queue.length;
+      for (var i = queue.length - 1; i >= 0; i--) {
+        var q = queue[i];
+        if (!q) continue;
+        var rid = q.room || q.to || '';
+        if (rid === AI_RID || rid === LOCAL_RID || rid === AI_PEER || rid === LOCAL_PEER) queue.splice(i, 1);
+      }
+      if (queue.length !== before) bootLog.push('丢掉 ' + (before - queue.length) + ' 条 AI/本地 残留排队消息');
+    } catch (e) {}
   }
 
   function flushQueue() {
@@ -915,6 +940,7 @@
     renderRooms();
   }
   try { aiNormalize(); } catch (e) {}
+  try { dropFakeQueue(); } catch (e) {}
   function aiReady() { return !!(S.ai && S.ai.on && S.ai.base && S.ai.model && aiKeyStore()); }
   function refreshAiStat() {
     var el = $('#aiStat');
@@ -1118,6 +1144,13 @@
       Object.keys(d).forEach(function (k) { var v = dmRoomOf(k); dup[v] = (dup[v] || 0) + 1; });
       var bad = Object.keys(dup).filter(function (k) { return dup[k] > 1; });
       lines.push('重复房间号：' + (bad.length ? bad.join('、') : '无'));
+      if (sendLog.length) {
+        lines.push('最近发送：' + sendLog.slice(-6).map(function (x) {
+          return x.kind + '[' + x.detail + ']' + (x.text ? '"' + x.text + '"' : '');
+        }).join(' · '));
+      } else {
+        lines.push('最近发送：(无)');
+      }
       var name = $('#aiName') ? $('#aiName').value : '';
       lines.push('面板名字：' + name + ' · 列表名：' + aiName());
     } catch (e) { lines.push('自检出错：' + e.message); }
@@ -1974,6 +2007,7 @@
       return;
     }
     lastSendPath = (S.cur === AI_RID || aiIsRoom(S.cur)) ? 'ai' : (S.cur === LOCAL_RID ? 'local' : 'server');
+    noteSend(lastSendPath, 'cur=' + S.cur, text);
     if (S.cur === AI_RID || aiIsRoom(S.cur)) {
       // 自带 AI 助手：不走服务器，也不占用「本地用户」的 Agent 通道
       var mineAi = null, listA = loadHist(AI_RID);
