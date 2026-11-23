@@ -160,10 +160,10 @@ html[data-skin="m3e"] #friendList .room {
 }
 /* 9.9 那套胶囊玻璃给行加了「柔光 + 内阴影描边」，换成方角行之后这些边会
    错位、还会在圆头像边上透出一圈彩色——这里全部关掉。 */
-html[data-skin="m3e"] #roomList .room::before,
-html[data-skin="m3e"] #friendList .room::before,
-html[data-skin="m3e"] #roomList .room::after,
-html[data-skin="m3e"] #friendList .room::after {
+html[data-skin] #roomList .room::before,
+html[data-skin] #friendList .room::before,
+html[data-skin] #roomList .room::after,
+html[data-skin] #friendList .room::after {
   content: none !important;
   background: none !important;
   box-shadow: none !important;
@@ -1356,4 +1356,16 @@ html[data-skin] .me-avatar,
 html[data-skin] .pick-ava,
 html[data-skin] .peer-ava {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--m3e-surface) 92%, transparent) !important;
+}
+
+/* 9.9 给每张会话卡片挂了「0 10px 24px 紫蓝外发光」，在玻璃/壁纸上会拖成一条
+   错位的亮青色光带（WebView 里尤其明显）。两条皮肤都去掉，改用干净的细描边。 */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room,
+html[data-skin] .friend-list .friend-row {
+  box-shadow: none !important;
+  border-width: 1px !important;
+  border-color: color-mix(in srgb, var(--m3e-surface) 70%, transparent) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
