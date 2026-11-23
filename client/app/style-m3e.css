@@ -1894,8 +1894,19 @@ html[data-skin] .action-scrim {
 
 /* ---- 页面顶部：滚动时底栏/顶栏更强，静态页面弱一点，层次更清楚 ---- */
 html[data-skin] .tabbar {
-  background: color-mix(in srgb, var(--m3e-surface) calc((var(--glass-container-a) + .06) * 100%), transparent);
-  box-shadow: inset 0 1px 0 var(--glass-edge), 0 -8px 26px color-mix(in srgb, var(--accent) 12%, transparent);
+  /* 底栏要保持通透：太实就没玻璃边界、果冻弹动也看不出来。
+     只比通用玻璃厚一点点（+4%），并保留一圈亮边 + 顶部内高光 */
+  background: color-mix(in srgb, var(--m3e-surface) calc((var(--m3e-glass-a) + .04) * 100%), transparent);
+  border: 0 !important;
+  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35)) !important;
+  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35)) !important;
+  /* 玻璃边框用外描边画（圆角更顺），再加顶部内高光 —— 这是"果冻玻璃边"的观感来源 */
+  box-shadow:
+    0 0 0 1px var(--m3e-glass-line),
+    0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent),
+    inset 0 1.5px 0 var(--m3e-glass-hi),
+    inset 0 -1px 0 rgba(255, 255, 255, .16),
+    0 -12px 34px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 /* 关掉玻璃时：上面新增的这些面也一起退回实底，别留半透明补丁 */
@@ -1954,3 +1965,68 @@ html[data-skin].no-glass .agent-row {
 }
 html[data-skin].no-glass .msgs .msg:not(.out) .bubble { background: var(--bg-soft) !important; }
 html[data-skin].no-glass .msgs .msg.out .bubble { background: var(--accent) !important; }
+
+/* ---------------------------------------------------------
+   小屏适配（小米 5：360×640 CSS 像素，DPR 3）
+   —— 640 高度里顶栏 80 + 底栏 80 吃掉 25%，信息区太挤；
+      这里把这两条压到 64，并收紧卡片/面板，给内容让出空间。
+   --------------------------------------------------------- */
+@media (max-height: 700px) {
+  html[data-skin="m3e"] .tabbar {
+    height: calc(64px + var(--safe-bottom));
+    padding: 8px 6px calc(var(--safe-bottom) + 8px);
+  }
+  html[data-skin="m3e"] .tab-item { font-size: 11px; padding: 2px 6px; gap: 2px; }
+  html[data-skin="m3e"] .tab-item .tab-ico { width: 56px; height: 28px; flex: 0 0 28px; font-size: 17px; }
+  html[data-skin] .topbar { min-height: 56px; padding: 6px 10px; }
+  html[data-skin] .topbar .bar-title, html[data-skin] .topbar-title { font-size: 16px; }
+  html[data-skin] .chat-top { min-height: 56px; padding: 6px 8px; }
+  html[data-skin] .chat-name { font-size: 14.5px; }
+  html[data-skin] .chat-sub { font-size: 10.5px; }
+  html[data-skin] #roomList .room { min-height: 66px; margin: 5px 8px !important; padding: 10px 12px !important; }
+  html[data-skin] #roomList .room + .room { margin-top: 9px !important; }
+  html[data-skin] #roomList .room .ava { width: 44px; height: 44px; }
+  html[data-skin] #roomList .room-name { font-size: 14.5px; }
+  html[data-skin] #roomList .room-last { font-size: 12.5px; }
+  html[data-skin] .composer { padding: 6px 8px calc(var(--safe-bottom) + 8px); }
+  html[data-skin] .msgs .msg .bubble { max-width: 78%; }
+  /* 面板：小屏一律走"底部抽屉 + 内部滚动 + 按钮吸底" */
+  html[data-skin] .action-card {
+    max-height: 92vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0;
+  }
+  /* 卡片本身当滚动容器（sticky 吸底才有效）；不要再 flex+hidden，否则内容被裁掉 */
+  #aiSheet .ai-foot {
+    position: sticky; bottom: 0; z-index: 2;
+    margin: 8px -16px 0; padding: 10px 16px calc(var(--safe-bottom) + 10px);
+    background: color-mix(in srgb, var(--m3e-surface) 92%, transparent);
+    border-top: 1px solid var(--m3e-glass-line-dark);
+  }
+  #aiSheet .ai-model-list { max-height: 22vh; }
+  #aiSheet .ai-test-out { max-height: 20vh; }
+  #aiSheet .ai-ava { width: 44px; height: 44px; font-size: 20px; }
+  #aiSheet .ai-idrow { margin: 2px 16px 8px; }
+  #aiSheet .ai-eff { padding: 7px 0; font-size: 12.5px; }
+  #aiSheet .ai-fetch { height: 38px; padding: 0 10px; font-size: 12.5px; }
+  #aiSheet .ai-input { height: 38px; }
+  #aiSheet .ai-rowhead { font-size: 12.5px; }
+  html[data-skin] .ai-model-chip { font-size: 10px; padding: 1px 7px; }
+}
+
+/* 更高的屏幕：AI 面板按钮也吸底，长列表滚起来按钮不会掉出去 */
+#aiSheet .ai-foot {
+  margin: 10px -4px 0;
+  padding-top: 4px;
+}
+#aiSheet .ai-foot .primary,
+#aiSheet .ai-foot .action-cancel { width: 100%; }
+
+/* 底栏选中图标（果冻胶囊）：加亮边 + 轻微浮起，弹动时看得见边界 */
+html[data-skin] .tabbar .tab-item.on .tab-ico {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    0 3px 10px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+html[data-skin] .tabbar .tab-item:active .tab-ico { transform: scale(.94); }
