@@ -1799,3 +1799,158 @@ html[data-skin] #roomList .room .ava { margin-right: 1px; }
   color: var(--text);
 }
 #aiSheet .ai-eff-hint { margin: 0 16px 6px; }
+
+/* ---------------------------------------------------------
+   全局玻璃增强（13.27）
+   —— 原来只有顶栏/底栏/输入条/面板 8 个面；这里把会话卡片、消息气泡、
+      我的页行、好友行、输入控件、按钮、悬浮层全部纳入，形成统一的玻璃层次：
+        容器层：厚（tabbar / 顶栏 / 面板）
+        卡片层：中（会话卡片 / 设置行 / 气泡）
+        控件层：薄（按钮 / 输入框 / 小胶囊）
+   --------------------------------------------------------- */
+html[data-skin] {
+  --glass-container-a: calc(0.72 + var(--row-alpha, .55) * 0.24);
+  --glass-card-a: calc(0.52 + var(--row-alpha, .55) * 0.26);
+  --glass-thin-a: calc(0.34 + var(--row-alpha, .55) * 0.30);
+  --glass-blur-card: calc(var(--m3e-glass-blur) * .62);
+  --glass-blur-thin: calc(var(--m3e-glass-blur) * .42);
+  --glass-edge: rgba(255, 255, 255, .42);
+  --glass-edge-dark: rgba(255, 255, 255, .10);
+}
+
+/* ---- 卡片层：会话卡片、好友行、我的页行 ---- */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room,
+html[data-skin] .friend-list .friend-row,
+html[data-skin] .me-row,
+html[data-skin] .agent-row {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-card-a) * 100%), transparent) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur-card)) saturate(var(--m3e-glass-sat, 1.35));
+  backdrop-filter: blur(var(--glass-blur-card)) saturate(var(--m3e-glass-sat, 1.35));
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 4px 16px color-mix(in srgb, var(--accent) 9%, transparent);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur-card) * .55)) saturate(var(--m3e-glass-sat, 1.35)) !important;
+  backdrop-filter: blur(calc(var(--glass-blur-card) * .55)) saturate(var(--m3e-glass-sat, 1.35)) !important;
+  transition: background-color .18s ease, box-shadow .18s ease, transform .18s cubic-bezier(.2,.9,.2,1);
+}
+html[data-skin][data-theme="dark"] #roomList .room,
+html[data-skin][data-theme="dark"] #friendList .room,
+html[data-skin][data-theme="dark"] .friend-list .friend-row,
+html[data-skin][data-theme="dark"] .me-row,
+html[data-skin][data-theme="dark"] .agent-row {
+  box-shadow: inset 0 1px 0 var(--glass-edge-dark), 0 4px 16px rgba(0,0,0,.28);
+}
+
+/* ---- 消息气泡也走玻璃（浅色玻璃 + 同色描边，不明显但质感统一） ---- */
+html[data-skin] .msgs .msg .bubble {
+  -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(140%);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+html[data-skin] .msgs .msg:not(.out) .bubble {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-thin-a) * 100%), transparent);
+}
+html[data-skin] .msgs .msg.out .bubble {
+  -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 2px 10px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* ---- 控件层：按钮、输入框、小胶囊 ---- */
+html[data-skin] .me-row .mini-btn,
+html[data-skin] .icon-btn,
+html[data-skin] .send-btn,
+html[data-skin] .tabbar .tab-item,
+html[data-skin] .ai-model-chip,
+html[data-skin] #aiSheet .ai-fetch,
+html[data-skin] #aiSheet .ai-eff,
+html[data-skin] #aiSheet .ai-model-row {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-thin-a) * 100%), transparent) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(150%);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+html[data-skin] .ai-input,
+html[data-skin] .search-input,
+html[data-skin] #text,
+html[data-skin] #aiSheet .ai-input,
+html[data-skin] #composer .composer-input {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-thin-a) * 92%), transparent) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur-thin));
+  backdrop-filter: blur(var(--glass-blur-thin));
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+/* ---- 悬浮层：面板/抽屉的遮罩带轻微模糊，卡片继续加厚 ---- */
+html[data-skin] .action-card,
+html[data-skin] .sheet-body {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-container-a) * 100%), transparent);
+  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35));
+  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35));
+}
+html[data-skin] .action-scrim {
+  -webkit-backdrop-filter: blur(calc(var(--m3e-glass-blur) * .22));
+  backdrop-filter: blur(calc(var(--m3e-glass-blur) * .22));
+}
+
+/* ---- 页面顶部：滚动时底栏/顶栏更强，静态页面弱一点，层次更清楚 ---- */
+html[data-skin] .tabbar {
+  background: color-mix(in srgb, var(--m3e-surface) calc((var(--glass-container-a) + .06) * 100%), transparent);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 -8px 26px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* 关掉玻璃时：上面新增的这些面也一起退回实底，别留半透明补丁 */
+html[data-skin].no-glass #roomList .room,
+html[data-skin].no-glass #friendList .room,
+html[data-skin].no-glass .friend-list .friend-row,
+html[data-skin].no-glass .me-row,
+html[data-skin].no-glass .agent-row,
+html[data-skin].no-glass .msg .bubble,
+html[data-skin].no-glass .msg.out .bubble,
+html[data-skin].no-glass #aiSheet .ai-fetch,
+html[data-skin].no-glass #aiSheet .ai-eff,
+html[data-skin].no-glass #aiSheet .ai-model-row,
+html[data-skin].no-glass .ai-model-chip,
+html[data-skin].no-glass .ai-input,
+html[data-skin].no-glass #text,
+html[data-skin].no-glass .action-scrim {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* 滚动中：卡片玻璃临时关掉（WebView 里 blur 很贵，滚动时最容易掉帧），停手 200ms 恢复 */
+body.scrolling-glass #roomList .room,
+body.scrolling-glass #friendList .room,
+body.scrolling-glass .msg .bubble,
+html[data-skin] .no-card-glass #roomList .room {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* 关掉液态玻璃：所有玻璃面（含新增的卡片/气泡/控件层）统一退回实底。
+   这段必须放在文件最后 —— 上面的卡片层规则带 !important，靠顺序+Y轴压住。 */
+html[data-skin].no-glass #roomList .room,
+html[data-skin].no-glass #friendList .room,
+html[data-skin].no-glass .friend-list .friend-row,
+html[data-skin].no-glass .me-row,
+html[data-skin].no-glass .agent-row,
+html[data-skin].no-glass .msgs .msg .bubble,
+html[data-skin].no-glass .msgs .msg.out .bubble,
+html[data-skin].no-glass #aiSheet .ai-fetch,
+html[data-skin].no-glass #aiSheet .ai-eff,
+html[data-skin].no-glass #aiSheet .ai-model-row,
+html[data-skin].no-glass .ai-model-chip,
+html[data-skin].no-glass .ai-input,
+html[data-skin].no-glass #text,
+html[data-skin].no-glass .action-scrim {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-skin].no-glass #roomList .room,
+html[data-skin].no-glass #friendList .room,
+html[data-skin].no-glass .friend-list .friend-row,
+html[data-skin].no-glass .me-row,
+html[data-skin].no-glass .agent-row {
+  background: var(--m3e-surface) !important;
+}
+html[data-skin].no-glass .msgs .msg:not(.out) .bubble { background: var(--bg-soft) !important; }
+html[data-skin].no-glass .msgs .msg.out .bubble { background: var(--accent) !important; }

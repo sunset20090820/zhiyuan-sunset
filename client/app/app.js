@@ -2284,16 +2284,20 @@
     else if (cw.wall !== 'none' || lw.wall !== 'none') root.setAttribute('data-wall', wallDark ? 'dark' : 'light');
     else root.removeAttribute('data-wall');
 
-    // 玻璃强度：0–100 → 模糊 4–44px、透明度 .18–.86、色渗 .02–.16
+    // 玻璃强度：0–100 → 模糊 6–58px、透明度 .14–.82、色渗 .02–.2
+    // 比之前更"厚"：模糊上限抬高、饱和更明显，滑块拉到中段就已经有玻璃感
     var lv = (typeof S.glassLevel === 'number') ? S.glassLevel : 55;
-    var blur = 4 + lv * 0.40;
-    var alpha = 0.18 + lv * 0.0068;
-    var tint = 0.02 + lv * 0.0014;
-    var sat = 150 + lv * 0.9;              // 150% – 240%
+    var blur = 6 + lv * 0.52;
+    var alpha = 0.14 + lv * 0.0068;
+    var tint = 0.02 + lv * 0.0018;
+    var sat = 165 + lv * 1.1;              // 165% – 275%
     root.style.setProperty('--row-blur', blur.toFixed(1) + 'px');
     root.style.setProperty('--row-sat', sat.toFixed(0) + '%');
     root.style.setProperty('--row-alpha', alpha.toFixed(3));
     root.style.setProperty('--row-tint', tint.toFixed(3));
+    // 卡片/列表用的"更薄一层"玻璃：比容器再透一点，才有前后层次
+    root.style.setProperty('--row-alpha-thin', Math.max(0.06, alpha - 0.1).toFixed(3));
+    root.style.setProperty('--row-blur-thin', Math.max(3, blur * 0.55).toFixed(1) + 'px');
     var gl = $('#glassLevel');
     if (gl && Number(gl.value) !== lv) gl.value = String(lv);
 
@@ -2970,6 +2974,20 @@
         if (topBar) topBar.classList.remove('compact');
         lastTop = box.scrollTop; lastT = 0;
       };
+    })();
+
+    // 卡片玻璃：滚动时不画模糊，停手 200ms 再恢复（WebView 里 blur 是重活）
+    (function bindGlassScroll() {
+      var timer = null;
+      var mark = function () {
+        document.body.classList.add('scrolling-glass');
+        clearTimeout(timer);
+        timer = setTimeout(function () { document.body.classList.remove('scrolling-glass'); }, 200);
+      };
+      ['#roomList', '#friendList', '#msgs'].forEach(function (sel) {
+        var el = $(sel);
+        if (el) el.addEventListener('scroll', mark, { passive: true });
+      });
     })();
 
     (function bindPullToRefresh() {
