@@ -1973,7 +1973,8 @@
       if (!list) return;
       var startY = 0, pulling = false, dy = 0;
       list.addEventListener('touchstart', function (e) {
-        if (list.scrollTop > 0 || !e.touches || !e.touches[0]) return;
+        // 真机上 scrollTop 常是 0.5 / 1.2 这种小数，卡死 >0 会导致下拉很难触发
+        if (list.scrollTop > 4 || !e.touches || !e.touches[0]) return;
         startY = e.touches[0].clientY; pulling = true; dy = 0;
         list.style.transition = 'none';
       }, { passive: true });
@@ -1987,8 +1988,8 @@
           list.style.setProperty('--pull', '0');
           return;
         }
-        // 橡皮筋：越拉越沉，最大 110px
-        var pull = Math.min(110, Math.pow(dy, 0.85) * 1.7);
+        // 橡皮筋：起手就有反馈，越拉越沉，上限 120px
+        var pull = Math.min(120, Math.pow(dy, 0.78) * 2.6);
         list.style.transform = 'translateY(' + pull.toFixed(1) + 'px)';
         list.classList.add('pulling');
         list.style.setProperty('--pull', pull.toFixed(1));
@@ -2013,8 +2014,8 @@
           list.classList.remove('pulling');
           list.style.setProperty('--pull', '0');
         }, 340);
-        if (dy > 64) toast('正在重新连接…');
-        if (dy > 64) {
+        if (dy > 40) toast('正在重新连接…');
+        if (dy > 40) {
           toast('正在重新连接…');
           try { if (ws) ws.close(); } catch (e) {}
           try { ws = null; } catch (e) {}
