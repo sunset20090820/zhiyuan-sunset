@@ -1643,3 +1643,42 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
   html[data-skin] .chat-top .ava,
   html[data-skin] .chat-top .chat-sub { transition: none !important; }
 }
+
+/* ---------------------------------------------------------
+   18) AI 助手面板：输入框整行铺开 + 点一下展开看全
+   （.agent-input 只有 96px，像接口地址这种根本看不全）
+   --------------------------------------------------------- */
+#aiSheet .ai-field { padding: 10px 16px 2px; }
+#aiSheet .ai-rowhead {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13.5px; color: var(--sub); margin-bottom: 6px;
+}
+#aiSheet .ai-inputwrap { display: flex; align-items: center; gap: 8px; }
+#aiSheet .ai-input {
+  flex: 1 1 auto; width: auto; min-width: 0; min-height: 44px;
+  padding: 11px 13px; border-radius: 13px;
+  border: 1px solid var(--line); background: var(--bg-soft); color: var(--text);
+  font-size: 14px; line-height: 1.35; text-align: left;
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+}
+#aiSheet .ai-input[name] { text-align: left; }
+#aiSheet .ai-expand {
+  flex: 0 0 auto; width: 44px; height: 44px; padding: 0;
+  border-radius: 13px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--sub);
+  font-size: 17px; line-height: 1;
+}
+#aiSheet .ai-expand:active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+#aiSheet .hint { margin: 6px 16px 12px; }
+#aiSheet .primary { margin: 2px 16px 10px; width: calc(100% - 32px); }
+
+/* 展开编辑：大 textarea，长地址也能一眼看全 */
+#aiExpand .ai-expand-text {
+  display: block; width: calc(100% - 32px); margin: 6px 16px 12px;
+  min-height: 108px; max-height: 46vh;
+  padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--bg-soft); color: var(--text);
+  font-size: 14px; line-height: 1.5; font-family: inherit;
+  resize: vertical; word-break: break-all; overflow-y: auto; text-align: left;
+}
+#aiExpand .primary { margin: 0 16px 10px; width: calc(100% - 32px); }

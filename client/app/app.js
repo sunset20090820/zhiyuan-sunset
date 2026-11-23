@@ -787,6 +787,36 @@
     if (!aiKeyStore()) { el.textContent = '还没填 API key'; return; }
     el.textContent = '已开启 · ' + S.ai.model + ' · ' + (S.ai.base || '').replace(/^https?:\/\//, '');
   }
+  /* 输入框展开：值太长时点开看全、改全 */
+  var aiExpandTarget = null;
+  var AI_FIELD_TITLES = { aiBase: '接口地址', aiModel: '模型', aiKey: 'API key', aiName: '名称' };
+  function aiOpenExpand(id) {
+    var src = $('#' + id);
+    if (!src || !$('#aiExpand')) return;
+    aiExpandTarget = id;
+    $('#aiExpandTitle').textContent = AI_FIELD_TITLES[id] || '编辑';
+    var v = src.value;
+    if (id === 'aiKey') { var real = aiKeyStore(); if (real) v = real; }
+    $('#aiExpandText').value = v || '';
+    var el = $('#aiExpand');
+    el.classList.remove('hidden');
+    requestAnimationFrame(function () {
+      el.classList.add('open');
+      setTimeout(function () { try { $('#aiExpandText').focus(); } catch (e) {} }, 140);
+    });
+  }
+  function aiCloseExpand(keep) {
+    var el = $('#aiExpand');
+    if (!el) return;
+    if (keep && aiExpandTarget) {
+      var src = $('#' + aiExpandTarget);
+      if (src) src.value = $('#aiExpandText').value;
+    }
+    aiExpandTarget = null;
+    el.classList.remove('open');
+    setTimeout(function () { try { el.classList.add('hidden'); } catch (e) {} }, 200);
+  }
+
   function renderAiPanel() {
     var a = S.ai || {};
     if ($('#aiOn')) $('#aiOn').checked = !!a.on;
@@ -2579,11 +2609,36 @@
       requestAnimationFrame(function () { el.classList.add('open'); });
     });
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
+    ['aiBase', 'aiModel', 'aiKey', 'aiName'].forEach(function (fid) {
+      var el = $('#' + fid);
+      if (el) on('#' + fid, 'click', function (e) { e.preventDefault(); try { el.blur(); } catch (err) {} aiOpenExpand(fid); });
+    });
+    on('#aiExpandOk', 'click', function () { aiCloseExpand(true); });
+    on('#aiExpandCancel', 'click', function () { aiCloseExpand(false); });
+    (function () {
+      var box = $('#aiExpand');
+      if (!box) return;
+      var scrim = box.querySelector('.action-scrim');
+      if (scrim) scrim.addEventListener('click', function () { aiCloseExpand(false); });
+      var wrap = box.querySelector('.ai-inputwrap');
+      if (wrap) wrap.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-expand]') : null;
+        if (b) aiOpenExpand(b.getAttribute('data-expand'));
+      });
+    })();
     on('#aiClose', 'click', function () {
       var el = $('#aiSheet');
       el.classList.remove('open');
       setTimeout(function () { el.classList.add('hidden'); }, 200);
     });
+    (function () {
+      var sheet = $('#aiSheet');
+      if (!sheet) return;
+      sheet.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-expand]') : null;
+        if (b) { e.preventDefault(); aiOpenExpand(b.getAttribute('data-expand')); }
+      });
+    })();
     on('#agentApply', 'click', function () {
       agentApply($('#agentOn').checked, Number($('#agentPort').value) || 6721, $('#agentLan').checked);
     });
