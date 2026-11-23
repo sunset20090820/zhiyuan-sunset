@@ -186,6 +186,14 @@
     <p class="remark-sub">填上 API key，会话列表里会多一个「AI 助手」，发消息它就回。和上面的「本地用户」互不影响，两个都开也行。</p>
     <label class="me-row agent-row"><span class="me-ico">🤖</span>开启 AI 助手
       <input id="aiOn" type="checkbox" class="agent-switch"></label>
+    <div class="ai-idrow">
+      <button id="aiAvatarBtn" class="ai-ava" type="button" aria-label="换头像">🤖</button>
+      <input id="aiAvatarInput" type="file" accept="image/*" class="hidden">
+      <div class="ai-idmeta">
+        <div class="ai-idname" id="aiIdName">AI 助手</div>
+        <div class="hint">点头像换图，名字在下面「名称」里改</div>
+      </div>
+    </div>
     <div class="ai-field">
       <div class="ai-rowhead"><span class="me-ico">🔗</span>接口地址</div>
       <div class="ai-inputwrap">

@@ -768,11 +768,58 @@
       return localStorage.getItem('pl.ai.key') || '';
     } catch (e) { return ''; }
   }
+  /* AI 助手只有一个：清掉重复条目、把 roomId 纠正回 dm:ai、记 ai:true 好识别 */
+  function aiNormalize() {
+    if (!S.dms) S.dms = {};
+    var keep = S.dms[AI_PEER] || null;
+    var changed = false;
+    Object.keys(S.dms).forEach(function (peerId) {
+      var d = S.dms[peerId];
+      if (!d) { delete S.dms[peerId]; changed = true; return; }
+      if (peerId === AI_PEER) return;
+      // 别的条目占着 dm:ai、或者标记成 AI 的：并进主条目后删掉，全局只留一个
+      if (d.roomId === AI_RID || d.ai === true) {
+        if (!keep) { keep = d; }
+        else if (!keep.avatar && d.avatar) { keep.avatar = d.avatar; changed = true; }
+        delete S.dms[peerId];
+        changed = true;
+      }
+    });
+    if (keep) {
+      var want = { roomId: AI_RID, ai: true, local: true };
+      if (S.ai && S.ai.name) want.name = S.ai.name;
+      if (S.ai && S.ai.avatar) want.avatar = S.ai.avatar;
+      Object.keys(want).forEach(function (k) {
+        if (keep[k] !== want[k]) { keep[k] = want[k]; changed = true; }
+      });
+      S.dms[AI_PEER] = keep;
+      if (!S.ai) S.ai = {};
+      if (keep.avatar && !S.ai.avatar) { S.ai.avatar = keep.avatar; changed = true; }
+    }
+    if (changed) {
+      // 归位结果要落盘，否则重开 App 又冒出一条重复的 AI
+      try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
+      try { save(); } catch (e) {}
+    }
+    return changed;
+  }
+
+  function aiIsRoom(rid) {
+    if (!rid) return false;
+    if (rid === AI_RID) return true;
+    var d = S.dms && S.dms[AI_PEER];
+    return !!(d && d.ai === true && d.roomId === rid);
+  }
+
   function ensureAiConv(on) {
     if (on) {
-      if (!S.dms[AI_PEER]) S.dms[AI_PEER] = { name: aiName(), roomId: AI_RID, local: true };
+      aiNormalize();
+      if (!S.dms[AI_PEER]) S.dms[AI_PEER] = { name: aiName(), roomId: AI_RID, local: true, ai: true };
       S.dms[AI_PEER].name = aiName();
       S.dms[AI_PEER].local = true;
+      S.dms[AI_PEER].ai = true;
+      S.dms[AI_PEER].roomId = AI_RID;
+      if (S.ai && S.ai.avatar) S.dms[AI_PEER].avatar = S.ai.avatar;
     } else if (S.dms[AI_PEER]) {
       delete S.dms[AI_PEER];
       if (S.cur === AI_RID) { S.cur = null; $('#chat').classList.add('hidden'); showTab(S.tab || 'chats'); }
@@ -780,6 +827,7 @@
     try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
     renderRooms();
   }
+  try { aiNormalize(); } catch (e) {}
   function aiReady() { return !!(S.ai && S.ai.on && S.ai.base && S.ai.model && aiKeyStore()); }
   function refreshAiStat() {
     var el = $('#aiStat');
@@ -833,6 +881,44 @@
     });
     box.innerHTML = rows;
   }
+  /* AI 助手头像：选本地图，裁成方形 256，存成 data URL（只在本机，不上传） */
+  function aiPickAvatar(file) {
+    if (!file) return;
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function () {
+      var size = 256;
+      var c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      var ctx = c.getContext('2d');
+      var sSide = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - sSide) / 2, (img.height - sSide) / 2, sSide, sSide, 0, 0, size, size);
+      var data = '';
+      try { data = c.toDataURL('image/jpeg', 0.82); } catch (err) { toast('图片处理失败'); return; }
+      URL.revokeObjectURL(url);
+      if (!S.ai) S.ai = {};
+      S.ai.avatar = data;
+      aiNormalize();
+      if (S.dms[AI_PEER]) S.dms[AI_PEER].avatar = data;
+      save();
+      try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
+      renderAiPanel(); renderRooms(); syncAiModelUi();
+      try { paintChatAva(AI_RID); } catch (e) {}
+      toast('头像换好了');
+    };
+    img.onerror = function () { toast('这张图打不开'); };
+    img.src = url;
+  }
+  function renderAiId() {
+    var b = $('#aiAvatarBtn');
+    if (b) {
+      if (S.ai && S.ai.avatar) b.innerHTML = '<img src="' + esc(S.ai.avatar) + '" alt="">';
+      else b.innerHTML = '🤖';
+      b.classList.toggle('has-img', !!(S.ai && S.ai.avatar));
+    }
+    if ($('#aiIdName')) $('#aiIdName').textContent = aiName();
+  }
+
   function aiToggleModel(m) {
     var picked = aiModelList();
     var i = picked.indexOf(m);
@@ -1017,6 +1103,7 @@
     if ($('#aiBase')) $('#aiBase').value = a.base || '';
     if ($('#aiModel')) $('#aiModel').value = a.model || '';
     if ($('#aiName')) $('#aiName').value = a.name || 'AI 助手';
+    renderAiId();
     renderAiModelList(); syncAiModelUi();
     if ($('#aiKey')) { var k = aiKeyStore(); $('#aiKey').value = k ? '••••••••' : ''; }
     refreshAiStat();
@@ -1033,6 +1120,10 @@
     save();
     ensureAiConv(!!a.on);
     refreshAiStat();
+    try { renderAiId(); } catch (e) {}
+    try { syncAiModelUi(); } catch (e) {}
+    try { renderRooms(); } catch (e) {}
+    try { paintChatAva(AI_RID); } catch (e) {}
     toast(a.on ? ('AI 助手已开启（' + a.model + '）') : 'AI 助手已关闭');
   }
   function normAiBase(v) {
@@ -1345,6 +1436,7 @@
   }
 
   function renderRooms() {
+    try { aiNormalize(); } catch (e) {}
     var html = '';
     function item(r, isDM, peerId) {
       var last = S.last[r.id];
@@ -1569,6 +1661,7 @@
   /* ---------------- 打开会话 ---------------- */
   function isDM(id) { return !!id && id.indexOf('dm:') === 0; }
   function openRoom(rid) {
+    if (aiIsRoom(rid) && rid !== AI_RID) rid = AI_RID;
     S.cur = rid;
     S.unread[rid] = 0; save(); renderRooms();
     showJumpButton(rid);
@@ -1711,7 +1804,7 @@
     S.last[S.cur] = { id: tid, text: text, name: '', ts: m.ts }; save();
     clearReply(); renderMentionBox();
     renderMsgs(true); renderRooms();
-    if (S.cur === AI_RID) {
+    if (S.cur === AI_RID || aiIsRoom(S.cur)) {
       // 自带 AI 助手：不走服务器，也不占用「本地用户」的 Agent 通道
       var mineAi = null, listA = loadHist(AI_RID);
       for (var ai2 = listA.length - 1; ai2 >= 0; ai2--) if (listA[ai2].id === tid) { mineAi = listA[ai2]; break; }
@@ -2627,7 +2720,7 @@
     (function bindPullToRefresh() {
       var list = $('#roomList');
       if (!list) return;
-      var startY = 0, pulling = false, dy = 0;
+      var startY = 0, pulling = false, dy = 0, pullRefreshAt = 0;
       list.addEventListener('touchstart', function (e) {
         // 真机上 scrollTop 常是 0.5 / 1.2 这种小数，卡死 >0 会导致下拉很难触发
         if (list.scrollTop > 4 || !e.touches || !e.touches[0]) return;
@@ -2669,8 +2762,8 @@
           list.classList.remove('pulling');
           list.style.setProperty('--pull', '0');
         }, 340);
-        if (dy > 72) toast('正在重新连接…');
-        if (dy > 72) {
+        if (dy > 130 && Date.now() - pullRefreshAt > 4000) {
+          pullRefreshAt = Date.now();
           toast('正在重新连接…');
           try { if (ws) ws.close(); } catch (e) {}
           try { ws = null; } catch (e) {}
@@ -2857,6 +2950,7 @@
       img.src = url;
     });
     on('#btnAi', 'click', function () {
+      aiNormalize();
       renderAiPanel();
       syncAiModelUi();
       var el = $('#aiSheet');
@@ -2866,6 +2960,15 @@
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
     on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
     on('#aiTest', 'click', function (e) { e.preventDefault(); aiTest(); });
+    on('#aiAvatarBtn', 'click', function (e) {
+      e.preventDefault();
+      var el = $('#aiAvatarInput');
+      if (el) { el.value = ''; el.click(); }
+    });
+    on('#aiAvatarInput', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      aiPickAvatar(f);
+    });
     on('#aiModelFilter', 'input', function () { renderAiModelList(); });
     (function () {
       var box = document.querySelector('#aiSheet .ai-presets');

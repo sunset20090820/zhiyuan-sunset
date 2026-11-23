@@ -1759,3 +1759,29 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 /* AI 助手：模型列表筛选框 */
 #aiSheet .ai-model-filter { margin: 2px 16px 8px; }
 #aiSheet .ai-model-filter.hidden { display: none; }
+
+/* 会话列表：卡片之间松一点，别贴在一起 */
+html[data-skin] #roomList .room {
+  margin: 6px 8px !important;
+  padding: 14px 14px 14px 12px;
+  min-height: 74px;
+}
+html[data-skin] #roomList { padding-top: 4px; padding-bottom: 8px; }
+/* 相邻卡片的小外边距会合并，单加一条保证上下都松：实际间隔约 12px */
+html[data-skin] #roomList .room + .room { margin-top: 12px !important; }
+html[data-skin] #roomList .room .room-line1 { margin-bottom: 3px; }
+html[data-skin] #roomList .room .ava { margin-right: 1px; }
+
+/* AI 助手面板：头像 + 名字 */
+#aiSheet .ai-idrow { display: flex; align-items: center; gap: 12px; margin: 4px 16px 10px; }
+#aiSheet .ai-ava {
+  flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--bg-soft);
+  font-size: 24px; line-height: 1; display: grid; place-items: center; overflow: hidden;
+  padding: 0;
+}
+#aiSheet .ai-ava.has-img { background: transparent; }
+#aiSheet .ai-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#aiSheet .ai-idmeta { min-width: 0; }
+#aiSheet .ai-idname { font-size: 15px; font-weight: 600; }
+#aiSheet .ai-idmeta .hint { margin: 2px 0 0; }
