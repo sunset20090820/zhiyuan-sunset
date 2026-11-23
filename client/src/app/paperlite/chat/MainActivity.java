@@ -347,6 +347,8 @@ public class MainActivity extends Activity {
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(30000);
             conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "okhttp/4.12.0");
             if (key != null && key.length() > 0) conn.setRequestProperty("Authorization", "Bearer " + key);
             int code = conn.getResponseCode();
             java.io.InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
@@ -410,48 +412,102 @@ public class MainActivity extends Activity {
             }).start();
         }
 
+        /** 一个地址试不通就换着试（少写 v1 / 多写 v1 / 带不带 /v1 前缀） */
+        private java.util.List<String> aiUrlCandidates(String base, String tail) {
+            java.util.List<String> out = new java.util.ArrayList<String>();
+            String b = base == null ? "" : base.trim().replaceAll("/+$", "");
+            if (b.length() == 0) b = "https://api.deepseek.com/v1";
+            out.add(b + tail);
+            String noVer = b.replaceAll("/v1$", "");
+            if (!noVer.equals(b)) {
+                out.add(noVer + tail);                              // 去掉 /v1 再试
+                out.add(noVer + "/v1" + tail);                       // 换个写法
+            } else {
+                out.add(b + "/v1" + tail);                           // 补上 /v1
+            }
+            return out;
+        }
+
         private String aiRequest(String base, String model, String messagesJson) throws Exception {
             String key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
             if (key == null || key.length() == 0) return "{\"ok\":false,\"error\":\"还没填 API key\"}";
-            String url = base.replaceAll("/+$", "") + "/chat/completions";
             org.json.JSONArray msgs = new org.json.JSONArray(messagesJson == null ? "[]" : messagesJson);
             org.json.JSONObject body = new org.json.JSONObject();
             body.put("model", model);
             body.put("messages", msgs);
             body.put("stream", false);
             byte[] bytes = body.toString().getBytes("UTF-8");
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-            conn.setConnectTimeout(12000);
-            conn.setReadTimeout(120000);
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            conn.setRequestProperty("Authorization", "Bearer " + key);
-            conn.setFixedLengthStreamingMode(bytes.length);
-            java.io.OutputStream os = conn.getOutputStream();
-            os.write(bytes);
-            os.flush();
-            os.close();
-            int code = conn.getResponseCode();
-            java.io.InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
-            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is, "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-            br.close();
-            String resp = sb.toString();
-            if (code >= 400) {
-                return "{\"ok\":false,\"error\":\"HTTP " + code + " " + esc4j(resp.length() > 160 ? resp.substring(0, 160) : resp) + "\"}";
+            java.util.List<String> urls = aiUrlCandidates(base, "/chat/completions");
+            String firstErr = null, tried = "";
+            for (int ui = 0; ui < urls.size(); ui++) {
+                String url = urls.get(ui);
+                if (tried.length() > 0) tried = tried + " → ";
+                tried = tried + url.replaceFirst("^https?://", "");
+                int code = -1;
+                String resp = "";
+                try {
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setConnectTimeout(12000);
+                    conn.setReadTimeout(120000);
+                    conn.setRequestMethod("POST");
+                    conn.setDoOutput(true);
+                    conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                    conn.setRequestProperty("Accept", "application/json");
+                    // 用正常客户端 UA：有些中转/Cloudflare 会把 Java/1.x 当机器人挡掉（502/403）
+                    conn.setRequestProperty("User-Agent", "okhttp/4.12.0");
+                    conn.setRequestProperty("Authorization", "Bearer " + key);
+                    conn.setFixedLengthStreamingMode(bytes.length);
+                    java.io.OutputStream os = conn.getOutputStream();
+                    os.write(bytes);
+                    os.flush();
+                    os.close();
+                    code = conn.getResponseCode();
+                    java.io.InputStream is2 = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                    StringBuilder sb = new StringBuilder();
+                    if (is2 != null) {
+                        java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is2, "UTF-8"));
+                        String line;
+                        while ((line = br.readLine()) != null) sb.append(line);
+                        br.close();
+                    }
+                    resp = sb.toString();
+                } catch (Exception e) {
+                    String m = String.valueOf(e.getMessage());
+                    firstErr = "连不上 " + url.replaceFirst("^https?://", "") + "：" + m;
+                    continue;                       // 网络层失败，换下一个地址
+                }
+                if (code >= 400) {
+                    String head = resp.length() > 200 ? resp.substring(0, 200) : resp;
+                    boolean html = head != null && (head.indexOf("<html") >= 0 || head.indexOf("<!DOCTYPE") >= 0
+                            || head.indexOf("error code:") >= 0 || head.trim().startsWith("<"));
+                    String why = html
+                        ? ("对方站点回的不是 JSON（网关/Cloudflare 错误页），说明是那个地址的服务或中转出了问题，不是手机这边：" + head)
+                        : ("HTTP " + code + " " + head);
+                    if (firstErr == null) firstErr = why + "（试过 " + tried + "）";
+                    // 404/405/502/503 这类往往是路径不对，换下一个地址再试；401/403 是 key 或权限，别再乱试
+                    if (code == 401 || code == 403) break;
+                    continue;
+                }
+                // 2xx：解析回复
+                org.json.JSONObject j = null;
+                try { j = new org.json.JSONObject(resp); } catch (Exception pe) {
+                    if (firstErr == null) firstErr = "返回的不是 JSON：" + (resp.length() > 200 ? resp.substring(0, 200) : resp);
+                    continue;
+                }
+                String text = "";
+                try {
+                    text = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content", "");
+                } catch (Exception e) {
+                    if (firstErr == null) firstErr = "返回里没有 choices[0].message.content：" + (resp.length() > 200 ? resp.substring(0, 200) : resp);
+                    continue;
+                }
+                if (text.length() == 0) {
+                    if (firstErr == null) firstErr = "模型返回了空内容";
+                    continue;
+                }
+                return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\",\"url\":\"" + esc4j(url.replaceFirst("^https?://", "")) + "\"}";
             }
-            org.json.JSONObject j = new org.json.JSONObject(resp);
-            String text = "";
-            try {
-                text = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content", "");
-            } catch (Exception e) {
-                return "{\"ok\":false,\"error\":\"返回里没有 choices[0].message.content：" + esc4j(resp.length() > 200 ? resp.substring(0, 200) : resp) + "\"}";
-            }
-            if (text.length() == 0) return "{\"ok\":false,\"error\":\"模型返回了空内容\"}";
-            return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\"}";
+            return "{\"ok\":false,\"error\":\"" + esc4j(firstErr == null ? "发不出去" : firstErr) + "\"}";
         }
 
         private String esc4j(String s) {

@@ -1748,3 +1748,10 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
   white-space: pre-wrap; word-break: break-all; max-height: 32vh; overflow-y: auto;
 }
 #aiSheet .ai-test-out.hidden { display: none; }
+
+/* AI 助手：常用服务商预设 */
+#aiSheet .ai-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 16px 2px; }
+#aiSheet .ai-preset {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--sub); font-size: 12px;
+}

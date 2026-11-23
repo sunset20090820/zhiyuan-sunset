@@ -1048,10 +1048,24 @@
     delete aiWait[rid];
     var j = null;
     try { j = JSON.parse(payload); } catch (e) {}
+    // 原生可能换了地址才通（少写/多写 /v1）：把通的地址记下来，下次直接用
+    if (j && j.ok && j.url) aiAdoptUrl(j.url);
     if (w.raw) w.raw(payload, j);
     if (j && j.ok) w.text(String(j.text || '(模型没返回内容)').trim());
     else w.text('连不上模型：' + ((j && j.error) || '未知错误'));
   };
+  // 原生实际打通的地址（不带 scheme，如 api.deepseek.com/v1/chat/completions）
+  function aiAdoptUrl(url) {
+    var u = String(url || '').replace(/\/chat\/completions$/i, '').replace(/\/+$/, '');
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    if (S.ai && S.ai.base !== u) {
+      S.ai.base = u;
+      save();
+      try { if ($('#aiBase')) $('#aiBase').value = u; } catch (e) {}
+      try { refreshAiStat(); } catch (e) {}
+    }
+  }
   function askAi(text, tid) {
     var hist = loadHist(AI_RID).filter(function (m) { return m && m.text && !m.sys; });
     var msgs = [{ role: 'system', content: '你是纸鸢里的 AI 助手，中文口语回答，简洁，不要用 Markdown 列表。' }];
@@ -2822,6 +2836,21 @@
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
     on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
     on('#aiTest', 'click', function (e) { e.preventDefault(); aiTest(); });
+    (function () {
+      var box = document.querySelector('#aiSheet .ai-presets');
+      if (!box) return;
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-base]') : null;
+        if (!b) return;
+        e.preventDefault();
+        if ($('#aiBase')) $('#aiBase').value = b.getAttribute('data-base');
+        var m = b.getAttribute('data-model');
+        if (m && $('#aiModel') && !$('#aiModel').value) $('#aiModel').value = m;
+        if (S.ai) { S.ai.base = b.getAttribute('data-base'); if (m) S.ai.model = m; }
+        renderAiModelList(); syncAiModelUi();
+        toast('已填入 ' + b.textContent + ' 的地址');
+      });
+    })();
     (function () {
       var mlist = $('#aiModelList');
       if (mlist) mlist.addEventListener('click', function (e) {
