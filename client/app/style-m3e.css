@@ -1173,12 +1173,13 @@ html[data-skin] .tab-item.pop { animation: m3e-label-pop 480ms cubic-bezier(.34,
 
 /* 切页时内容也弹一下（不同界面从侧面滑入 + 回弹） */
 @keyframes m3e-tab-in {
-  0%   { opacity: .4; transform: translateY(6px) scale(.985); }
-  60%  { opacity: 1;  transform: translateY(-1.5px) scale(1.004); }
-  100% { opacity: 1;  transform: translateY(0) scale(1); }
+  0%   { opacity: .25; transform: translateY(12px) scale(.972); }
+  55%  { opacity: 1;  transform: translateY(-2px) scale(1.006); }
+  78%  { transform: translateY(1px) scale(.999); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 html[data-skin] .screen.tab-switch,
-html[data-skin] .me-page.tab-switch { animation: m3e-tab-in 380ms cubic-bezier(.34, 1.56, .64, 1) both; }
+html[data-skin] .me-page.tab-switch { animation: m3e-tab-in 460ms cubic-bezier(.22, 1.12, .36, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-skin] .nav-pill,
@@ -1187,6 +1188,17 @@ html[data-skin] .me-page.tab-switch { animation: m3e-tab-in 380ms cubic-bezier(.
   html[data-skin] .tab-item.pop .tab-ico,
   html[data-skin] .screen.tab-switch,
   html[data-skin] .me-page.tab-switch { animation: none !important; transition: none !important; }
+}
+
+/* 退出聊天页时底栏被接回来：轻轻推上来，别硬切 */
+html[data-skin] .tabbar.bar-in { animation: m3e-bar-in 320ms cubic-bezier(.22, 1.06, .34, 1) both; }
+@keyframes m3e-bar-in {
+  0%   { opacity: 0; transform: translateY(18px); }
+  70%  { opacity: 1; transform: translateY(-2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin] .tabbar.bar-in { animation: none !important; }
 }
 
 /* 底栏整条随切换轻弹一下（很小，但让「果冻」是整块的而不是只有一个圆） */
@@ -1422,13 +1434,14 @@ html[data-skin] #friendList .room + .room { margin-top: 3px !important; }
 
 /* 卡片入场：滚动到视口里才浮现（JS 加 .row-in） */
 @keyframes m3e-row-in {
-  0%   { opacity: 0; transform: translateY(14px) scale(.97); }
-  62%  { opacity: 1; transform: translateY(-2px) scale(1.006); }
+  0%   { opacity: 0; transform: translateY(20px) scale(.962); }
+  58%  { opacity: 1; transform: translateY(-3px) scale(1.008); }
+  80%  { transform: translateY(1px) scale(.999); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 html[data-skin] #roomList .room.row-in,
 html[data-skin] #friendList .room.row-in {
-  animation: m3e-row-in 420ms cubic-bezier(.34, 1.4, .5, 1) both;
+  animation: m3e-row-in 480ms cubic-bezier(.22, 1.16, .36, 1) both;
 }
 
 /* 按下反馈：整张卡片轻微下压，头像跟着缩一点 */
@@ -1464,31 +1477,31 @@ html[data-skin] #roomList .room {
 
 /* 界面切换：按方向滑入 + 回弹 */
 @keyframes m3e-page-in-right {
-  0%   { opacity: .35; transform: translateX(26px) scale(.992); }
-  70%  { opacity: 1;   transform: translateX(-3px) scale(1.002); }
-  100% { opacity: 1;   transform: translateX(0) scale(1); }
+  0%   { opacity: .2; transform: translateX(38px) scale(.982); }
+  66%  { opacity: 1;  transform: translateX(-4px) scale(1.003); }
+  100% { opacity: 1;  transform: translateX(0) scale(1); }
 }
 @keyframes m3e-page-in-left {
-  0%   { opacity: .35; transform: translateX(-26px) scale(.992); }
-  70%  { opacity: 1;   transform: translateX(3px) scale(1.002); }
-  100% { opacity: 1;   transform: translateX(0) scale(1); }
+  0%   { opacity: .2; transform: translateX(-38px) scale(.982); }
+  66%  { opacity: 1;  transform: translateX(4px) scale(1.003); }
+  100% { opacity: 1;  transform: translateX(0) scale(1); }
 }
 html[data-skin] .screen.tab-switch.slide-right,
-html[data-skin] .me-page.tab-switch.slide-right { animation: m3e-page-in-right 360ms cubic-bezier(.34, 1.3, .5, 1) both; }
+html[data-skin] .me-page.tab-switch.slide-right { animation: m3e-page-in-right 440ms cubic-bezier(.22, 1.06, .34, 1) both; }
 html[data-skin] .screen.tab-switch.slide-left,
-html[data-skin] .me-page.tab-switch.slide-left { animation: m3e-page-in-left 360ms cubic-bezier(.34, 1.3, .5, 1) both; }
+html[data-skin] .me-page.tab-switch.slide-left { animation: m3e-page-in-left 440ms cubic-bezier(.22, 1.06, .34, 1) both; }
 
 /* 进聊天页：从右侧推入；退出：往右侧退走 */
 @keyframes m3e-chat-in {
-  0%   { opacity: .5; transform: translateX(34px); }
-  72%  { opacity: 1;  transform: translateX(-4px); }
-  100% { opacity: 1;  transform: translateX(0); }
+  0%   { opacity: .35; transform: translateX(56px) scale(.985); }
+  68%  { opacity: 1;  transform: translateX(-6px) scale(1.002); }
+  100% { opacity: 1;  transform: translateX(0) scale(1); }
 }
 @keyframes m3e-chat-out {
   0%   { opacity: 1; transform: translateX(0); }
   100% { opacity: 0; transform: translateX(34px); }
 }
-html[data-skin] .chat.chat-open { animation: m3e-chat-in 320ms cubic-bezier(.34, 1.25, .5, 1) both; }
+html[data-skin] .chat.chat-open { animation: m3e-chat-in 400ms cubic-bezier(.22, 1.1, .34, 1) both; }
 html[data-skin] .chat.chat-close { animation: m3e-chat-out 200ms cubic-bezier(.4, 0, .7, .2) both; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1548,9 +1561,11 @@ html[data-skin] .msgs { animation: none; }
 
 html[data-skin] .msgs {
   /* 从顶部往外长：底边多出去的部分被 .chat 裁掉，顶上不会露缝 */
-  transform: translateY(var(--flow-ty, 0px)) scaleY(var(--flow-sy, 1));
+  transform:
+    translateY(calc(var(--flow-ty, 0px) + var(--flow-lean, 0px)))
+    scaleY(var(--flow-sy, 1));
   transform-origin: top center;
-  transition: transform 340ms cubic-bezier(.2, .9, .25, 1.14);
+  transition: transform 420ms cubic-bezier(.16, .94, .24, 1.16);
   will-change: transform;
   /* 安卓自带的拉扯发光会和自己的橡皮筋打架 */
   overscroll-behavior-y: contain;
@@ -1567,10 +1582,10 @@ html[data-skin] .recording-bar { position: relative; z-index: 4; }
 /* 顶栏收起：高度和留白一起缩，头像变小，副标题淡出 */
 html[data-skin] .chat-top {
   transition:
-    height 240ms cubic-bezier(.2, .9, .25, 1.1),
-    min-height 240ms cubic-bezier(.2, .9, .25, 1.1),
-    padding 240ms cubic-bezier(.2, .9, .25, 1.1),
-    box-shadow 240ms ease;
+    height 300ms cubic-bezier(.16, .94, .24, 1.12),
+    min-height 300ms cubic-bezier(.16, .94, .24, 1.12),
+    padding 300ms cubic-bezier(.16, .94, .24, 1.12),
+    box-shadow 300ms ease;
 }
 html[data-skin] .chat-top .ava {
   transition:

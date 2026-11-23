@@ -1206,6 +1206,14 @@
     S.cur = null;
     renderRooms();
     showTab(S.tab || 'chats');
+    // 底栏是被接回来的，硬切会「啪」一下冒出来：轻轻推上来
+    var barEl = $('#tabbar');
+    if (barEl && !barEl.classList.contains('hidden')) {
+      barEl.classList.remove('bar-in');
+      void barEl.offsetWidth;
+      barEl.classList.add('bar-in');
+      setTimeout(function () { try { barEl.classList.remove('bar-in'); } catch (e) {} }, 380);
+    }
   }
 
   /* ---------------- 发送 ---------------- */
@@ -2020,17 +2028,18 @@
 
       var topBar = document.querySelector('.chat-top');
       var lastTop = box.scrollTop, lastT = 0, idleTimer = null, raf = 0;
-      var MAX_STRETCH = 0.024, MAX_BAND = 84;
+      var MAX_STRETCH = 0.045, MAX_LEAN = 16, MAX_BAND = 120;
       var band = { active: false, dir: 0, startY: 0, edgeY: 0 };
 
       function setTy(v) { box.style.setProperty('--flow-ty', (Math.round(v * 100) / 100) + 'px'); }
+      function setLean(v) { box.style.setProperty('--flow-lean', (Math.round(v * 100) / 100) + 'px'); }
       function setSy(v) { box.style.setProperty('--flow-sy', v.toFixed(4)); }
       function live(on) {
         if (on) box.classList.add('flow-live');
         else box.classList.remove('flow-live');
       }
       // 停手：交给 CSS 过渡弹回原位
-      function settle() { live(false); setTy(0); setSy(1); }
+      function settle() { live(false); setTy(0); setLean(0); setSy(1); }
 
       // 顶栏：位置滞回，收起和展开各一个阈值
       function syncTopBar() {
@@ -2041,10 +2050,15 @@
         else if (compact && t < 40) topBar.classList.remove('compact');
       }
 
-      // v: px/ms，越快拉得越多，上限 2.4%
+      // v: px/ms，越快拉得越多，上限 4.5%
       function stretchOf(v) {
-        var k = Math.min(1, Math.abs(v) / 2.4);
+        var k = Math.min(1, Math.abs(v) / 1.5);
         return 1 + k * MAX_STRETCH;
+      }
+      // 跟手位移：顺着滚动方向轻轻甩一下，停手弹回
+      function leanOf(v) {
+        var k = Math.max(-1, Math.min(1, v / 2.2));
+        return -k * MAX_LEAN;
       }
 
       box.addEventListener('scroll', function () {
@@ -2060,6 +2074,7 @@
           raf = 0;
           live(true);
           setTy(0);
+          setLean(leanOf(v));
           setSy(stretchOf(v));
         });
         clearTimeout(idleTimer);
@@ -2097,10 +2112,11 @@
           return;
         }
         clearTimeout(idleTimer);
-        var pull = Math.min(MAX_BAND, Math.pow(d, 0.86) * 1.9) * band.dir;
+        var pull = Math.min(MAX_BAND, Math.pow(d, 0.82) * 2.4) * band.dir;
         live(true);
+        setLean(0);
         setTy(pull);
-        setSy(1 + Math.abs(pull) * 0.0004);
+        setSy(1 + Math.abs(pull) * 0.0006);
       }, { passive: true });
 
       function endBand() {
@@ -2112,6 +2128,7 @@
         requestAnimationFrame(function () {
           live(false);
           setTy(0);
+          setLean(0);
           setSy(1);
         });
       }
@@ -2122,7 +2139,7 @@
       box.__chatReset = function () {
         band.active = false; band.dir = 0;
         clearTimeout(idleTimer);
-        live(false); setTy(0); setSy(1);
+        live(false); setTy(0); setLean(0); setSy(1);
         if (topBar) topBar.classList.remove('compact');
         lastTop = box.scrollTop; lastT = 0;
       };
@@ -3872,7 +3889,11 @@
         setTimeout(function () { b.classList.remove('pop'); }, 560);
       }
     });
-    $('#tabbar').classList.toggle('hidden', !$('#chat').classList.contains('hidden'));
+    // 聊天页正在退场（chat-close）时也算已关闭：否则退场这 190ms 里底栏会被一起藏掉，
+    // 等 hidden 加上以后又没人把它打开，看起来就是「底栏莫名其妙消失了」
+    var chatEl = $('#chat');
+    var chatOpen = !!chatEl && !chatEl.classList.contains('hidden') && !chatEl.classList.contains('chat-close');
+    $('#tabbar').classList.toggle('hidden', chatOpen);
     markPainted($('#chats'), 400);
     markPainted($('#contacts'), 400);
     markPainted($('#mePage'), 400);
