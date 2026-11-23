@@ -1132,7 +1132,8 @@
     $('#chat').classList.remove('hidden');
     $('#chat').classList.remove('chat-close');
     $('#chat').classList.add('chat-open');
-    setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, 360);
+    // 要等进场动画（400ms）走完再撤类，不然会被截断
+    setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, 430);
     try {
       var _ct = document.querySelector('.chat-top');
       if (_ct) {
@@ -1220,7 +1221,7 @@
     var ch = $('#chat');
     if (ch && !ch.classList.contains('hidden') && !document.documentElement.classList.contains('no-motion')) {
       ch.classList.add('chat-close');
-      setTimeout(function () { try { ch.classList.remove('chat-close'); ch.classList.add('hidden'); } catch (e) {} }, 190);
+      setTimeout(function () { try { ch.classList.remove('chat-close'); ch.classList.add('hidden'); } catch (e) {} }, 215);
     } else {
       ch.classList.add('hidden');
     }

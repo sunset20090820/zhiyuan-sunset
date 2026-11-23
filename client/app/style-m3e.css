@@ -1491,16 +1491,23 @@ html[data-skin] .me-page.tab-switch.slide-right { animation: m3e-page-in-right 4
 html[data-skin] .screen.tab-switch.slide-left,
 html[data-skin] .me-page.tab-switch.slide-left { animation: m3e-page-in-left 440ms cubic-bezier(.22, 1.06, .34, 1) both; }
 
-/* 进聊天页：从右侧推入；退出：往右侧退走 */
+/* 进聊天页：从「比屏幕略大」缩放回来（zoom-in），全程不透明；
+   任何一帧都比屏幕大 → 底下的会话列表一帧都露不出来。
+   以前用 opacity .35 + 右移，开头那几帧整个聊天页是半透明的，
+   底下的主页面就透出来了 = 「打开会话时闪一下主页面」。 */
 @keyframes m3e-chat-in {
-  0%   { opacity: .35; transform: translateX(56px) scale(.985); }
-  68%  { opacity: 1;  transform: translateX(-6px) scale(1.002); }
-  100% { opacity: 1;  transform: translateX(0) scale(1); }
+  0%   { opacity: 1; transform: scale(1.06) translateY(8px); }
+  70%  { opacity: 1; transform: scale(1.002) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 @keyframes m3e-chat-out {
   0%   { opacity: 1; transform: translateX(0); }
   100% { opacity: 0; transform: translateX(34px); }
 }
+/* 基础皮肤的 .chat 自带 screen-in：chat-open 一撤掉，animation-name 变回 screen-in，
+   它会整页再淡入一次（opacity .72 + 右移），看起来又是主页面闪一下。
+   聊天页的进场/退场完全自己管，这里把基础那条关掉。 */
+html[data-skin] .chat { animation: none; }
 html[data-skin] .chat.chat-open { animation: m3e-chat-in 400ms cubic-bezier(.22, 1.1, .34, 1) both; }
 html[data-skin] .chat.chat-close { animation: m3e-chat-out 200ms cubic-bezier(.4, 0, .7, .2) both; }
 
