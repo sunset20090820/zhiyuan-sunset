@@ -976,9 +976,11 @@ html[data-skin] #roomList,
 html[data-skin] #friendList,
 html[data-skin] .me-card,
 html[data-skin] .me-group {
-  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 100%), transparent);
-  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat)) brightness(1.06);
-  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat)) brightness(1.06);
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent);
+  /* 保守配方：只用模糊 + 适度饱和。brightness() 会跟着背景整体提亮，
+     在 Android WebView 上容易出现发灰/发脏的观感。 */
+  -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(1.35);
+  backdrop-filter: blur(var(--m3e-glass-blur)) saturate(1.35);
   border: 1px solid var(--m3e-glass-line);
   box-shadow:
     inset 0 1px 0 var(--m3e-glass-hi),
@@ -1000,6 +1002,14 @@ html[data-skin][data-theme="dark"] .me-group {
     inset 0 1px 0 rgba(255, 255, 255, .10),
     inset 0 -1px 0 rgba(255, 255, 255, .04),
     0 12px 32px rgba(0, 0, 0, .45);
+}
+
+/* 列表/卡片：底更厚，避免头像边缘透出壁纸色 */
+html[data-skin] #roomList,
+html[data-skin] #friendList,
+html[data-skin] .me-card,
+html[data-skin] .me-group {
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 100%), transparent);
 }
 
 /* 顶栏 / 底栏 / 输入条：只留一条玻璃高光边，不要整圈描边 */
@@ -1065,9 +1075,9 @@ html[data-skin] .nav-pill {
   margin-left: calc(var(--pill-x, 0px) * 0);
   border-radius: var(--m3e-full);
   /* 玻璃：半透明容器色 + 背后模糊，不再是一块实色 */
-  background: color-mix(in srgb, var(--m3e-secondary-container) 56%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(190%) brightness(1.08);
-  backdrop-filter: blur(14px) saturate(190%) brightness(1.08);
+  /* 不再自己上 backdrop-filter：父级底栏已经在模糊，嵌套背景模糊在 WebView 里
+     会糊出灰块/色斑。这里用「半透明色 + 高光 + 边框」做出玻璃质感。 */
+  background: color-mix(in srgb, var(--m3e-secondary-container) 72%, transparent);
   /* 玻璃边框：浅底上纯白会隐形，所以边框用「上白下带色」的渐变 */
   border: 1px solid transparent;
   background-image:
