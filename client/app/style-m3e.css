@@ -1415,3 +1415,80 @@ html[data-skin] #friendList,
 html[data-skin] .friend-list { padding: 6px; }
 html[data-skin] #roomList .room + .room,
 html[data-skin] #friendList .room + .room { margin-top: 3px !important; }
+
+/* ---------------------------------------------------------
+   15) 列表卡片动画 / 界面切换过渡
+   --------------------------------------------------------- */
+
+/* 卡片入场：滚动到视口里才浮现（JS 加 .row-in） */
+@keyframes m3e-row-in {
+  0%   { opacity: 0; transform: translateY(14px) scale(.97); }
+  62%  { opacity: 1; transform: translateY(-2px) scale(1.006); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+html[data-skin] #roomList .room.row-in,
+html[data-skin] #friendList .room.row-in {
+  animation: m3e-row-in 420ms cubic-bezier(.34, 1.4, .5, 1) both;
+}
+
+/* 按下反馈：整张卡片轻微下压，头像跟着缩一点 */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room {
+  transition:
+    transform 160ms cubic-bezier(.34, 1.4, .5, 1),
+    background-color 140ms linear,
+    border-color 140ms linear;
+  transform-origin: center;
+}
+html[data-skin] #roomList .room:active,
+html[data-skin] #friendList .room:active {
+  transform: scale(.975);
+}
+html[data-skin] #roomList .room:active .ava,
+html[data-skin] #friendList .room:active .ava { transform: scale(.94); }
+
+/* 下拉时的橡皮筋：列表被平移时，卡片纵向轻微拉伸 */
+html[data-skin] #roomList.pulling .room {
+  /* 入场动画用了 fill: both，会一直占着 transform，这里必须关掉动画才能拉得动 */
+  animation: none !important;
+  transform: scaleY(calc(1 + var(--pull, 0) * 0.0016));
+  transition: transform 60ms linear;
+}
+
+/* 界面切换：按方向滑入 + 回弹 */
+@keyframes m3e-page-in-right {
+  0%   { opacity: .35; transform: translateX(26px) scale(.992); }
+  70%  { opacity: 1;   transform: translateX(-3px) scale(1.002); }
+  100% { opacity: 1;   transform: translateX(0) scale(1); }
+}
+@keyframes m3e-page-in-left {
+  0%   { opacity: .35; transform: translateX(-26px) scale(.992); }
+  70%  { opacity: 1;   transform: translateX(3px) scale(1.002); }
+  100% { opacity: 1;   transform: translateX(0) scale(1); }
+}
+html[data-skin] .screen.tab-switch.slide-right,
+html[data-skin] .me-page.tab-switch.slide-right { animation: m3e-page-in-right 360ms cubic-bezier(.34, 1.3, .5, 1) both; }
+html[data-skin] .screen.tab-switch.slide-left,
+html[data-skin] .me-page.tab-switch.slide-left { animation: m3e-page-in-left 360ms cubic-bezier(.34, 1.3, .5, 1) both; }
+
+/* 进聊天页：从右侧推入；退出：往右侧退走 */
+@keyframes m3e-chat-in {
+  0%   { opacity: .5; transform: translateX(34px); }
+  72%  { opacity: 1;  transform: translateX(-4px); }
+  100% { opacity: 1;  transform: translateX(0); }
+}
+@keyframes m3e-chat-out {
+  0%   { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(34px); }
+}
+html[data-skin] .chat.chat-open { animation: m3e-chat-in 320ms cubic-bezier(.34, 1.25, .5, 1) both; }
+html[data-skin] .chat.chat-close { animation: m3e-chat-out 200ms cubic-bezier(.4, 0, .7, .2) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin] #roomList .room,
+  html[data-skin] #friendList .room,
+  html[data-skin] .chat.chat-open,
+  html[data-skin] .chat.chat-close,
+  html[data-skin] .screen.tab-switch,
+  html[data-skin] .me-page.tab-switch { animation: none !important; transition: none !important; }
+}

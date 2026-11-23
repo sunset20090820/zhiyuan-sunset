@@ -961,12 +961,50 @@
     box.innerHTML = html;
     if (scroller && keepScroll) scroller.scrollTop = keepScroll;
     markPainted(box, 600);
+    try { observeRows(box); } catch (e) {}
   }
 
   /* 首屏入场动画只播一次：播完打个 painted，之后重绘不再重播 */
   function markPainted(el, delay) {
     if (!el || el.classList.contains('painted')) return;
     setTimeout(function () { try { el.classList.add('painted'); } catch (e) {} }, delay || 600);
+  }
+
+  /* 卡片滚动到场才浮现：只对还没露出的行加 .row-in，露过一次就不再管 */
+  var rowObserver = null;
+  function observeRows(box) {
+    if (!box) return;
+    if (!('IntersectionObserver' in window)) return;
+    if (!rowObserver) {
+      rowObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) {
+            en.target.classList.add('row-in');
+            rowObserver.unobserve(en.target);
+          }
+        });
+      }, { root: box, rootMargin: '0px 0px -8% 0px', threshold: 0.01 });
+    }
+    Array.prototype.forEach.call(box.querySelectorAll('.room'), function (el, i) {
+      if (el.classList.contains('painted-row')) return;
+      el.classList.add('painted-row');
+      el.style.animationDelay = (Math.min(i, 6) * 26) + 'ms';
+      rowObserver.observe(el);
+    });
+  }
+  /* 任何路径改动列表（renderRooms / renderContacts / 直接 innerHTML）都自动接上 */
+  function watchLists() {
+    ['#roomList', '#friendList'].forEach(function (sel) {
+      var box = $(sel);
+      if (!box || box.__watched) return;
+      box.__watched = true;
+      try {
+        new MutationObserver(function () {
+          try { observeRows(box); } catch (e) {}
+        }).observe(box, { childList: true });
+      } catch (e) {}
+      try { observeRows(box); } catch (e) {}
+    });
   }
   /* ---------------- 渲染：聊天页 ---------------- */
   function renderMsgs(force) {
@@ -1081,6 +1119,9 @@
     $('#chatName').textContent = r.name;
     setConn(connected);
     $('#chat').classList.remove('hidden');
+    $('#chat').classList.remove('chat-close');
+    $('#chat').classList.add('chat-open');
+    setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, 360);
     $('#tabbar').classList.add('hidden');
     markPainted($('#msgs'), 500);
     syncPinBtn();
@@ -1149,7 +1190,13 @@
     });
   }
   function closeRoom() {
-    $('#chat').classList.add('hidden');
+    var ch = $('#chat');
+    if (ch && !ch.classList.contains('hidden') && !document.documentElement.classList.contains('no-motion')) {
+      ch.classList.add('chat-close');
+      setTimeout(function () { try { ch.classList.remove('chat-close'); ch.classList.add('hidden'); } catch (e) {} }, 190);
+    } else {
+      ch.classList.add('hidden');
+    }
     S.cur = null;
     renderRooms();
     showTab(S.tab || 'chats');
@@ -1936,12 +1983,20 @@
         if (dy <= 0) { dy = 0; list.style.transform = ''; return; }
         var pull = Math.min(96, Math.pow(dy, 0.86) * 1.6);
         list.style.transform = 'translateY(' + pull + 'px)';
+        list.classList.add('pulling');
+        list.style.setProperty('--pull', String(pull));
       }, { passive: true });
       list.addEventListener('touchend', function () {
         if (!pulling) return;
         pulling = false;
         list.style.transition = 'transform .32s cubic-bezier(.2,.9,.2,1.2)';
         list.style.transform = '';
+        // 卡片先弹回原状，再撤掉拉伸状态
+        list.style.setProperty('--pull', '0');
+        setTimeout(function () {
+          list.classList.remove('pulling');
+          list.style.setProperty('--pull', '0');
+        }, 340);
         if (dy > 64) {
           toast('正在重新连接…');
           try { if (ws) ws.close(); } catch (e) {}
@@ -3618,6 +3673,7 @@
 
   function showTab(name, opts) {
     var byUser = !!(opts && opts.user);
+    var prevTab = S.tab;
     S.tab = name;
     $('#chats').classList.toggle('hidden', name !== 'chats');
     $('#contacts').classList.toggle('hidden', name !== 'contacts');
@@ -3656,10 +3712,12 @@
       }
       var page = name === 'me' ? $('#mePage') : (name === 'contacts' ? $('#contacts') : $('#chats'));
       if (page) {
-        page.classList.remove('tab-switch');
+        var order = { chats: 0, contacts: 1, me: 2 };
+        var dir = (order[name] || 0) >= (order[prevTab] || 0) ? 'slide-right' : 'slide-left';
+        page.classList.remove('tab-switch', 'slide-right', 'slide-left');
         void page.offsetWidth;
-        page.classList.add('tab-switch');
-        setTimeout(function () { page.classList.remove('tab-switch'); }, 460);
+        page.classList.add('tab-switch', dir);
+        setTimeout(function () { page.classList.remove('tab-switch', 'slide-right', 'slide-left'); }, 460);
       }
     }
 
@@ -3837,6 +3895,7 @@
     loadRemarks();
     loadStickers();
     try { applySkin(); } catch (e) {}
+    try { setTimeout(watchLists, 120); } catch (e) {}
     try {
       // 三个主页面：首屏动画播完就不再重播
       setTimeout(function () {
