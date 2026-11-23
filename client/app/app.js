@@ -6,6 +6,7 @@
   var LOCAL_RID = 'dm:local';
   var LOCAL_PEER = 'local';
   var AI_RID = 'dm:ai';
+  var lastSendPath = '';
   var AI_PEER = 'ai';
   var ROOMS_DEFAULT = [
     { id: 'lobby', name: '公共大厅', emoji: '💬', color: '#3390ec' },
@@ -771,6 +772,12 @@
   /* AI 助手只有一个：清掉重复条目、把 roomId 纠正回 dm:ai、记 ai:true 好识别 */
   /* 三种接入（公共大厅 / 本地用户 / AI 助手）各自只能有一个会话：
      把条目的 roomId 归位到规范 id、重复条目合并、历史记录搬过去、房间列表去重。 */
+  function roomExists(rid) {
+    if (!rid) return false;
+    for (var i = 0; i < (S.rooms || []).length; i++) if (S.rooms[i] && S.rooms[i].id === rid) return true;
+    return false;
+  }
+
   function dmRoomOf(peerId) {
     if (peerId === AI_PEER) return AI_RID;
     if (peerId === LOCAL_PEER) return LOCAL_RID;
@@ -856,7 +863,12 @@
       Object.keys(wantAi).forEach(function (k) {
         if (aiD[k] !== wantAi[k]) { aiD[k] = wantAi[k]; changed = true; }
       });
-      if (aiD.avatar && !S.ai.avatar) { S.ai.avatar = aiD.avatar; changed = true; }
+      // 只认 S.ai.avatar：以前的合并会把它写成别人的头像（用户遇到过"她用的是我的头像"）
+      if (S.ai.avatar !== aiD.avatar) {
+        if (S.ai.avatar) { aiD.avatar = S.ai.avatar; }
+        else { delete aiD.avatar; }
+        changed = true;
+      }
     }
     if (S.localAgent && S.localAgent.on) {
       if (!S.dms[LOCAL_PEER]) { S.dms[LOCAL_PEER] = { name: localAgentName(), roomId: LOCAL_RID, local: true }; changed = true; }
@@ -1065,6 +1077,43 @@
     } catch (e) { done([], e.message); }
   }
   /* ---------- 测试连接：把真实的 HTTP 结果摊开给人看 ---------- */
+  function aiDiag() {
+    var lines = [];
+    try {
+      lines.push('当前会话：' + (S.cur || '(无)'));
+      lines.push('最近一次发送走：' + (lastSendPath || '(还没发过)'));
+      var d = S.dms || {};
+      lines.push('私信条目：' + (Object.keys(d).length ? Object.keys(d).map(function (k) {
+        return k + '→' + (d[k] && d[k].roomId);
+      }).join('、') : '(空)'));
+      lines.push('AI 开启：' + (!!(S.ai && S.ai.on)) + ' · AI 房间号：' + AI_RID + ' · 头像：' + ((S.ai && S.ai.avatar) ? '有' : '无'));
+      lines.push('房间列表：' + (S.rooms || []).map(function (r) { return r && r.id; }).join('、'));
+      var aiHist = 0, last = null;
+      try { aiHist = (loadHist(AI_RID) || []).length; } catch (e) {}
+      try { last = S.last[AI_RID]; } catch (e) {}
+      lines.push('AI 历史：' + aiHist + ' 条' + (last ? ' · 最后一条在 ' + fmtTime(last.ts) : ''));
+      var lob = 0;
+      try { lob = (loadHist('lobby') || []).length; } catch (e) {}
+      lines.push('大厅历史：' + lob + ' 条');
+      var dup = {};
+      Object.keys(d).forEach(function (k) { var v = dmRoomOf(k); dup[v] = (dup[v] || 0) + 1; });
+      var bad = Object.keys(dup).filter(function (k) { return dup[k] > 1; });
+      lines.push('重复房间号：' + (bad.length ? bad.join('、') : '无'));
+      var name = $('#aiName') ? $('#aiName').value : '';
+      lines.push('面板名字：' + name + ' · 列表名：' + aiName());
+    } catch (e) { lines.push('自检出错：' + e.message); }
+    aiTestOut(lines.join('\n'));
+  }
+  function aiRepair() {
+    var did = false;
+    try { did = aiNormalize(); } catch (e) {}
+    renderRooms();
+    if (S.cur) { try { renderMsgs(true); } catch (e) {} }
+    fireDiag();
+    toast(did ? '会话已归位' : '会话本来就是对的');
+  }
+  function fireDiag() { try { aiDiag(); } catch (e) {} }
+
   function aiTestOut(text) {
     var el = $('#aiTestOut');
     if (!el) return;
@@ -1487,8 +1536,10 @@
     if (isDM(rid)) {
       var peerId = dmPeerOf(rid);
       var dd = (S.dms && S.dms[peerId]) || {};
-      url = peerAvatarUrl([peerId, dd.peerId, dd.name, r.name]) ||
-            absAvatar(dd.avatar) || absAvatar(r.avatar);
+      if (peerId === AI_PEER) url = absAvatar((S.ai && S.ai.avatar) || '');
+      else if (peerId === LOCAL_PEER) url = absAvatar((S.localAgent && S.localAgent.avatar) || '');
+      else url = peerAvatarUrl([peerId, dd.peerId, dd.name, r.name]) ||
+                 absAvatar(dd.avatar) || absAvatar(r.avatar);
       text = String(dd.name || r.name || '?').trim().slice(0, 1).toUpperCase() || '👤';
       bg = colorOf(peerId || r.name || '');
     } else if (r.avatar) {
@@ -1522,7 +1573,9 @@
       var avaText = r.emoji, avaBg = r.color;
       if (isDM) {
         var dd = (S.dms && S.dms[peerId]) || {};
-        avaUrl = peerAvatarUrl([peerId, dd.peerId, dd.name, r.name]);
+        if (peerId === AI_PEER) avaUrl = (S.ai && S.ai.avatar) || '';
+        else if (peerId === LOCAL_PEER) avaUrl = (S.localAgent && S.localAgent.avatar) || '';
+        else avaUrl = peerAvatarUrl([peerId, dd.peerId, dd.name, r.name]);
         avaText = String(dd.name || r.name || '?').trim().slice(0, 1).toUpperCase() || '👤';
         avaBg = colorOf(peerId || r.name || '');
       } else if (r.avatar) {
@@ -1885,6 +1938,14 @@
     S.last[S.cur] = { id: tid, text: text, name: '', ts: m.ts }; save();
     clearReply(); renderMentionBox();
     renderMsgs(true); renderRooms();
+    // 房间号为空/认不出来时绝不能发：服务器会把它当大厅消息（用户遇到过"发到公共大厅"）
+    if (!S.cur || (!isDM(S.cur) && !isGroup(S.cur) && !roomExists(S.cur))) {
+      try { aiNormalize(); } catch (e) {}
+      toast('这个会话的房间号不对，已自动修复，请重新打开会话再发');
+      renderMsgs(false);
+      return;
+    }
+    lastSendPath = (S.cur === AI_RID || aiIsRoom(S.cur)) ? 'ai' : (S.cur === LOCAL_RID ? 'local' : 'server');
     if (S.cur === AI_RID || aiIsRoom(S.cur)) {
       // 自带 AI 助手：不走服务器，也不占用「本地用户」的 Agent 通道
       var mineAi = null, listA = loadHist(AI_RID);
@@ -3041,6 +3102,8 @@
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
     on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
     on('#aiTest', 'click', function (e) { e.preventDefault(); aiTest(); });
+    on('#aiDiag', 'click', function (e) { e.preventDefault(); aiDiag(); });
+    on('#aiRepair', 'click', function (e) { e.preventDefault(); aiRepair(); });
     on('#aiAvatarBtn', 'click', function (e) {
       e.preventDefault();
       var el = $('#aiAvatarInput');

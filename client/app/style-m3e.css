@@ -1785,3 +1785,4 @@ html[data-skin] #roomList .room .ava { margin-right: 1px; }
 #aiSheet .ai-idmeta { min-width: 0; }
 #aiSheet .ai-idname { font-size: 15px; font-weight: 600; }
 #aiSheet .ai-idmeta .hint { margin: 2px 0 0; }
+#aiSheet .ai-test-row { flex-wrap: wrap; row-gap: 8px; }
