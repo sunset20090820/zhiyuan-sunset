@@ -860,13 +860,14 @@
       if (inAi) chip.textContent = (a.model || '模型') + ' ▾';
     }
   }
-  function aiFetchModels() {
+  function aiFetchModels(silent) {
     var base = normAiBase($('#aiBase') ? $('#aiBase').value : (S.ai && S.ai.base));
     var hint = $('#aiModelHint');
     if (!aiKeyStore()) { toast('先填 API key'); return; }
     if (hint) hint.textContent = '正在向 ' + base + ' 获取模型列表…';
     var btn = $('#aiFetchModels');
     if (btn) btn.disabled = true;
+    aiModelSilent = !!silent;
     var done = function (ids, err) {
       if (btn) btn.disabled = false;
       if (err) { if (hint) hint.textContent = '获取失败：' + err; toast('获取模型失败'); return; }
@@ -876,7 +877,7 @@
       // 当前模型不在新的列表里就换成第一个可用的
       if (ids.length && ids.indexOf(S.ai.model) < 0 && picked.indexOf(S.ai.model) < 0) S.ai.model = ids[0];
       save(); renderAiModelList(); syncAiModelUi();
-      toast('拿到 ' + ids.length + ' 个模型');
+      if (!silent) toast('拿到 ' + ids.length + ' 个模型');
     };
     try {
       if (window.PaperNative && window.PaperNative.aiModels) {
@@ -919,7 +920,14 @@
         aiAskNative(base, model, msgs, function () { /* 结果统一在 onRaw 里摊开 */ }, function (payload, j) {
           clearTimeout(slow);
           if (j && j.ok) doneOne('通了，模型回：' + String(j.text || '').slice(0, 200));
-          else doneOne('失败：' + String(payload || '').slice(0, 400));
+          else {
+            var e2 = String(payload || '').slice(0, 400);
+            if (/model[^.]*not|not.?found|invalid.?model|model_not_found|not available/i.test(e2)) {
+              try { aiFetchModels(true); } catch (err) {}
+              e2 = e2 + '\n\n这个地址没有这个模型名：按「获取」看它实际提供哪些，勾一个再试。';
+            }
+            doneOne('失败：' + e2);
+          }
         });
         return;
       }
@@ -949,6 +957,7 @@
     if (hint) hint.textContent = '获取失败：' + ((j && j.error) || '未知错误');
     toast('获取模型失败');
   };
+  var aiModelSilent = false;
   var aiModelDone = function (ids) {
     var hint = $('#aiModelHint'), btn = $('#aiFetchModels');
     if (btn) btn.disabled = false;
@@ -959,7 +968,7 @@
     if (!S.ai.model && ids.length) S.ai.model = ids[0];
     save(); renderAiModelList(); syncAiModelUi();
     if (hint) hint.textContent = '拿到 ' + ids.length + ' 个模型';
-    toast('拿到 ' + ids.length + ' 个模型');
+    if (!aiModelSilent) toast('拿到 ' + ids.length + ' 个模型');
   };
 
   /* 输入框展开：值太长时点开看全、改全 */
@@ -1052,7 +1061,18 @@
     if (j && j.ok && j.url) aiAdoptUrl(j.url);
     if (w.raw) w.raw(payload, j);
     if (j && j.ok) w.text(String(j.text || '(模型没返回内容)').trim());
-    else w.text('连不上模型：' + ((j && j.error) || '未知错误'));
+    else {
+      var errText = String((j && j.error) || '未知错误');
+      var modelBad = /model[^.]*not|not.?found|invalid.?model|model_not_found|not available|does not exist/i.test(errText);
+      if (modelBad) {
+        // 这个地址没有这个模型：顺手把它真正提供的模型抓回来，面板里就能直接勾
+        var oldModel = (S.ai && S.ai.model) || '';
+        try { aiFetchModels(true); } catch (e) {}
+        errText = errText + '｜模型名和这个地址对不上（当前填的是 ' + oldModel + '），点开 AI 面板按「获取」挑它真正提供的模型';
+        try { toast('这个地址没有 ' + oldModel + '，正在获取它的模型列表'); } catch (e) {}
+      }
+      w.text('连不上模型：' + errText);
+    }
   };
   // 原生实际打通的地址（不带 scheme，如 api.deepseek.com/v1/chat/completions）
   function aiAdoptUrl(url) {
