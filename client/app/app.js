@@ -806,6 +806,16 @@
     picked.forEach(function (m) { if (list.indexOf(m) < 0) list.push(m); });
     if (!list.length) {
       box.innerHTML = '<p class="ai-model-empty">还没获取过模型列表，点上面的「获取」。</p>';
+      var f0 = $('#aiModelFilter');
+      if (f0) f0.classList.add('hidden');
+      return;
+    }
+    var fEl = $('#aiModelFilter');
+    var q = fEl ? String(fEl.value || '').trim().toLowerCase() : '';
+    if (fEl) fEl.classList.toggle('hidden', list.length < 8);
+    if (q) list = list.filter(function (m) { return m.toLowerCase().indexOf(q) >= 0; });
+    if (!list.length) {
+      box.innerHTML = '<p class="ai-model-empty">没有名字里带「' + esc(q) + '」的模型。</p>';
       return;
     }
     list.forEach(function (m) {
@@ -2856,6 +2866,7 @@
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
     on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
     on('#aiTest', 'click', function (e) { e.preventDefault(); aiTest(); });
+    on('#aiModelFilter', 'input', function () { renderAiModelList(); });
     (function () {
       var box = document.querySelector('#aiSheet .ai-presets');
       if (!box) return;

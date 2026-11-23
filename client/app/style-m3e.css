@@ -1755,3 +1755,7 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
   padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--bg-soft); color: var(--sub); font-size: 12px;
 }
+
+/* AI 助手：模型列表筛选框 */
+#aiSheet .ai-model-filter { margin: 2px 16px 8px; }
+#aiSheet .ai-model-filter.hidden { display: none; }
