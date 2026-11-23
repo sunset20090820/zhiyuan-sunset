@@ -943,6 +943,7 @@ html[data-skin] {
   --m3e-glass-blur: var(--row-blur, 26px);
   --m3e-glass-sat: var(--row-sat, 200%);
   --m3e-glass-a: var(--row-alpha, 0.55);
+  --m3e-glass-a-container: .88;   /* 列表/卡片用更厚的底，避免头像边缘透色 */
   --m3e-glass-line: rgba(255, 255, 255, .55);
   --m3e-glass-line-dark: rgba(255, 255, 255, .12);
   --m3e-glass-hi: rgba(255, 255, 255, .38);
@@ -975,7 +976,7 @@ html[data-skin] #roomList,
 html[data-skin] #friendList,
 html[data-skin] .me-card,
 html[data-skin] .me-group {
-  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent);
+  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 100%), transparent);
   -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat)) brightness(1.06);
   backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat)) brightness(1.06);
   border: 1px solid var(--m3e-glass-line);
@@ -1333,3 +1334,16 @@ html[data-skin] #friendList .room-dm .ava {
    在 WebView 里可能在头像边缘露一圈杂色 */
 html[data-skin] #roomList .room,
 html[data-skin] #friendList .room { overflow: visible; }
+
+/* 头像边缘一圈「底色环」：把圆形抗锯齿那段混色定义成设计的一部分，
+   看起来是描边而不是脏边 */
+html[data-skin] .room .ava,
+html[data-skin] #roomList .room .ava,
+html[data-skin] #friendList .room .ava,
+html[data-skin] .chat-top .ava,
+html[data-skin] .mini-ava,
+html[data-skin] .me-avatar,
+html[data-skin] .pick-ava,
+html[data-skin] .peer-ava {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--m3e-surface) 92%, transparent) !important;
+}
