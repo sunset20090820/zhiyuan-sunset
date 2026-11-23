@@ -1122,6 +1122,12 @@
     $('#chat').classList.remove('chat-close');
     $('#chat').classList.add('chat-open');
     setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, 360);
+    try {
+      var _ct = document.querySelector('.chat-top');
+      if (_ct) _ct.classList.remove('compact');
+      var _ms = $('#msgs');
+      if (_ms && _ms.__chatReset) _ms.__chatReset();
+    } catch (e) {}
     $('#tabbar').classList.add('hidden');
     markPainted($('#msgs'), 500);
     syncPinBtn();
@@ -1999,6 +2005,127 @@
           }, 110);
         }, { passive: true });
       });
+    })();
+
+    /* 聊天页：消息区滑动动画
+       ① 滑动时消息区跟着手指拉伸（scaleY 跟手，停手带回弹），只拉不压——
+          压缩会让消息边缘露出底色条，拉伸是从顶部往外长，不会有缝
+       ② 已经到顶 / 到底还继续拖：橡皮筋跟着手指走，松手弹回
+       ③ 往下翻过 64px 顶栏收起（头像缩、副标题淡出），回到 40px 以内再展开
+          ——两个阈值分开，来回翻时不会抖 */
+    (function bindChatScrollAnim() {
+      var box = $('#msgs');
+      if (!box || box.__chatAnim) return;
+      box.__chatAnim = true;
+
+      var topBar = document.querySelector('.chat-top');
+      var lastTop = box.scrollTop, lastT = 0, idleTimer = null, raf = 0;
+      var MAX_STRETCH = 0.024, MAX_BAND = 84;
+      var band = { active: false, dir: 0, startY: 0, edgeY: 0 };
+
+      function setTy(v) { box.style.setProperty('--flow-ty', (Math.round(v * 100) / 100) + 'px'); }
+      function setSy(v) { box.style.setProperty('--flow-sy', v.toFixed(4)); }
+      function live(on) {
+        if (on) box.classList.add('flow-live');
+        else box.classList.remove('flow-live');
+      }
+      // 停手：交给 CSS 过渡弹回原位
+      function settle() { live(false); setTy(0); setSy(1); }
+
+      // 顶栏：位置滞回，收起和展开各一个阈值
+      function syncTopBar() {
+        if (!topBar) return;
+        var t = box.scrollTop;
+        var compact = topBar.classList.contains('compact');
+        if (!compact && t > 64) topBar.classList.add('compact');
+        else if (compact && t < 40) topBar.classList.remove('compact');
+      }
+
+      // v: px/ms，越快拉得越多，上限 2.4%
+      function stretchOf(v) {
+        var k = Math.min(1, Math.abs(v) / 2.4);
+        return 1 + k * MAX_STRETCH;
+      }
+
+      box.addEventListener('scroll', function () {
+        var now = performance.now();
+        var t = box.scrollTop;
+        var dt = lastT ? Math.max(8, now - lastT) : 16;
+        var v = (t - lastTop) / dt;          // px/ms，正=往下翻
+        lastTop = t; lastT = now;
+        syncTopBar();
+        if (band.dir) return;                // 橡皮筋期间由手势接管
+        if (raf) return;
+        raf = requestAnimationFrame(function () {
+          raf = 0;
+          live(true);
+          setTy(0);
+          setSy(stretchOf(v));
+        });
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(settle, 130);
+      }, { passive: true });
+
+      /* ---- 到顶 / 到底继续拖：橡皮筋 ---- */
+      function atTop() { return box.scrollTop <= 2; }
+      function atBottom() {
+        return box.scrollTop + box.clientHeight >= box.scrollHeight - 2;
+      }
+
+      box.addEventListener('touchstart', function (e) {
+        if (!e.touches || e.touches.length !== 1) { band.dir = 0; return; }
+        band.active = true; band.dir = 0;
+        band.startY = e.touches[0].clientY;
+      }, { passive: true });
+
+      box.addEventListener('touchmove', function (e) {
+        if (!band.active || !e.touches || e.touches.length !== 1) return;
+        var y = e.touches[0].clientY;
+        if (!band.dir) {
+          var d0 = y - band.startY;
+          // 起手方向 + 已经在边上，才接管；否则交给原生滚动。
+          // 起点用 touchstart 的位置，接管的这一下就有反馈（不会先空跳一次）
+          if (d0 > 0 && atTop()) { band.dir = 1; band.edgeY = band.startY; }
+          else if (d0 < 0 && atBottom()) { band.dir = -1; band.edgeY = band.startY; }
+          else return;
+        }
+        var d = (y - band.edgeY) * band.dir;  // 越过边界多远，正数=还在往外拽
+        if (d <= 0) {                         // 推回去了：立刻交回正常滚动
+          band.dir = 0;
+          clearTimeout(idleTimer);
+          settle();
+          return;
+        }
+        clearTimeout(idleTimer);
+        var pull = Math.min(MAX_BAND, Math.pow(d, 0.86) * 1.9) * band.dir;
+        live(true);
+        setTy(pull);
+        setSy(1 + Math.abs(pull) * 0.0004);
+      }, { passive: true });
+
+      function endBand() {
+        band.active = false;
+        if (!band.dir) return;
+        band.dir = 0;
+        clearTimeout(idleTimer);
+        // 先留着当前位移，下一帧再归零，才看得到弹回
+        requestAnimationFrame(function () {
+          live(false);
+          setTy(0);
+          setSy(1);
+        });
+      }
+      box.addEventListener('touchend', endBand, { passive: true });
+      box.addEventListener('touchcancel', endBand, { passive: true });
+
+      // 每次打开聊天页都回到常态（换会话时顶栏要是展开的）
+      box.__chatReset = function () {
+        band.active = false; band.dir = 0;
+        clearTimeout(idleTimer);
+        live(false); setTy(0); setSy(1);
+        if (topBar) topBar.classList.remove('compact');
+        lastTop = box.scrollTop; lastT = 0;
+      };
     })();
 
     (function bindPullToRefresh() {

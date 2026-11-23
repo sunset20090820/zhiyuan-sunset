@@ -1520,3 +1520,98 @@ html[data-skin] #friendList.lean-live { transition: none; }
   html[data-skin] #roomList,
   html[data-skin] #friendList { transform: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------
+   17) 聊天页：消息区滑动动画 + 顶栏收起
+   ① 滑动时消息区纵向拉伸（只拉不压——压缩会让消息边缘露出底色条），
+      停手由过渡弹回；越快拉得越多，上限 2.4%
+   ② 已经到顶 / 到底还继续拖：橡皮筋跟着手指走，松手弹回
+   ③ 往下翻过 64px 顶栏收起（头像缩小、副标题淡出），回到 40px 以内再展开
+   --------------------------------------------------------- */
+
+/* 拉伸和橡皮筋都要能被聊天页裁掉，别压到底栏上去；
+   底色跟消息区保持一致——顶上/底下被拽出来的那条缝才不会是个不同颜色的条 */
+html[data-skin] .chat {
+  overflow: hidden;
+  background-color: var(--tg-chat);
+  background-image:
+    linear-gradient(var(--chat-wall-dim, transparent), var(--chat-wall-dim, transparent)),
+    var(--chat-wall, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+/* 消息区原来带一条 fade-up 入场动画，fill: both 会一直占着 transform ——
+   滚动时的拉伸就永远不生效。入场交给整个聊天页的推入动画，这里关掉它。 */
+html[data-skin] .msgs { animation: none; }
+
+html[data-skin] .msgs {
+  /* 从顶部往外长：底边多出去的部分被 .chat 裁掉，顶上不会露缝 */
+  transform: translateY(var(--flow-ty, 0px)) scaleY(var(--flow-sy, 1));
+  transform-origin: top center;
+  transition: transform 340ms cubic-bezier(.2, .9, .25, 1.14);
+  will-change: transform;
+  /* 安卓自带的拉扯发光会和自己的橡皮筋打架 */
+  overscroll-behavior-y: contain;
+  z-index: 1;
+}
+/* 跟着手指走的时候不要过渡，松手才弹 */
+html[data-skin] .msgs.flow-live { transition: none; }
+
+/* 消息区被拉伸/平移后不许盖住输入条和回复条（flex 子项上写 z-index 就生效） */
+html[data-skin] .composer,
+html[data-skin] .reply-bar,
+html[data-skin] .recording-bar { position: relative; z-index: 4; }
+
+/* 顶栏收起：高度和留白一起缩，头像变小，副标题淡出 */
+html[data-skin] .chat-top {
+  transition:
+    height 240ms cubic-bezier(.2, .9, .25, 1.1),
+    min-height 240ms cubic-bezier(.2, .9, .25, 1.1),
+    padding 240ms cubic-bezier(.2, .9, .25, 1.1),
+    box-shadow 240ms ease;
+}
+html[data-skin] .chat-top .ava {
+  transition:
+    width 240ms cubic-bezier(.2, .9, .25, 1.15),
+    height 240ms cubic-bezier(.2, .9, .25, 1.15),
+    min-width 240ms cubic-bezier(.2, .9, .25, 1.15),
+    min-height 240ms cubic-bezier(.2, .9, .25, 1.15),
+    max-width 240ms cubic-bezier(.2, .9, .25, 1.15),
+    max-height 240ms cubic-bezier(.2, .9, .25, 1.15),
+    flex-basis 240ms cubic-bezier(.2, .9, .25, 1.15),
+    font-size 240ms ease;
+}
+html[data-skin] .chat-top .chat-sub {
+  transition: opacity 160ms ease, transform 220ms cubic-bezier(.2, .9, .25, 1.1);
+}
+html[data-skin] .chat-top .chat-name {
+  transition: font-size 220ms cubic-bezier(.2, .9, .25, 1.1);
+}
+
+html[data-skin] .chat-top.compact {
+  height: 46px;
+  min-height: 46px;
+  padding-top: calc(var(--safe-top) + 2px);
+  padding-bottom: 2px;
+  box-shadow:
+    inset 0 1px 0 var(--m3e-glass-hi, rgba(255, 255, 255, .5)),
+    0 4px 14px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+html[data-skin] .chat-top.compact .ava {
+  width: 32px; height: 32px;
+  min-width: 32px; min-height: 32px;
+  max-width: 32px; max-height: 32px;
+  flex: 0 0 32px;
+  font-size: 15px;
+}
+html[data-skin] .chat-top.compact .chat-sub { opacity: 0; transform: translateY(-4px); }
+html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin] .msgs { transform: none !important; transition: none !important; }
+  html[data-skin] .chat-top,
+  html[data-skin] .chat-top .ava,
+  html[data-skin] .chat-top .chat-sub { transition: none !important; }
+}
