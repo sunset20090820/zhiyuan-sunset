@@ -685,6 +685,9 @@
     }
     if (d.t === 'pm_history') {
       var peerId = d.with || '';
+      if (peerId === AI_PEER || peerId === LOCAL_PEER || /^dm:(ai|local)(\||$)/.test(String(d.room || ''))) {
+        return;      // AI / 本地是本机的，服务端别拿它的私信房间号覆盖我们
+      }
       upsertDm(peerId, d.room, d.peer && d.peer.name, d.peer && d.peer.uid, d.peer && d.peer.dev);
       try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
       if (S.cur && isDM(S.cur)) S.cur = d.room;
@@ -832,9 +835,18 @@
     try { saveHist(to); } catch (e) {}
     delete S.msgs[from];
     try { localStorage.removeItem(histKey(from)); } catch (e) {}
-    if (!S.last[to] && S.last[from]) { S.last[to] = S.last[from]; delete S.last[from]; }
-    if (S.unread[from]) { S.unread[to] = (S.unread[to] || 0) + S.unread[from]; delete S.unread[from]; }
-    if (S.pins[from]) { S.pins[to] = 1; delete S.pins[from]; }
+    try {
+      if (!S.last) S.last = {};
+      if (!S.last[to] && S.last[from]) { S.last[to] = S.last[from]; delete S.last[from]; }
+    } catch (e4) {}
+    try {
+      if (!S.unread) S.unread = {};
+      if (S.unread[from]) { S.unread[to] = (S.unread[to] || 0) + S.unread[from]; delete S.unread[from]; }
+    } catch (e5) {}
+    try {
+      if (!S.pins) S.pins = {};
+      if (S.pins[from]) { S.pins[to] = 1; delete S.pins[from]; }
+    } catch (e6) {}
     return moved;
   }
   function aiNormalize() {
@@ -861,8 +873,10 @@
       if ((isAi || isLocal) && d.local !== true) { d.local = true; changed = true; }
       if (old && old !== want) {
         // 旧房间号可能正被大厅/群聊占着，只有它不属于真房间时才搬历史
-        var realRoom = (S.rooms || []).some(function (x) { return x && x.id === old; });
-        if (!realRoom) { try { migrateHist(old, want); } catch (e) {} }
+        try {
+          var realRoom = (S.rooms || []).some(function (x) { return x && x.id === old; });
+          if (!realRoom) migrateHist(old, want);
+        } catch (e) {}
       }
     });
     // 2) 同一个 roomId 只留一个条目（优先 AI / 本地 / 有历史的）
@@ -919,6 +933,8 @@
   function aiIsRoom(rid) {
     if (!rid) return false;
     if (rid === AI_RID) return true;
+    if (/^dm:ai(\||$)/.test(rid)) return true;
+    if (/^dm:local(\||$)/.test(rid)) return true;
     var d = S.dms && S.dms[AI_PEER];
     return !!(d && d.ai === true && d.roomId === rid);
   }
@@ -1901,7 +1917,15 @@
   }
   function dmPeerOf(roomId) {
     var keys = Object.keys(S.dms);
-    for (var i = 0; i < keys.length; i++) if (S.dms[keys[i]].roomId === roomId) return keys[i];
+    for (var i = 0; i < keys.length; i++) {
+      if (S.dms[keys[i]] && S.dms[keys[i]].roomId === roomId) return keys[i];
+    }
+    // 服务端会把私信房间号写成 dm:<我>|<对方>，AI/本地也可能被写成这样
+    if (roomId && roomId.indexOf('dm:') === 0) {
+      var tail = roomId.slice(3).split('|')[0];
+      if (tail === AI_PEER || tail === LOCAL_PEER) return tail;
+      if (S.dms[tail]) return tail;
+    }
     return null;
   }
   function upsertDm(peerId, roomId, peerName, uid, altPeer) {
@@ -2034,7 +2058,7 @@
     var grp = isGroup(S.cur) ? groupOf(S.cur) : null;
     var outPayload = dmPeer ? { t: 'pm', to: dmPeer, text: text, tempId: tid, replyTo: quote }
       : grp ? { t: 'group_msg', id: grp.id, text: text, tempId: tid, replyTo: quote, mentions: mentions }
-      : Object.assign({ t: 'msg' }, payload);
+      : Object.assign({ t: 'msg', room: S.cur }, payload);
     if (!wsSend(outPayload)) {
       queue.push(dmPeer ? { pm: true, to: dmPeer, text: text, tempId: tid, replyTo: quote } : payload);
       toast('没连上服务器，恢复后会自动发出');
