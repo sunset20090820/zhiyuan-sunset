@@ -126,7 +126,7 @@
     }
     var ks = Object.keys(S.dms);
     for (var j = 0; j < ks.length; j++) {
-      if (S.dms[ks[j]].roomId === id) {
+      if (dmRoomOf(ks[j]) === id) {
         return { id: id, name: nameOf(ks[j], S.dms[ks[j]].name || '私信'), emoji: '👤', color: '#6b7d8f' };
       }
     }
@@ -769,35 +769,110 @@
     } catch (e) { return ''; }
   }
   /* AI 助手只有一个：清掉重复条目、把 roomId 纠正回 dm:ai、记 ai:true 好识别 */
+  /* 三种接入（公共大厅 / 本地用户 / AI 助手）各自只能有一个会话：
+     把条目的 roomId 归位到规范 id、重复条目合并、历史记录搬过去、房间列表去重。 */
+  function dmRoomOf(peerId) {
+    if (peerId === AI_PEER) return AI_RID;
+    if (peerId === LOCAL_PEER) return LOCAL_RID;
+    var d = (S.dms && S.dms[peerId]) || {};
+    return d.roomId || ('dm:' + peerId);
+  }
+  function migrateHist(from, to) {
+    if (!from || !to || from === to) return 0;
+    var a = [];
+    try { a = loadHist(from) || []; } catch (e) { a = []; }
+    if (!a.length) {
+      try { localStorage.removeItem(histKey(from)); } catch (e2) {}
+      return 0;
+    }
+    var b = [];
+    try { b = loadHist(to) || []; } catch (e) { b = []; }
+    var seen = {};
+    b.forEach(function (m) { if (m && m.id) seen[m.id] = 1; });
+    var moved = 0;
+    a.forEach(function (m) {
+      if (!m || !m.id || seen[m.id]) return;
+      b.push(m); seen[m.id] = 1; moved++;
+    });
+    if (!moved) { try { localStorage.removeItem(histKey(from)); } catch (e3) {} return 0; }
+    b.sort(function (x, y) { return (x.ts || 0) - (y.ts || 0); });
+    S.msgs[to] = b;
+    try { saveHist(to); } catch (e) {}
+    delete S.msgs[from];
+    try { localStorage.removeItem(histKey(from)); } catch (e) {}
+    if (!S.last[to] && S.last[from]) { S.last[to] = S.last[from]; delete S.last[from]; }
+    if (S.unread[from]) { S.unread[to] = (S.unread[to] || 0) + S.unread[from]; delete S.unread[from]; }
+    if (S.pins[from]) { S.pins[to] = 1; delete S.pins[from]; }
+    return moved;
+  }
   function aiNormalize() {
     if (!S.dms) S.dms = {};
-    var keep = S.dms[AI_PEER] || null;
     var changed = false;
+    // 1) 条目自愈：roomId 归位、打上身份标记、历史从旧 id 搬过来
     Object.keys(S.dms).forEach(function (peerId) {
       var d = S.dms[peerId];
       if (!d) { delete S.dms[peerId]; changed = true; return; }
-      if (peerId === AI_PEER) return;
-      // 别的条目占着 dm:ai、或者标记成 AI 的：并进主条目后删掉，全局只留一个
-      if (d.roomId === AI_RID || d.ai === true) {
-        if (!keep) { keep = d; }
-        else if (!keep.avatar && d.avatar) { keep.avatar = d.avatar; changed = true; }
+      var want = dmRoomOf(peerId);
+      var isAi = (peerId === AI_PEER) || d.ai === true;
+      var isLocal = (peerId === LOCAL_PEER) || d.local === true && !isAi;
+      if (isAi) { want = AI_RID; }
+      else if (isLocal) { want = LOCAL_RID; }
+      var old = d.roomId;
+      // 假条目占了真房间（大厅/群聊）的房间号：它不是会话，直接删掉，否则列表里多一行
+      if (!isAi && !isLocal && old && (S.rooms || []).some(function (x) { return x && x.id === old; })) {
         delete S.dms[peerId];
         changed = true;
+        return;
+      }
+      if (old !== want) { d.roomId = want; changed = true; }
+      if (isAi && d.ai !== true) { d.ai = true; changed = true; }
+      if ((isAi || isLocal) && d.local !== true) { d.local = true; changed = true; }
+      if (old && old !== want) {
+        // 旧房间号可能正被大厅/群聊占着，只有它不属于真房间时才搬历史
+        var realRoom = (S.rooms || []).some(function (x) { return x && x.id === old; });
+        if (!realRoom) { try { migrateHist(old, want); } catch (e) {} }
       }
     });
-    if (keep) {
-      var want = { roomId: AI_RID, ai: true, local: true };
-      if (S.ai && S.ai.name) want.name = S.ai.name;
-      if (S.ai && S.ai.avatar) want.avatar = S.ai.avatar;
-      Object.keys(want).forEach(function (k) {
-        if (keep[k] !== want[k]) { keep[k] = want[k]; changed = true; }
+    // 2) 同一个 roomId 只留一个条目（优先 AI / 本地 / 有历史的）
+    var byRoom = {};
+    Object.keys(S.dms).forEach(function (peerId) {
+      var rid = dmRoomOf(peerId);
+      if (!byRoom[rid]) { byRoom[rid] = peerId; return; }
+      var cur = byRoom[rid];
+      var score = function (p) { return (p === AI_PEER ? 3 : 0) + (p === LOCAL_PEER ? 2 : 0) + ((S.dms[p].avatar) ? 1 : 0); };
+      var loser = score(peerId) > score(cur) ? cur : peerId;
+      var win = loser === cur ? peerId : cur;
+      byRoom[rid] = win;
+      if (!S.dms[win].avatar && S.dms[loser].avatar) S.dms[win].avatar = S.dms[loser].avatar;
+      delete S.dms[loser];
+      changed = true;
+    });
+    // 3) AI / 本地：开着就必须恰好各有一条
+    if (S.ai && S.ai.on) {
+      if (!S.dms[AI_PEER]) { S.dms[AI_PEER] = { name: aiName(), roomId: AI_RID, local: true, ai: true }; changed = true; }
+      var aiD = S.dms[AI_PEER];
+      var wantAi = { roomId: AI_RID, ai: true, local: true, name: aiName() };
+      if (S.ai.avatar) wantAi.avatar = S.ai.avatar;
+      Object.keys(wantAi).forEach(function (k) {
+        if (aiD[k] !== wantAi[k]) { aiD[k] = wantAi[k]; changed = true; }
       });
-      S.dms[AI_PEER] = keep;
-      if (!S.ai) S.ai = {};
-      if (keep.avatar && !S.ai.avatar) { S.ai.avatar = keep.avatar; changed = true; }
+      if (aiD.avatar && !S.ai.avatar) { S.ai.avatar = aiD.avatar; changed = true; }
+    }
+    if (S.localAgent && S.localAgent.on) {
+      if (!S.dms[LOCAL_PEER]) { S.dms[LOCAL_PEER] = { name: localAgentName(), roomId: LOCAL_RID, local: true }; changed = true; }
+      else if (S.dms[LOCAL_PEER].roomId !== LOCAL_RID) { S.dms[LOCAL_PEER].roomId = LOCAL_RID; changed = true; }
+    }
+    // 4) 房间列表按 id 去重（服务器偶尔会重复下发）
+    if (S.rooms && S.rooms.length) {
+      var seenRoom = {};
+      var dedup = [];
+      S.rooms.forEach(function (r) {
+        if (!r || !r.id || seenRoom[r.id]) { changed = true; return; }
+        seenRoom[r.id] = 1; dedup.push(r);
+      });
+      if (dedup.length !== S.rooms.length) S.rooms = dedup;
     }
     if (changed) {
-      // 归位结果要落盘，否则重开 App 又冒出一条重复的 AI
       try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
       try { save(); } catch (e) {}
     }
@@ -1468,7 +1543,7 @@
     var list = [];
     Object.keys(S.dms).forEach(function (peerId) {
       var d = S.dms[peerId];
-      list.push({ r: { id: d.roomId, name: nameOf(peerId, d.name || '私信'), emoji: '👤', color: '#6b7d8f',
+      list.push({ r: { id: dmRoomOf(peerId), name: nameOf(peerId, d.name || '私信'), emoji: '👤', color: '#6b7d8f',
         avatar: d.avatar || '' }, isDM: true, peerId: peerId });
     });
     Object.keys(S.groups).forEach(function (gid) {
@@ -1661,7 +1736,13 @@
   /* ---------------- 打开会话 ---------------- */
   function isDM(id) { return !!id && id.indexOf('dm:') === 0; }
   function openRoom(rid) {
+    try { aiNormalize(); } catch (e) {}
     if (aiIsRoom(rid) && rid !== AI_RID) rid = AI_RID;
+    if (rid && rid.indexOf('dm:') === 0) {
+      var pid = dmPeerOf(rid);
+      if (pid === AI_PEER) rid = AI_RID;
+      else if (pid === LOCAL_PEER) rid = LOCAL_RID;
+    }
     S.cur = rid;
     S.unread[rid] = 0; save(); renderRooms();
     showJumpButton(rid);
