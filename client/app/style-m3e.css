@@ -1499,3 +1499,24 @@ html[data-skin] .chat.chat-close { animation: m3e-chat-out 200ms cubic-bezier(.4
   html[data-skin] .screen.tab-switch,
   html[data-skin] .me-page.tab-switch { animation: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------
+   16) 滚动跟随：列表随滚动轻微斜移 + 纵向拉伸，停下弹性回落
+   --------------------------------------------------------- */
+html[data-skin] #roomList,
+html[data-skin] #friendList {
+  transform:
+    translateY(calc(var(--pull-ty, 0px) + var(--lean-ty, 0px)))
+    scaleY(var(--lean-sy, 1));
+  transform-origin: top center;
+  transition: transform 300ms cubic-bezier(.2, .9, .25, 1.12);
+  will-change: transform;
+}
+/* 正在滚动时不加过渡，跟手；停下后由上面的过渡弹回 */
+html[data-skin] #roomList.lean-live,
+html[data-skin] #friendList.lean-live { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin] #roomList,
+  html[data-skin] #friendList { transform: none !important; transition: none !important; }
+}

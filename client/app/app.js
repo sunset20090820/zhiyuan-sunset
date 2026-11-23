@@ -1968,6 +1968,39 @@
       $('#agentSheet').classList.remove('hidden');
       requestAnimationFrame(function () { $('#agentSheet').classList.add('open'); });
     });
+    /* 滚动跟随动画：滚动时列表轻微斜移 + 纵向拉伸，停下弹性回落。
+       只改列表容器上的两个 CSS 变量，不逐行操作，滚动不掉帧。 */
+    (function bindScrollAnim() {
+      ['#roomList', '#friendList'].forEach(function (sel) {
+        var list = $(sel);
+        if (!list || list.__scrollAnim) return;
+        list.__scrollAnim = true;
+        var lastTop = list.scrollTop, lastT = 0, idleTimer = null, raf = 0;
+        list.addEventListener('scroll', function () {
+          var now = performance.now();
+          var top = list.scrollTop;
+          var dt = lastT ? Math.max(8, now - lastT) : 16;
+          var v = (top - lastTop) / dt;          // px/ms，正=往下滚
+          lastTop = top; lastT = now;
+          if (raf) return;
+          raf = requestAnimationFrame(function () {
+            raf = 0;
+            var lean = Math.max(-12, Math.min(12, -v * 26));       // 反向斜移感
+            var sy = 1 + Math.min(0.035, Math.abs(v) * 0.012);     // 纵向轻微拉伸
+            list.classList.add('lean-live');
+            list.style.setProperty('--lean-ty', lean.toFixed(2) + 'px');
+            list.style.setProperty('--lean-sy', sy.toFixed(4));
+          });
+          clearTimeout(idleTimer);
+          idleTimer = setTimeout(function () {
+            list.classList.remove('lean-live');
+            list.style.setProperty('--lean-ty', '0px');
+            list.style.setProperty('--lean-sy', '1');
+          }, 110);
+        }, { passive: true });
+      });
+    })();
+
     (function bindPullToRefresh() {
       var list = $('#roomList');
       if (!list) return;
@@ -1983,14 +2016,14 @@
         dy = e.touches[0].clientY - startY;
         if (dy <= 0) {
           dy = 0;
-          list.style.transform = '';
+          list.style.setProperty('--pull-ty', '0px');
           list.classList.remove('pulling');
           list.style.setProperty('--pull', '0');
           return;
         }
         // 橡皮筋：起手就有反馈，越拉越沉，上限 120px
         var pull = Math.min(120, Math.pow(dy, 0.78) * 2.6);
-        list.style.transform = 'translateY(' + pull.toFixed(1) + 'px)';
+        list.style.setProperty('--pull-ty', pull.toFixed(1) + 'px');
         list.classList.add('pulling');
         list.style.setProperty('--pull', pull.toFixed(1));
         // 卡片随拉动整体轻微下沉，越靠下越明显（被往下拽开的感觉）
@@ -2003,8 +2036,7 @@
       list.addEventListener('touchend', function () {
         if (!pulling) return;
         pulling = false;
-        list.style.transition = 'transform .32s cubic-bezier(.2,.9,.2,1.2)';
-        list.style.transform = '';
+        list.style.setProperty('--pull-ty', '0px');
         // 卡片先弹回原状，再撤掉拉伸状态
         list.style.setProperty('--pull', '0');
         Array.prototype.forEach.call(list.querySelectorAll('.room'), function (r) {
@@ -2014,8 +2046,8 @@
           list.classList.remove('pulling');
           list.style.setProperty('--pull', '0');
         }, 340);
-        if (dy > 40) toast('正在重新连接…');
-        if (dy > 40) {
+        if (dy > 72) toast('正在重新连接…');
+        if (dy > 72) {
           toast('正在重新连接…');
           try { if (ws) ws.close(); } catch (e) {}
           try { ws = null; } catch (e) {}
