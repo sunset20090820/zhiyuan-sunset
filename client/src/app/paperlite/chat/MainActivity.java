@@ -382,12 +382,12 @@ public class MainActivity extends Activity {
          * base/model/messages 由 JS 给，key 从本机保险箱取，不回传 JS。
          */
         @JavascriptInterface
-        public void aiAsk(final String base, final String model, final String messagesJson, final String rid) {
+        public void aiAsk(final String base, final String model, final String messagesJson, final String rid, final String optsJson) {
             new Thread(new Runnable() {
                 @Override public void run() {
                     String out;
                     try {
-                        out = aiRequest(base, model, messagesJson);
+                        out = aiRequest(base, model, messagesJson, optsJson);
                     } catch (Exception e) {
                         out = "{\"ok\":false,\"error\":\"" + esc4j(String.valueOf(e.getMessage())) + "\"}";
                     }
@@ -428,7 +428,7 @@ public class MainActivity extends Activity {
             return out;
         }
 
-        private String aiRequest(String base, String model, String messagesJson) throws Exception {
+        private String aiRequest(String base, String model, String messagesJson, String optsJson) throws Exception {
             String key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
             if (key == null || key.length() == 0) return "{\"ok\":false,\"error\":\"还没填 API key\"}";
             org.json.JSONArray msgs = new org.json.JSONArray(messagesJson == null ? "[]" : messagesJson);
@@ -436,7 +436,32 @@ public class MainActivity extends Activity {
             body.put("model", model);
             body.put("messages", msgs);
             body.put("stream", false);
+            // 思考强度：关 → 明确禁用思考；低/中/高 → reasoning_effort。
+            // 有些中转不认这些字段会直接忽略，也有少数会报 400，那种情况下面会重试一次「不带额外字段」。
+            String effort = "";
+            try {
+                if (optsJson != null && optsJson.length() > 0) {
+                    effort = new org.json.JSONObject(optsJson).optString("effort", "");
+                }
+            } catch (Exception e) { effort = ""; }
+            if ("none".equals(effort)) {
+                org.json.JSONObject think = new org.json.JSONObject();
+                think.put("type", "disabled");
+                body.put("thinking", think);
+                body.put("enable_thinking", false);
+            } else if ("low".equals(effort) || "medium".equals(effort) || "high".equals(effort)) {
+                body.put("reasoning_effort", effort);
+            }
             byte[] bytes = body.toString().getBytes("UTF-8");
+            // 不带思考参数的一份：对方把额外字段当错误（400）时用它重试
+            byte[] bytesPlain = null;
+            if (effort != null && effort.length() > 0) {
+                org.json.JSONObject plain = new org.json.JSONObject();
+                plain.put("model", model);
+                plain.put("messages", msgs);
+                plain.put("stream", false);
+                bytesPlain = plain.toString().getBytes("UTF-8");
+            }
             java.util.List<String> urls = aiUrlCandidates(base, "/chat/completions");
             String firstErr = null, tried = "";
             for (int ui = 0; ui < urls.size(); ui++) {
@@ -446,31 +471,13 @@ public class MainActivity extends Activity {
                 int code = -1;
                 String resp = "";
                 try {
-                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                    conn.setConnectTimeout(12000);
-                    conn.setReadTimeout(120000);
-                    conn.setRequestMethod("POST");
-                    conn.setDoOutput(true);
-                    conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                    conn.setRequestProperty("Accept", "application/json");
-                    // 用正常客户端 UA：有些中转/Cloudflare 会把 Java/1.x 当机器人挡掉（502/403）
-                    conn.setRequestProperty("User-Agent", "okhttp/4.12.0");
-                    conn.setRequestProperty("Authorization", "Bearer " + key);
-                    conn.setFixedLengthStreamingMode(bytes.length);
-                    java.io.OutputStream os = conn.getOutputStream();
-                    os.write(bytes);
-                    os.flush();
-                    os.close();
-                    code = conn.getResponseCode();
-                    java.io.InputStream is2 = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
-                    StringBuilder sb = new StringBuilder();
-                    if (is2 != null) {
-                        java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is2, "UTF-8"));
-                        String line;
-                        while ((line = br.readLine()) != null) sb.append(line);
-                        br.close();
+                    String[] r1 = aiPost(url, key, bytes);
+                    code = Integer.parseInt(r1[0]);
+                    resp = r1[1];
+                    if (code == 400 && bytesPlain != null) {
+                        String[] r2 = aiPost(url, key, bytesPlain);   // 对方不认思考参数，去掉再试
+                        if (Integer.parseInt(r2[0]) < 400) { code = Integer.parseInt(r2[0]); resp = r2[1]; }
                     }
-                    resp = sb.toString();
                 } catch (Exception e) {
                     String m = String.valueOf(e.getMessage());
                     firstErr = "连不上 " + url.replaceFirst("^https?://", "") + "：" + m;
@@ -508,6 +515,35 @@ public class MainActivity extends Activity {
                 return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\",\"url\":\"" + esc4j(url.replaceFirst("^https?://", "")) + "\"}";
             }
             return "{\"ok\":false,\"error\":\"" + esc4j(firstErr == null ? "发不出去" : firstErr) + "\"}";
+        }
+
+        /** 发一次 POST，返回 {状态码, 响应体} */
+        private String[] aiPost(String url, String key, byte[] bytes) throws Exception {
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            conn.setConnectTimeout(12000);
+            conn.setReadTimeout(120000);
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("Accept", "application/json");
+            // 用正常客户端 UA：有些中转/Cloudflare 会把 Java/1.x 当机器人挡掉（502/403）
+            conn.setRequestProperty("User-Agent", "okhttp/4.12.0");
+            conn.setRequestProperty("Authorization", "Bearer " + key);
+            conn.setFixedLengthStreamingMode(bytes.length);
+            java.io.OutputStream os = conn.getOutputStream();
+            os.write(bytes);
+            os.flush();
+            os.close();
+            int code = conn.getResponseCode();
+            java.io.InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            StringBuilder sb = new StringBuilder();
+            if (is != null) {
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is, "UTF-8"));
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+            }
+            return new String[] { String.valueOf(code), sb.toString() };
         }
 
         private String esc4j(String s) {

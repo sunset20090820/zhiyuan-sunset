@@ -219,6 +219,16 @@
       </div>
       <input id="aiModelFilter" class="ai-input ai-model-filter hidden" type="text" placeholder="筛选模型名，比如 deepseek" spellcheck="false" autocomplete="off">
       <div id="aiModelList" class="ai-model-list"></div>
+      <div class="ai-field">
+        <div class="ai-rowhead"><span class="me-ico">💭</span>思考强度</div>
+        <div class="ai-effort" id="aiEffort">
+          <button type="button" class="ai-eff" data-eff="none">关</button>
+          <button type="button" class="ai-eff" data-eff="low">低</button>
+          <button type="button" class="ai-eff" data-eff="medium">中</button>
+          <button type="button" class="ai-eff" data-eff="high">高</button>
+        </div>
+        <p class="hint ai-eff-hint">「关/低」回得最快；「高」会让模型想得更久。中转站不认这个参数时会被忽略。</p>
+      </div>
       <div class="ai-test-row">
         <button id="aiTest" class="ai-fetch" type="button">测试连接</button>
         <span class="ai-test-tip">发一句「你好」看看能不能通</span>

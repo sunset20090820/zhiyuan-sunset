@@ -71,7 +71,7 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
-    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [] },
+    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [], effort: 'low' },
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' },
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
@@ -234,7 +234,7 @@
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
-        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [] }, o.ai || {});
+        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [], effort: 'low' }, o.ai || {});
         if (!Array.isArray(S.ai.models)) S.ai.models = [];
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
         S.bg = normalizeBg(o.bg);
@@ -902,6 +902,12 @@
       Object.keys(wantAi).forEach(function (k) {
         if (aiD[k] !== wantAi[k]) { aiD[k] = wantAi[k]; changed = true; }
       });
+      // AI 头像等于你自己的头像 = 之前被污染了，清掉（否则会一直显示你的脸）
+      if (S.ai.avatar && (S.ai.avatar === S.myAvatar ||
+          (S.avatars && S.nick && S.ai.avatar === S.avatars[S.nick]))) {
+        S.ai.avatar = '';
+        changed = true;
+      }
       // 只认 S.ai.avatar：以前的合并会把它写成别人的头像（用户遇到过"她用的是我的头像"）
       if (S.ai.avatar !== aiD.avatar) {
         if (S.ai.avatar) { aiD.avatar = S.ai.avatar; }
@@ -1302,6 +1308,10 @@
     if ($('#aiBase')) $('#aiBase').value = a.base || '';
     if ($('#aiModel')) $('#aiModel').value = a.model || '';
     if ($('#aiName')) $('#aiName').value = a.name || 'AI 助手';
+    var eff = a.effort || 'low';
+    Array.prototype.forEach.call(document.querySelectorAll('#aiEffort .ai-eff'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-eff') === eff);
+    });
     renderAiId();
     renderAiModelList(); syncAiModelUi();
     if ($('#aiKey')) { var k = aiKeyStore(); $('#aiKey').value = k ? '••••••••' : ''; }
@@ -1339,7 +1349,8 @@
     aiWait[rid] = { text: onText, raw: onRaw };
     try {
       if (window.PaperNative && window.PaperNative.aiAsk) {
-        window.PaperNative.aiAsk(base, model, msgs, rid);
+        var opts = JSON.stringify({ effort: (S.ai && S.ai.effort) || 'low' });
+        window.PaperNative.aiAsk(base, model, msgs, rid, opts);
         return rid;
       }
     } catch (e) { delete aiWait[rid]; throw e; }
@@ -1416,6 +1427,20 @@
 
     var msgsJson = JSON.stringify(msgs);
     var wantSlowHint = true;
+    var waited = 0;
+    var tickTimer = setInterval(function () {
+      waited += 1;
+      if (!wantSlowHint) return;
+      var list0 = loadHist(AI_RID);
+      for (var i0 = 0; i0 < list0.length; i0++) {
+        if (list0[i0] && list0[i0].id === ph.id && list0[i0].typing) {
+          list0[i0].text = '思考中… ' + waited + ' 秒';
+          saveHist(AI_RID);
+          if (S.cur === AI_RID) renderMsgs(false);
+          break;
+        }
+      }
+    }, 1000);
     setTimeout(function () {
       if (!wantSlowHint) return;
       var list = loadHist(AI_RID);
@@ -1428,14 +1453,16 @@
         }
       }
     }, 25000);
+    var stopTick = function () { try { clearInterval(tickTimer); } catch (e) {} };
     // 原生发请求：WebView 里 fetch 会被 CORS / file:// 拦住，浏览器调试时才走 fetch
     try {
       if (window.PaperNative && window.PaperNative.aiAsk) {
-        aiAskNative(S.ai.base || '', S.ai.model || '', msgsJson, function (t) { wantSlowHint = false; done(t); });
+        aiAskNative(S.ai.base || '', S.ai.model || '', msgsJson, function (t) { wantSlowHint = false; stopTick(); done(t); });
         return;
       }
     } catch (e) {}
     wantSlowHint = false;
+    stopTick();
     try {
       fetch((S.ai.base || '') + '/chat/completions', {
         method: 'POST',
@@ -3189,6 +3216,21 @@
     on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
     on('#aiTest', 'click', function (e) { e.preventDefault(); aiTest(); });
     on('#aiDiag', 'click', function (e) { e.preventDefault(); aiDiag(); });
+    (function () {
+      var box = $('#aiEffort');
+      if (!box) return;
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-eff]') : null;
+        if (!b) return;
+        e.preventDefault();
+        if (!S.ai) S.ai = {};
+        S.ai.effort = b.getAttribute('data-eff');
+        save();
+        renderAiPanel();
+        var names = { none: '关', low: '低', medium: '中', high: '高' };
+        toast('思考强度：' + (names[S.ai.effort] || S.ai.effort));
+      });
+    })();
     on('#aiRepair', 'click', function (e) { e.preventDefault(); aiRepair(); });
     on('#aiAvatarBtn', 'click', function (e) {
       e.preventDefault();
