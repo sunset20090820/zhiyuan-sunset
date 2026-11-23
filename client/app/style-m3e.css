@@ -1736,3 +1736,15 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ai-model-chip.hidden { display: none; }
+
+/* AI 助手：测试连接 */
+#aiSheet .ai-test-row { display: flex; align-items: center; gap: 10px; margin: 6px 16px 2px; }
+#aiSheet .ai-test-tip { font-size: 12px; color: var(--sub); }
+#aiSheet .ai-test-out {
+  margin: 6px 16px 10px; padding: 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 6%, var(--bg-soft));
+  border: 1px solid var(--line);
+  font-size: 12px; line-height: 1.55; color: var(--sub);
+  white-space: pre-wrap; word-break: break-all; max-height: 32vh; overflow-y: auto;
+}
+#aiSheet .ai-test-out.hidden { display: none; }

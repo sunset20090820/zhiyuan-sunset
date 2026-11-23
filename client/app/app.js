@@ -892,6 +892,52 @@
         .catch(function (e) { done([], e.message); });
     } catch (e) { done([], e.message); }
   }
+  /* ---------- 测试连接：把真实的 HTTP 结果摊开给人看 ---------- */
+  function aiTestOut(text) {
+    var el = $('#aiTestOut');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
+  }
+  function aiTest() {
+    var a = S.ai || {};
+    var base = normAiBase($('#aiBase') ? $('#aiBase').value : a.base);
+    var model = (($('#aiModel') && $('#aiModel').value) || a.model || '').trim();
+    if (!aiKeyStore()) { aiTestOut('还没填 API key，先在上面填好再点「保存并启用」。'); return; }
+    if (!model) { aiTestOut('还没选模型，点「获取」勾一个。'); return; }
+    var btn = $('#aiTest');
+    if (btn) btn.disabled = true;
+    aiTestOut('正在请求 ' + base + '/chat/completions · model=' + model + ' …');
+    var msgs = JSON.stringify([{ role: 'user', content: '你好' }]);
+    var doneOne = function (msg) {
+      if (btn) btn.disabled = false;
+      aiTestOut(msg);
+    };
+    var slow = setTimeout(function () { if (btn) btn.disabled = false; }, 130000);
+    try {
+      if (window.PaperNative && window.PaperNative.aiAsk) {
+        aiAskNative(base, model, msgs, function () { /* 结果统一在 onRaw 里摊开 */ }, function (payload, j) {
+          clearTimeout(slow);
+          if (j && j.ok) doneOne('通了，模型回：' + String(j.text || '').slice(0, 200));
+          else doneOne('失败：' + String(payload || '').slice(0, 400));
+        });
+        return;
+      }
+    } catch (e) { }
+    // 浏览器里调试才走 fetch
+    try {
+      fetch(base + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aiKeyStore() },
+        body: JSON.stringify({ model: model, messages: [{ role: 'user', content: '你好' }], stream: false })
+      }).then(function (r) {
+        return r.text().then(function (t) {
+          doneOne('HTTP ' + r.status + ' · ' + String(t || '').slice(0, 400));
+        });
+      }).catch(function (e) { doneOne('请求失败：' + (e && e.message ? e.message : e)); });
+    } catch (e) { doneOne('请求没发出去：' + e.message); }
+  }
+
   // 原生回调：{"ok":true,"ids":[...]} / {"ok":false,"error":"..."}
   window.__aiModelsReply = function (payload) {
     var j = null;
@@ -977,15 +1023,34 @@
     return t.replace(/\/+$/, '').replace(/\/chat\/completions$/i, '');
   }
   // 聊天里给 AI 发消息：把最近几条历史一起发过去，回复直接落到会话里
-  var aiPending = [];      // 原生回调是按顺序回来的，这里按 FIFO 取
-  function aiDoneCb(fn) { aiPending.push(fn); }
-  window.__aiReply = function (payload) {
-    var fn = aiPending.shift();
-    if (!fn) return;
+  // 每次请求带一个号，原生原样回传，避免「一次没回、后面全错位」
+  var aiRidSeq = 0, aiWait = {};
+  function aiAskNative(base, model, msgs, onText, onRaw) {
+    var rid = 'q' + (++aiRidSeq) + Date.now();
+    aiWait[rid] = { text: onText, raw: onRaw };
+    try {
+      if (window.PaperNative && window.PaperNative.aiAsk) {
+        window.PaperNative.aiAsk(base, model, msgs, rid);
+        return rid;
+      }
+    } catch (e) { delete aiWait[rid]; throw e; }
+    delete aiWait[rid];
+    return null;
+  }
+  window.__aiReply = function (payload, rid) {
+    var w = (rid && aiWait[rid]) || null;
+    if (!w) {                    // 老版本原生不带号：取最早还在等的那个
+      var keys = Object.keys(aiWait);
+      if (!keys.length) return;
+      w = aiWait[keys[0]];
+      rid = keys[0];
+    }
+    delete aiWait[rid];
     var j = null;
     try { j = JSON.parse(payload); } catch (e) {}
-    if (j && j.ok) fn(String(j.text || '(模型没返回内容)').trim());
-    else fn('连不上模型：' + ((j && j.error) || '未知错误'));
+    if (w.raw) w.raw(payload, j);
+    if (j && j.ok) w.text(String(j.text || '(模型没返回内容)').trim());
+    else w.text('连不上模型：' + ((j && j.error) || '未知错误'));
   };
   function askAi(text, tid) {
     var hist = loadHist(AI_RID).filter(function (m) { return m && m.text && !m.sys; });
@@ -1016,14 +1081,27 @@
     };
 
     var msgsJson = JSON.stringify(msgs);
-    aiDoneCb(done);
+    var wantSlowHint = true;
+    setTimeout(function () {
+      if (!wantSlowHint) return;
+      var list = loadHist(AI_RID);
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === ph.id && list[i].typing) {
+          list[i].text = '（还没回应，最多等 2 分钟；一直这样就在面板里点「测试」看具体报错）';
+          saveHist(AI_RID);
+          if (S.cur === AI_RID) renderMsgs(false);
+          break;
+        }
+      }
+    }, 25000);
     // 原生发请求：WebView 里 fetch 会被 CORS / file:// 拦住，浏览器调试时才走 fetch
     try {
       if (window.PaperNative && window.PaperNative.aiAsk) {
-        window.PaperNative.aiAsk(S.ai.base || '', S.ai.model || '', msgsJson);
+        aiAskNative(S.ai.base || '', S.ai.model || '', msgsJson, function (t) { wantSlowHint = false; done(t); });
         return;
       }
     } catch (e) {}
+    wantSlowHint = false;
     try {
       fetch((S.ai.base || '') + '/chat/completions', {
         method: 'POST',
@@ -1034,9 +1112,9 @@
         return r.json();
       }).then(function (j) {
         var t = j && j.choices && j.choices[0] && (j.choices[0].message || {}).content;
-        aiPending.shift(); done(String(t || '(模型没返回内容)').trim());
-      }).catch(function (e) { aiPending.shift(); done('连不上模型：' + (e && e.message ? e.message : e)); });
-    } catch (e) { aiPending.shift(); done('请求没发出去：' + e.message); }
+        done(String(t || '(模型没返回内容)').trim());
+      }).catch(function (e) { done('连不上模型：' + (e && e.message ? e.message : e)); });
+    } catch (e) { done('请求没发出去：' + e.message); }
   }
 
   /* ---------------- 用户接入（Agent 作为真账号） ---------------- */
@@ -2743,6 +2821,7 @@
     });
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
     on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
+    on('#aiTest', 'click', function (e) { e.preventDefault(); aiTest(); });
     (function () {
       var mlist = $('#aiModelList');
       if (mlist) mlist.addEventListener('click', function (e) {

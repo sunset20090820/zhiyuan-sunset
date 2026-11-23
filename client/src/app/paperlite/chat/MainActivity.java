@@ -380,7 +380,7 @@ public class MainActivity extends Activity {
          * base/model/messages 由 JS 给，key 从本机保险箱取，不回传 JS。
          */
         @JavascriptInterface
-        public void aiAsk(final String base, final String model, final String messagesJson) {
+        public void aiAsk(final String base, final String model, final String messagesJson, final String rid) {
             new Thread(new Runnable() {
                 @Override public void run() {
                     String out;
@@ -389,6 +389,10 @@ public class MainActivity extends Activity {
                     } catch (Exception e) {
                         out = "{\"ok\":false,\"error\":\"" + esc4j(String.valueOf(e.getMessage())) + "\"}";
                     }
+                    // 带上请求号，JS 那边按号对账，避免一次丢包后面全错位
+                    if (rid != null && rid.length() > 0 && out.endsWith("}")) {
+                        out = out.substring(0, out.length() - 1) + ",\"rid\":" + org.json.JSONObject.quote(rid) + "}";
+                    }
                     final String payload = out;
                     try {
                         act.runOnUiThread(new Runnable() {
@@ -396,7 +400,8 @@ public class MainActivity extends Activity {
                                 try {
                                     act.web.evaluateJavascript(
                                         "try{window.__aiReply&&window.__aiReply("
-                                        + org.json.JSONObject.quote(payload) + ")}catch(e){}", null);
+                                        + org.json.JSONObject.quote(payload) + ","
+                                        + org.json.JSONObject.quote(rid == null ? "" : rid) + ")}catch(e){}", null);
                                 } catch (Exception e) { }
                             }
                         });
@@ -439,7 +444,13 @@ public class MainActivity extends Activity {
                 return "{\"ok\":false,\"error\":\"HTTP " + code + " " + esc4j(resp.length() > 160 ? resp.substring(0, 160) : resp) + "\"}";
             }
             org.json.JSONObject j = new org.json.JSONObject(resp);
-            String text = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
+            String text = "";
+            try {
+                text = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content", "");
+            } catch (Exception e) {
+                return "{\"ok\":false,\"error\":\"返回里没有 choices[0].message.content：" + esc4j(resp.length() > 200 ? resp.substring(0, 200) : resp) + "\"}";
+            }
+            if (text.length() == 0) return "{\"ok\":false,\"error\":\"模型返回了空内容\"}";
             return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\"}";
         }
 
