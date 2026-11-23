@@ -82,6 +82,10 @@
           list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
     glass: true, glassLevel: 55, glassMul: 100, glassCard: 100, glassThin: 100, accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
   };
+  // 存档是否已经从磁盘读进来。启动阶段的模块级代码（aiNormalize 等）会调 save()，
+  // 那时 S 还是空的，写下去就把 auth/token 洗成了未登录 —— 大退后要重新登录就是这么来的。
+  var stateLoaded = false;
+  var blockedSaves = 0;
   /* 备注：只改自己看到的称呼，存本地 */
   function loadRemarks() {
     try { S.remarks = JSON.parse(localStorage.getItem(LK('remarks')) || '{}') || {}; } catch (e) { S.remarks = {}; }
@@ -162,6 +166,7 @@
     try {
       var o = JSON.parse(json);
       if (!o || !o.auth) { lastDiag.native = '有镜像但未登录'; return; }
+      if (!o.token) { lastDiag.native = '镜像里没有令牌（旧版本写坏的镜像）'; return; }
       S.nick = o.nick || S.nick;
       S.server = o.server || S.server;
       S.user = o.user || S.user;
@@ -191,18 +196,20 @@
 
   // 原生在 onPause 时要求立刻同步状态
   window.__flushState = function () {
-    try { save(); } catch (e) {}
-    try {
-      if (window.PaperNative && window.PaperNative.saveState) {
-        window.PaperNative.saveState(JSON.stringify({
-          nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth
-        }));
-      }
-    } catch (e) {}
+    try { save(); } catch (e) {}   // save() 内部就会把完整镜像写给原生，别再用残缺字段覆盖一次
+    try { flushWebStorage(); } catch (e) {}
   };
+  // 让原生把 WebView 的 localStorage 立刻落盘（进程被杀时不容易丢）
+  function flushWebStorage() {
+    try { if (window.PaperNative && window.PaperNative.flushStorage) window.PaperNative.flushStorage(); } catch (e) {}
+  }
 
+  function statePayload() {
+    return { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, ts: Date.now(), log: bootLog.slice(-12) };
+  }
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, ts: Date.now(), log: bootLog.slice(-12) };
+    if (!stateLoaded) { blockedSaves++; return; }   // 存档还没读进来，写下去会洗掉登录
+    var payload = statePayload();
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -258,6 +265,7 @@
         if (typeof o.bgDimBoth === 'boolean') S.bgDimBoth = o.bgDimBoth;
       }
     } catch (e) {}
+    stateLoaded = true;
   }
   function histKey(id) { return LK('hist.' + id); }
   function loadHist(id) {
@@ -1009,8 +1017,8 @@
     try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
     renderRooms();
   }
-  try { aiNormalize(); } catch (e) {}
-  try { dropFakeQueue(); } catch (e) {}
+  // 注意：aiNormalize / dropFakeQueue 会写存档，必须等 boot() 里 load() 之后再调，
+  // 否则启动瞬间就把 auth/token 洗成未登录（曾经就是这么丢掉登录的）。
   function aiReady() { return !!(S.ai && S.ai.on && S.ai.base && S.ai.model && aiKeyStore()); }
   function refreshAiStat() {
     var el = $('#aiStat');
@@ -5071,7 +5079,8 @@
   function updateDiag() {
     try {
       var l = localStorage.getItem(LK('v1'));
-      lastDiag.local = l ? ('本地 ' + new Date((JSON.parse(l).ts) || 0).toLocaleString() + (JSON.parse(l).auth ? ' 已登录' : ' 未登录')) : '本地空';
+      var lo = l ? JSON.parse(l) : null;
+      lastDiag.local = lo ? ('本地 ' + new Date(lo.ts || 0).toLocaleString() + (lo.auth ? ' 已登录' : ' 未登录') + (lo.token ? '·有令牌' : '·无令牌')) : '本地空';
     } catch (e) { lastDiag.local = '读不出'; }
     try {
       if (window.PaperNative && window.PaperNative.loadState) {
@@ -5079,7 +5088,7 @@
         if (!n) lastDiag.native = '镜像空';
         else {
           var o = JSON.parse(n);
-          lastDiag.native = '镜像 ' + new Date(o.ts || 0).toLocaleString() + (o.auth ? ' 已登录' : ' 未登录');
+          lastDiag.native = '镜像 ' + new Date(o.ts || 0).toLocaleString() + (o.auth ? ' 已登录' : ' 未登录') + (o.token ? '·有令牌' : '·无令牌') + (blockedSaves ? ' · 启动期拦下写入 ' + blockedSaves + ' 次' : '');
         }
       } else lastDiag.native = '无原生桥';
     } catch (e) { lastDiag.native = '读镜像失败'; }
@@ -5214,6 +5223,8 @@
       if (line) line.textContent = '纸鸢 ' + ver + ' · 账号版';
     } catch (e) {}
     try { S.dms = JSON.parse(localStorage.getItem(LK('dms')) || '{}') || {}; } catch (e) { S.dms = {}; }
+    try { aiNormalize(); } catch (e) {}      // 必须在 load() 之后：它会写存档
+    try { dropFakeQueue(); } catch (e) {}
     try { if (S.localAgent && S.localAgent.on) ensureLocalConv(true); } catch (e) {}
     bind();
     try { applyAgentProfile(); } catch (e) {}
@@ -5316,7 +5327,7 @@
 
     on('#btnFlush', 'click', function () {
       save();
-      try { if (window.PaperNative && window.PaperNative.saveState) window.PaperNative.saveState(JSON.stringify({ nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, ts: Date.now() })); } catch (e) {}
+      flushWebStorage();
       toast('已写入本机存储');
       updateDiag();
       if ($('#meDiag')) $('#meDiag').innerHTML = '版本号 ' + esc(lastDiag.code) + '<br>' + esc(lastDiag.local) + '<br>' + esc(lastDiag.native);
@@ -5474,4 +5485,7 @@
   try { if (window.visualViewport) window.visualViewport.addEventListener('resize', syncViewport); } catch (e) {}
 
   document.addEventListener('DOMContentLoaded', function () { syncViewport(); boot(); });
+  // 页面被隐藏/卸载时兜底存一次（stateLoaded 之前不会写，安全）
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { try { save(); } catch (e) {} try { flushWebStorage(); } catch (e) {} } });
+  window.addEventListener('pagehide', function () { try { save(); } catch (e) {} });
 })();

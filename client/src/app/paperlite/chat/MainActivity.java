@@ -20,6 +20,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
+import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
@@ -104,6 +105,17 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 try {
                     String st = getSharedPreferences("paperlite", MODE_PRIVATE).getString("state", "");
+                    if (st == null || st.length() < 3) {
+                        try {
+                            java.io.File f = new java.io.File(getFilesDir(), "session.json");
+                            if (f.exists()) {
+                                byte[] b = new byte[(int) f.length()];
+                                java.io.FileInputStream in = new java.io.FileInputStream(f);
+                                in.read(b); in.close();
+                                st = new String(b, "UTF-8");
+                            }
+                        } catch (Exception e2) { }
+                    }
                     if (st != null && st.length() > 2) {
                         String js = "try{window.__nativeRestore&&window.__nativeRestore("
                                 + org.json.JSONObject.quote(st) + ")}catch(e){}";
@@ -607,6 +619,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void flushStorage() {
+            flushWebViewStorage();
+        }
+
+        @JavascriptInterface
         public void saveState(String json) {
             try {
                 act.getSharedPreferences("paperlite", MODE_PRIVATE).edit()
@@ -616,6 +633,8 @@ public class MainActivity extends Activity {
                 java.io.File f = new java.io.File(act.getFilesDir(), "session.json");
                 java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
                 fo.write(json.getBytes("UTF-8"));
+                fo.flush();
+                try { fo.getFD().sync(); } catch (Exception e2) { }   // 直接落盘，防止被大退杀掉时内容丢失
                 fo.close();
             } catch (Exception e) { Log.w("PaperLite", "saveState file: " + e); }
         }
@@ -901,7 +920,27 @@ public class MainActivity extends Activity {
                 web.evaluateJavascript("try{window.__flushState&&window.__flushState()}catch(e){}", null);
             }
         } catch (Exception e) { }
+        // WebView 的 localStorage 是异步落盘的，被「大退」杀掉进程时可能来不及写，
+        // 这里主动催一下，保证下次启动读得到存档（登录状态靠它）。
+        flushWebViewStorage();
         KeepAliveService.setListener(null);
+    }
+
+    // WebStorage.flush() 在 API 33 之后从 SDK 里移除了，但老系统上它才是把 localStorage
+    // 立刻写盘的那一下。用反射调用：能用就调，不能用就算了（存档另有原生镜像兜底）。
+    static void flushWebViewStorage() {
+        try {
+            Class<?> c = Class.forName("android.webkit.WebStorage");
+            Object inst = c.getMethod("getInstance").invoke(null);
+            c.getMethod("flush").invoke(inst);
+        } catch (Throwable e) { }
+        try { CookieManager.getInstance().flush(); } catch (Throwable e) { }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        flushWebViewStorage();
     }
 
     @Override
