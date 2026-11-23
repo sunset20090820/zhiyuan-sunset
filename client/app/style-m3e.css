@@ -1560,11 +1560,8 @@ html[data-skin] .chat {
 html[data-skin] .msgs { animation: none; }
 
 html[data-skin] .msgs {
-  /* 从顶部往外长：底边多出去的部分被 .chat 裁掉，顶上不会露缝 */
-  transform:
-    translateY(calc(var(--flow-ty, 0px) + var(--flow-lean, 0px)))
-    scaleY(var(--flow-sy, 1));
-  transform-origin: top center;
+  /* 只做整像素位移，不做缩放：scale 会把消息文字按新比例重新栅格化，看着发虚、看不清 */
+  transform: translateY(calc(var(--flow-ty, 0px) + var(--flow-lean, 0px)));
   transition: transform 420ms cubic-bezier(.16, .94, .24, 1.16);
   will-change: transform;
   /* 安卓自带的拉扯发光会和自己的橡皮筋打架 */
@@ -1578,6 +1575,15 @@ html[data-skin] .msgs.flow-live { transition: none; }
 html[data-skin] .composer,
 html[data-skin] .reply-bar,
 html[data-skin] .recording-bar { position: relative; z-index: 4; }
+
+/* 进会话时顶栏要「瞬间」还原，不要跟着过渡长大（这也是一下抽搐） */
+html[data-skin] .chat-top.no-anim,
+html[data-skin] .chat-top.no-anim .ava,
+html[data-skin] .chat-top.no-anim .chat-sub,
+html[data-skin] .chat-top.no-anim .chat-name { transition: none !important; }
+
+/* 打开会话时消息区整块重建，最后一条不必再弹一次 */
+html[data-skin] .msgs.fresh .msg:last-child { animation: none !important; }
 
 /* 顶栏收起：高度和留白一起缩，头像变小，副标题淡出 */
 html[data-skin] .chat-top {

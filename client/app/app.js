@@ -1049,7 +1049,18 @@
     });
 
     box.innerHTML = html || '<div class="day">还没有消息</div>';
-    if (force || nearBottom) box.scrollTop = box.scrollHeight;
+    if (force || nearBottom) snapBottom(box);
+  }
+
+  /* 直接落到底部：.msgs 上有 scroll-behavior: smooth，赋值 scrollTop 会变成一段
+     500ms 的滚动动画——进会话时就是那一下「抽搐」。这里临时关掉平滑再落位。 */
+  function snapBottom(box) {
+    if (!box) return;
+    var prev = box.style.scrollBehavior;
+    box.style.scrollBehavior = 'auto';
+    box.scrollTop = box.scrollHeight;
+    void box.scrollHeight;
+    box.style.scrollBehavior = prev;
   }
   function messageBody(m) {
     if (m.voice) {
@@ -1124,9 +1135,19 @@
     setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, 360);
     try {
       var _ct = document.querySelector('.chat-top');
-      if (_ct) _ct.classList.remove('compact');
+      if (_ct) {
+        // 收起的顶栏要「立刻」还原，不能跟着 300ms 过渡长大——进会话时那也是一下抽搐
+        _ct.classList.add('no-anim');
+        _ct.classList.remove('compact');
+        setTimeout(function () { try { _ct.classList.remove('no-anim'); } catch (e) {} }, 260);
+      }
       var _ms = $('#msgs');
       if (_ms && _ms.__chatReset) _ms.__chatReset();
+      if (_ms) {
+        // 首屏整块重建，最后一条不该再弹一次
+        _ms.classList.add('fresh');
+        setTimeout(function () { try { _ms.classList.remove('fresh'); } catch (e) {} }, 420);
+      }
     } catch (e) {}
     $('#tabbar').classList.add('hidden');
     markPainted($('#msgs'), 500);
@@ -1140,7 +1161,7 @@
     } else {
       wsSend({ t: 'room', room: rid });
     }
-    setTimeout(function () { $('#msgs').scrollTop = $('#msgs').scrollHeight; }, 30);
+    setTimeout(function () { snapBottom($('#msgs')); }, 30);
   }
   function dmPeerOf(roomId) {
     var keys = Object.keys(S.dms);
@@ -2028,18 +2049,21 @@
 
       var topBar = document.querySelector('.chat-top');
       var lastTop = box.scrollTop, lastT = 0, idleTimer = null, raf = 0;
-      var MAX_STRETCH = 0.045, MAX_LEAN = 16, MAX_BAND = 120;
+      // 打开会话时有一次「落到底部」的程序滚动，那不是用户在翻页：
+      // 既不该把顶栏收起，也不该触发跟手位移。第一次真实触摸/滚动之后才算武装。
+      var armed = false;
+      var MAX_LEAN = 22, MAX_BAND = 120;
       var band = { active: false, dir: 0, startY: 0, edgeY: 0 };
 
-      function setTy(v) { box.style.setProperty('--flow-ty', (Math.round(v * 100) / 100) + 'px'); }
-      function setLean(v) { box.style.setProperty('--flow-lean', (Math.round(v * 100) / 100) + 'px'); }
-      function setSy(v) { box.style.setProperty('--flow-sy', v.toFixed(4)); }
+      // 位移一律取整像素：带小数的 translate 会让文字在亚像素上重新栅格化，看着发虚
+      function setTy(v) { box.style.setProperty('--flow-ty', Math.round(v) + 'px'); }
+      function setLean(v) { box.style.setProperty('--flow-lean', Math.round(v) + 'px'); }
       function live(on) {
         if (on) box.classList.add('flow-live');
         else box.classList.remove('flow-live');
       }
       // 停手：交给 CSS 过渡弹回原位
-      function settle() { live(false); setTy(0); setLean(0); setSy(1); }
+      function settle() { live(false); setTy(0); setLean(0); }
 
       // 顶栏：位置滞回，收起和展开各一个阈值
       function syncTopBar() {
@@ -2050,14 +2074,9 @@
         else if (compact && t < 40) topBar.classList.remove('compact');
       }
 
-      // v: px/ms，越快拉得越多，上限 4.5%
-      function stretchOf(v) {
-        var k = Math.min(1, Math.abs(v) / 1.5);
-        return 1 + k * MAX_STRETCH;
-      }
-      // 跟手位移：顺着滚动方向轻轻甩一下，停手弹回
+      // 跟手位移：顺着滚动方向甩一下，停手弹回。纯位移，不动缩放，文字始终是清晰的
       function leanOf(v) {
-        var k = Math.max(-1, Math.min(1, v / 2.2));
+        var k = Math.max(-1, Math.min(1, v / 1.9));
         return -k * MAX_LEAN;
       }
 
@@ -2067,6 +2086,7 @@
         var dt = lastT ? Math.max(8, now - lastT) : 16;
         var v = (t - lastTop) / dt;          // px/ms，正=往下翻
         lastTop = t; lastT = now;
+        if (!armed) { armed = true; return; }
         syncTopBar();
         if (band.dir) return;                // 橡皮筋期间由手势接管
         if (raf) return;
@@ -2075,7 +2095,6 @@
           live(true);
           setTy(0);
           setLean(leanOf(v));
-          setSy(stretchOf(v));
         });
         clearTimeout(idleTimer);
         idleTimer = setTimeout(settle, 130);
@@ -2088,6 +2107,7 @@
       }
 
       box.addEventListener('touchstart', function (e) {
+        armed = true;
         if (!e.touches || e.touches.length !== 1) { band.dir = 0; return; }
         band.active = true; band.dir = 0;
         band.startY = e.touches[0].clientY;
@@ -2116,7 +2136,6 @@
         live(true);
         setLean(0);
         setTy(pull);
-        setSy(1 + Math.abs(pull) * 0.0006);
       }, { passive: true });
 
       function endBand() {
@@ -2129,7 +2148,6 @@
           live(false);
           setTy(0);
           setLean(0);
-          setSy(1);
         });
       }
       box.addEventListener('touchend', endBand, { passive: true });
@@ -2138,8 +2156,9 @@
       // 每次打开聊天页都回到常态（换会话时顶栏要是展开的）
       box.__chatReset = function () {
         band.active = false; band.dir = 0;
+        armed = false;
         clearTimeout(idleTimer);
-        live(false); setTy(0); setLean(0); setSy(1);
+        live(false); setTy(0); setLean(0);
         if (topBar) topBar.classList.remove('compact');
         lastTop = box.scrollTop; lastT = 0;
       };
