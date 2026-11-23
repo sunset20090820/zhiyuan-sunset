@@ -899,6 +899,39 @@
     return '<div class="ava' + (cls ? ' ' + cls : '') + '" style="background:' + esc(bg) + '">' + esc(text) + '</div>';
   }
 
+  /* 聊天页顶栏头像：跟会话列表用同一套取图逻辑。
+     以前这里只写了 emoji / 👤，带图片头像的用户进会话后顶栏永远是那个占位符。 */
+  function paintChatAva(rid) {
+    var el = $('#chatAva');
+    if (!el || !rid) return;
+    var r = room(rid) || {};
+    var url = '', text = r.emoji || '💬', bg = r.color || '#3390ec';
+    if (isDM(rid)) {
+      var peerId = dmPeerOf(rid);
+      var dd = (S.dms && S.dms[peerId]) || {};
+      url = peerAvatarUrl([peerId, dd.peerId, dd.name, r.name]) ||
+            absAvatar(dd.avatar) || absAvatar(r.avatar);
+      text = String(dd.name || r.name || '?').trim().slice(0, 1).toUpperCase() || '👤';
+      bg = colorOf(peerId || r.name || '');
+    } else if (r.avatar) {
+      url = absAvatar(r.avatar);
+    }
+    if (url) {
+      el.classList.add('has-img');
+      el.style.background = '';
+      el.innerHTML = '<img src="' + esc(url) + '" alt="">';
+    } else {
+      el.classList.remove('has-img');
+      el.style.background = bg;
+      el.textContent = text;
+    }
+  }
+  // 头像地址可能是相对路径，补上服务器前缀
+  function absAvatar(v) {
+    if (!v) return '';
+    return /^(data:|https?:)/.test(v) ? v : httpBase() + v;
+  }
+
   function renderRooms() {
     var html = '';
     function item(r, isDM, peerId) {
@@ -940,6 +973,9 @@
       list.push({ r: groupRoom(g), isDM: false, peerId: null });
     });
     S.rooms.forEach(function (r) { list.push({ r: r, isDM: false, peerId: null }); });
+
+    // 顶栏头像跟列表同一套逻辑：别人换了头像、或私信记录刚补上头像，聊天页里也要跟着变
+    try { if (S.cur && $('#chat') && !$('#chat').classList.contains('hidden')) paintChatAva(S.cur); } catch (e) {}
 
     // 置顶排最前，各自按最后消息时间倒序
     list.sort(function (a, b) {
@@ -1125,8 +1161,7 @@
     S.unread[rid] = 0; save(); renderRooms();
     showJumpButton(rid);
     var r = room(rid);
-    $('#chatAva').textContent = isDM(rid) ? '👤' : r.emoji;
-    $('#chatAva').style.background = isDM(rid) ? '#6b7d8f' : r.color;
+    paintChatAva(rid);
     $('#chatName').textContent = r.name;
     setConn(connected);
     $('#chat').classList.remove('hidden');
@@ -2778,9 +2813,8 @@
     S.cur = rid;
     S.unread[rid] = 0; save(); renderRooms();
     showJumpButton(rid);
-    $('#chatAva').textContent = '👥';
+    paintChatAva(rid);
     $('#chatAva').setAttribute('data-group-open', gid);
-    $('#chatAva').style.background = '#7c5cff';
     $('#chatName').textContent = g.name;
     $('#chatSub').textContent = (g.members ? g.members.length : 0) + ' 人';
     $('#chat').classList.remove('hidden');
