@@ -1026,8 +1026,27 @@
     save(); renderAiModelList(); syncAiModelUi();
     toast('已切到 ' + m);
   }
+  function paintPathSub() {
+    var el = $('#chatSub');
+    if (!el) return;
+    if (S.cur === AI_RID) {
+      var m = (S.ai && S.ai.model) || '未选模型';
+      el.textContent = 'AI 通路 · dm:ai · ' + m;
+      return true;
+    }
+    if (S.cur === LOCAL_RID) {
+      el.textContent = '本地通路 · dm:local';
+      return true;
+    }
+    if (S.cur === 'lobby') {
+      el.textContent = '服务器通路 · lobby';
+      return true;
+    }
+    return false;
+  }
   function syncAiModelUi() {
     var a = S.ai || {};
+    try { paintPathSub(); } catch (e) {}
     if ($('#aiModel')) $('#aiModel').value = a.model || '';
     if ($('#aiModelHint')) {
       var n = aiModelList().length;
@@ -1103,6 +1122,13 @@
       lines.push('面板名字：' + name + ' · 列表名：' + aiName());
     } catch (e) { lines.push('自检出错：' + e.message); }
     aiTestOut(lines.join('\n'));
+    // 顺手把结果落到会话里，手机上截图更方便
+    try {
+      var ridForDiag = S.cur && (S.cur === AI_RID || isDM(S.cur) || roomExists(S.cur)) ? S.cur : AI_RID;
+      addMsg(ridForDiag, { id: 'diag' + Date.now(), from: AI_PEER, name: '自检', text: lines.join('\n'), ts: Date.now(), sys: true });
+      saveHist(ridForDiag);
+      if (S.cur === ridForDiag) renderMsgs(false);
+    } catch (e) {}
   }
   function aiRepair() {
     var did = false;
@@ -1804,6 +1830,7 @@
     try { syncAiModelUi(); } catch (e) {}
     $('#chatName').textContent = r.name;
     setConn(connected);
+    try { if (!paintPathSub()) { } } catch (e) {}
     $('#chat').classList.remove('hidden');
     $('#chat').classList.remove('chat-close');
     $('#chat').classList.add('chat-open');
@@ -1889,6 +1916,7 @@
   function refreshDMs() {
     Object.keys(S.dms || {}).forEach(function (peer) {
       if (peer === LOCAL_PEER) return;      // 本地用户不向服务器登记
+      if (peer === AI_PEER) return;         // AI 助手是本机的，不该让服务器去找这个「用户」
       wsSend({ t: 'pm_open', with: peer, withName: S.dms[peer].name || '' });
     });
   }
