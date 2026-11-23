@@ -124,6 +124,7 @@
     <div class="chat-meta">
       <div id="chatName" class="chat-name">公共大厅</div>
       <div id="chatSub" class="chat-sub">连接中…</div>
+      <button id="aiModelChip" class="ai-model-chip hidden" type="button">切换模型</button>
     </div>
     <button id="btnPinRoom" class="pin-btn" type="button" aria-label="置顶会话">📌</button>
   </header>
@@ -196,8 +197,11 @@
       <div class="ai-rowhead"><span class="me-ico">🧠</span>模型</div>
       <div class="ai-inputwrap">
         <input id="aiModel" class="ai-input" type="text" placeholder="deepseek-chat" spellcheck="false" autocomplete="off">
+        <button id="aiFetchModels" class="ai-fetch" type="button">获取</button>
         <button class="ai-expand" type="button" data-expand="aiModel" aria-label="展开查看">⤢</button>
       </div>
+      <p class="hint ai-model-hint" id="aiModelHint">点「获取」向接口地址请求可用模型，勾选你要的；会话里点标题旁的模型名可以随时切换。</p>
+      <div id="aiModelList" class="ai-model-list"></div>
     </div>
     <div class="ai-field">
       <div class="ai-rowhead"><span class="me-ico">🔑</span>API key</div>

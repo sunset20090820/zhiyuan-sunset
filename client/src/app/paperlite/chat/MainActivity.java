@@ -313,6 +313,68 @@ public class MainActivity extends Activity {
             return act.notificationsAllowed();
         }
 
+        /** 取可用模型列表：GET {base}/models，key 从本机保险箱取 */
+        @JavascriptInterface
+        public void aiModels(final String base) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    String out;
+                    try {
+                        out = aiModelsRequest(base);
+                    } catch (Exception e) {
+                        out = "{\"ok\":false,\"error\":\"" + esc4j(String.valueOf(e.getMessage())) + "\"}";
+                    }
+                    final String payload = out;
+                    try {
+                        act.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    act.web.evaluateJavascript(
+                                        "try{window.__aiModelsReply&&window.__aiModelsReply("
+                                        + org.json.JSONObject.quote(payload) + ")}catch(e){}", null);
+                                } catch (Exception e) { }
+                            }
+                        });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
+        private String aiModelsRequest(String base) throws Exception {
+            String key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
+            String url = base.replaceAll("/+$", "") + "/models";
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(30000);
+            conn.setRequestMethod("GET");
+            if (key != null && key.length() > 0) conn.setRequestProperty("Authorization", "Bearer " + key);
+            int code = conn.getResponseCode();
+            java.io.InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is, "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            if (code >= 400) {
+                String r = sb.toString();
+                return "{\"ok\":false,\"error\":\"HTTP " + code + " " + esc4j(r.length() > 160 ? r.substring(0, 160) : r) + "\"}";
+            }
+            org.json.JSONObject j = new org.json.JSONObject(sb.toString());
+            org.json.JSONArray data = j.optJSONArray("data");
+            StringBuilder ids = new StringBuilder();
+            if (data != null) {
+                for (int i = 0; i < data.length(); i++) {
+                    org.json.JSONObject m = data.optJSONObject(i);
+                    if (m == null) continue;
+                    String id = m.optString("id", "");
+                    if (id.length() == 0) continue;
+                    if (ids.length() > 0) ids.append(',');
+                    ids.append(org.json.JSONObject.quote(id));
+                }
+            }
+            return "{\"ok\":true,\"ids\":[" + ids + "]}";
+        }
+
         /**
          * 自带 AI 助手：把请求交给原生发（WebView 里 fetch 会被 CORS 和 file:// 拦住）。
          * base/model/messages 由 JS 给，key 从本机保险箱取，不回传 JS。

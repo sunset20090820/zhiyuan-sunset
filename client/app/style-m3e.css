@@ -1173,7 +1173,7 @@ html[data-skin] .tab-item.pop { animation: m3e-label-pop 480ms cubic-bezier(.34,
 
 /* 切页时内容也弹一下（不同界面从侧面滑入 + 回弹） */
 @keyframes m3e-tab-in {
-  0%   { opacity: .25; transform: translateY(12px) scale(.972); }
+  0%   { opacity: .94; transform: translateY(12px) scale(.972); }
   55%  { opacity: 1;  transform: translateY(-2px) scale(1.006); }
   78%  { transform: translateY(1px) scale(.999); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
@@ -1477,12 +1477,12 @@ html[data-skin] #roomList .room {
 
 /* 界面切换：按方向滑入 + 回弹 */
 @keyframes m3e-page-in-right {
-  0%   { opacity: .2; transform: translateX(38px) scale(.982); }
+  0%   { opacity: .92; transform: translateX(38px) scale(.982); }
   66%  { opacity: 1;  transform: translateX(-4px) scale(1.003); }
   100% { opacity: 1;  transform: translateX(0) scale(1); }
 }
 @keyframes m3e-page-in-left {
-  0%   { opacity: .2; transform: translateX(-38px) scale(.982); }
+  0%   { opacity: .92; transform: translateX(-38px) scale(.982); }
   66%  { opacity: 1;  transform: translateX(4px) scale(1.003); }
   100% { opacity: 1;  transform: translateX(0) scale(1); }
 }
@@ -1508,6 +1508,13 @@ html[data-skin] .me-page.tab-switch.slide-left { animation: m3e-page-in-left 440
    它会整页再淡入一次（opacity .72 + 右移），看起来又是主页面闪一下。
    聊天页的进场/退场完全自己管，这里把基础那条关掉。 */
 html[data-skin] .chat { animation: none; }
+/* 基础皮肤里 .me-page / .screen / .me-row / .me-group 都带 page-in-* 入场动画：
+   我们撤掉自己那套 tab-switch 类时 animation-name 会掉回它们，整页又淡入一次，
+   看起来就是「进我的界面会抽搐一下」。皮肤模式下这些基础动画全部关掉。 */
+html[data-skin] .screen,
+html[data-skin] .me-page,
+html[data-skin] .me-body .me-group,
+html[data-skin] .me-row { animation: none; }
 html[data-skin] .chat.chat-open { animation: m3e-chat-in 400ms cubic-bezier(.22, 1.1, .34, 1) both; }
 html[data-skin] .chat.chat-close { animation: m3e-chat-out 200ms cubic-bezier(.4, 0, .7, .2) both; }
 
@@ -1682,3 +1689,50 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
   resize: vertical; word-break: break-all; overflow-y: auto; text-align: left;
 }
 #aiExpand .primary { margin: 0 16px 10px; width: calc(100% - 32px); }
+
+/* AI 助手：模型列表（勾选 + 切换） */
+#aiSheet .ai-fetch {
+  flex: 0 0 auto; height: 44px; padding: 0 14px; margin: 0;
+  border-radius: 13px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-soft));
+  color: var(--text); font-size: 13.5px;
+}
+#aiSheet .ai-fetch:disabled { opacity: .55; }
+#aiSheet .ai-model-hint { margin: 8px 16px 4px; }
+#aiSheet .ai-model-list { margin: 2px 16px 8px; max-height: 34vh; overflow-y: auto; }
+#aiSheet .ai-model-empty { margin: 4px 0 8px; font-size: 12.5px; color: var(--sub); }
+#aiSheet .ai-model-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; margin-bottom: 6px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg-soft);
+  color: var(--text); font-size: 13.5px; text-align: left;
+  word-break: break-all;
+}
+#aiSheet .ai-model-hit {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 3px 2px; border: 0; background: transparent; color: inherit;
+  font-size: inherit; text-align: left;
+}
+#aiSheet .ai-model-use {
+  flex: 0 0 auto; padding: 5px 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-size: 12px;
+}
+#aiSheet .ai-model-row.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-soft)); }
+#aiSheet .ai-model-row.cur { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+#aiSheet .ai-model-box {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line);
+  display: grid; place-items: center; font-size: 12px; color: var(--accent-ink);
+}
+#aiSheet .ai-model-row.on .ai-model-box { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+#aiSheet .ai-model-name { flex: 1 1 auto; min-width: 0; }
+#aiSheet .ai-model-badge { flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* 聊天页顶栏：AI 会话的模型切换胶囊 */
+.ai-model-chip {
+  display: inline-block; margin-top: 3px; padding: 2px 9px; max-width: 100%;
+  border-radius: 10px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--sub); font-size: 11px; line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ai-model-chip.hidden { display: none; }

@@ -70,7 +70,7 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
-    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手' },
+    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [] },
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' },
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
@@ -233,7 +233,8 @@
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
-        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手' }, o.ai || {});
+        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [] }, o.ai || {});
+        if (!Array.isArray(S.ai.models)) S.ai.models = [];
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
         S.bg = normalizeBg(o.bg);
         if (typeof o.glass === 'boolean') S.glass = o.glass;
@@ -787,6 +788,134 @@
     if (!aiKeyStore()) { el.textContent = '还没填 API key'; return; }
     el.textContent = '已开启 · ' + S.ai.model + ' · ' + (S.ai.base || '').replace(/^https?:\/\//, '');
   }
+  /* ---------- 模型列表：向接口地址要 /models，勾选后保存，会话里可切换 ---------- */
+  var aiModelFetched = [];       // 这次从接口拿到的全部可选模型
+  function aiModelList() {
+    var a = S.ai || {};
+    if (!Array.isArray(a.models)) a.models = [];
+    return a.models;
+  }
+  function renderAiModelList() {
+    var box = $('#aiModelList');
+    if (!box) return;
+    var picked = aiModelList();
+    var cur = (S.ai && S.ai.model) || '';
+    var rows = '';
+    // 已勾选的排前面，当前模型打勾标记
+    var list = aiModelFetched.slice();
+    picked.forEach(function (m) { if (list.indexOf(m) < 0) list.push(m); });
+    if (!list.length) {
+      box.innerHTML = '<p class="ai-model-empty">还没获取过模型列表，点上面的「获取」。</p>';
+      return;
+    }
+    list.forEach(function (m) {
+      var on = picked.indexOf(m) >= 0;
+      var isCur = m === cur;
+      rows += '<div class="ai-model-row' + (on ? ' on' : '') + (isCur ? ' cur' : '') + '">' +
+                '<button class="ai-model-hit" type="button" data-model="' + esc(m) + '">' +
+                  '<span class="ai-model-box">' + (on ? '✓' : '') + '</span>' +
+                  '<span class="ai-model-name">' + esc(m) + '</span>' +
+                '</button>' +
+                (isCur
+                  ? '<span class="ai-model-badge">当前</span>'
+                  : (on ? '<button class="ai-model-use" type="button" data-cur="' + esc(m) + '">设为当前</button>' : '')) +
+              '</div>';
+    });
+    box.innerHTML = rows;
+  }
+  function aiToggleModel(m) {
+    var picked = aiModelList();
+    var i = picked.indexOf(m);
+    if (i >= 0) {
+      if (picked.length === 1) { toast('至少留一个模型'); return; }
+      picked.splice(i, 1);
+      if (S.ai.model === m) S.ai.model = picked[0];     // 删掉的正好是当前的，换第一个
+    } else {
+      picked.push(m);
+      if (!S.ai.model || aiModelList().indexOf(S.ai.model) < 0) S.ai.model = m;
+    }
+    save(); renderAiModelList(); syncAiModelUi();
+  }
+  // 在勾选好的模型里切换当前用的那个
+  function aiSetCurrent(m) {
+    if (aiModelList().indexOf(m) < 0) return;
+    S.ai.model = m;
+    save(); renderAiModelList(); syncAiModelUi();
+    toast('已切到 ' + m);
+  }
+  function syncAiModelUi() {
+    var a = S.ai || {};
+    if ($('#aiModel')) $('#aiModel').value = a.model || '';
+    if ($('#aiModelHint')) {
+      var n = aiModelList().length;
+      $('#aiModelHint').textContent = n
+        ? ('已勾选 ' + n + ' 个模型，当前用的是 ' + (a.model || '') + '；点模型名字可以换。')
+        : '点「获取」向接口地址请求可用模型，勾选你要的。';
+    }
+    // 聊天页顶栏：AI 会话里显示当前模型
+    var chip = $('#aiModelChip');
+    if (chip) {
+      var inAi = S.cur === AI_RID;
+      chip.classList.toggle('hidden', !inAi);
+      if (inAi) chip.textContent = (a.model || '模型') + ' ▾';
+    }
+  }
+  function aiFetchModels() {
+    var base = normAiBase($('#aiBase') ? $('#aiBase').value : (S.ai && S.ai.base));
+    var hint = $('#aiModelHint');
+    if (!aiKeyStore()) { toast('先填 API key'); return; }
+    if (hint) hint.textContent = '正在向 ' + base + ' 获取模型列表…';
+    var btn = $('#aiFetchModels');
+    if (btn) btn.disabled = true;
+    var done = function (ids, err) {
+      if (btn) btn.disabled = false;
+      if (err) { if (hint) hint.textContent = '获取失败：' + err; toast('获取模型失败'); return; }
+      aiModelFetched = ids.slice();
+      var picked = aiModelList();
+      if (!picked.length && ids.length) { picked.push(ids[0]); S.ai.model = S.ai.model || ids[0]; }
+      // 当前模型不在新的列表里就换成第一个可用的
+      if (ids.length && ids.indexOf(S.ai.model) < 0 && picked.indexOf(S.ai.model) < 0) S.ai.model = ids[0];
+      save(); renderAiModelList(); syncAiModelUi();
+      toast('拿到 ' + ids.length + ' 个模型');
+    };
+    try {
+      if (window.PaperNative && window.PaperNative.aiModels) {
+        window.PaperNative.aiModels(base);
+        return;
+      }
+    } catch (e) {}
+    // 浏览器调试时才走 fetch
+    try {
+      fetch(base + '/models', { headers: { 'Authorization': 'Bearer ' + aiKeyStore() } })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) { done(((j && j.data) || []).map(function (x) { return x.id; }).filter(Boolean)); })
+        .catch(function (e) { done([], e.message); });
+    } catch (e) { done([], e.message); }
+  }
+  // 原生回调：{"ok":true,"ids":[...]} / {"ok":false,"error":"..."}
+  window.__aiModelsReply = function (payload) {
+    var j = null;
+    try { j = JSON.parse(payload); } catch (e) {}
+    if (j && j.ok && Array.isArray(j.ids)) return aiModelDone(j.ids);
+    var hint = $('#aiModelHint');
+    var btn = $('#aiFetchModels');
+    if (btn) btn.disabled = false;
+    if (hint) hint.textContent = '获取失败：' + ((j && j.error) || '未知错误');
+    toast('获取模型失败');
+  };
+  var aiModelDone = function (ids) {
+    var hint = $('#aiModelHint'), btn = $('#aiFetchModels');
+    if (btn) btn.disabled = false;
+    aiModelFetched = ids.slice();
+    var picked = aiModelList();
+    if (!picked.length && ids.length) picked.push(ids[0]);
+    if (ids.length && picked.indexOf(S.ai.model) < 0 && ids.indexOf(S.ai.model) < 0) S.ai.model = ids[0];
+    if (!S.ai.model && ids.length) S.ai.model = ids[0];
+    save(); renderAiModelList(); syncAiModelUi();
+    if (hint) hint.textContent = '拿到 ' + ids.length + ' 个模型';
+    toast('拿到 ' + ids.length + ' 个模型');
+  };
+
   /* 输入框展开：值太长时点开看全、改全 */
   var aiExpandTarget = null;
   var AI_FIELD_TITLES = { aiBase: '接口地址', aiModel: '模型', aiKey: 'API key', aiName: '名称' };
@@ -823,6 +952,7 @@
     if ($('#aiBase')) $('#aiBase').value = a.base || '';
     if ($('#aiModel')) $('#aiModel').value = a.model || '';
     if ($('#aiName')) $('#aiName').value = a.name || 'AI 助手';
+    renderAiModelList(); syncAiModelUi();
     if ($('#aiKey')) { var k = aiKeyStore(); $('#aiKey').value = k ? '••••••••' : ''; }
     refreshAiStat();
   }
@@ -1322,6 +1452,7 @@
     showJumpButton(rid);
     var r = room(rid);
     paintChatAva(rid);
+    try { syncAiModelUi(); } catch (e) {}
     $('#chatName').textContent = r.name;
     setConn(connected);
     $('#chat').classList.remove('hidden');
@@ -1421,6 +1552,7 @@
       ch.classList.add('hidden');
     }
     S.cur = null;
+    try { syncAiModelUi(); } catch (e) {}
     renderRooms();
     showTab(S.tab || 'chats');
     // 底栏是被接回来的，硬切会「啪」一下冒出来：轻轻推上来
@@ -2604,11 +2736,29 @@
     });
     on('#btnAi', 'click', function () {
       renderAiPanel();
+      syncAiModelUi();
       var el = $('#aiSheet');
       el.classList.remove('hidden');
       requestAnimationFrame(function () { el.classList.add('open'); });
     });
     on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
+    on('#aiFetchModels', 'click', function (e) { e.preventDefault(); aiFetchModels(); });
+    (function () {
+      var mlist = $('#aiModelList');
+      if (mlist) mlist.addEventListener('click', function (e) {
+        var use = e.target.closest ? e.target.closest('[data-cur]') : null;
+        if (use) { e.preventDefault(); aiSetCurrent(use.getAttribute('data-cur')); return; }
+        var b = e.target.closest ? e.target.closest('[data-model]') : null;
+        if (b) { e.preventDefault(); aiToggleModel(b.getAttribute('data-model')); }
+      });
+      var chip = $('#aiModelChip');
+      if (chip) chip.addEventListener('click', function (e) {
+        e.preventDefault();
+        renderAiPanel(); syncAiModelUi();
+        var el = $('#aiSheet');
+        if (el) { el.classList.remove('hidden'); requestAnimationFrame(function () { el.classList.add('open'); }); }
+      });
+    })();
     ['aiBase', 'aiModel', 'aiKey', 'aiName'].forEach(function (fid) {
       var el = $('#' + fid);
       if (el) on('#' + fid, 'click', function (e) { e.preventDefault(); try { el.blur(); } catch (err) {} aiOpenExpand(fid); });
