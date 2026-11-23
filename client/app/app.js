@@ -5,6 +5,8 @@
 
   var LOCAL_RID = 'dm:local';
   var LOCAL_PEER = 'local';
+  var AI_RID = 'dm:ai';
+  var AI_PEER = 'ai';
   var ROOMS_DEFAULT = [
     { id: 'lobby', name: '公共大厅', emoji: '💬', color: '#3390ec' },
     { id: 'tech',  name: '技术交流', emoji: '🛠', color: '#4caf50' },
@@ -68,6 +70,7 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
+    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手' },
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' },
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
@@ -194,7 +197,7 @@
   };
 
   function save() {
-    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
+    var payload = { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, ts: Date.now(), log: bootLog.slice(-12) };
     try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
@@ -230,6 +233,7 @@
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
+        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手' }, o.ai || {});
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
         S.bg = normalizeBg(o.bg);
         if (typeof o.glass === 'boolean') S.glass = o.glass;
@@ -749,6 +753,132 @@
     refreshAgentStatus();
     toast(on ? ('本地用户已开启，端口 ' + S.localAgent.port) : '本地用户已关闭');
   }
+  /* ---------------- 自带 AI 助手（填 key 就能聊，和「本地用户」互不影响） ---------------- */
+  function aiName() { return (S.ai && S.ai.name) || 'AI 助手'; }
+  function aiKeyStore(k, v) {
+    // key 优先放原生私有存储（Android SharedPreferences），没桥时退回 localStorage
+    try {
+      var P = window.PaperNative;
+      if (P && P.secretSet && v !== undefined) { P.secretSet('ai_key', v); return; }
+      if (P && P.secretGet) { var got = P.secretGet('ai_key'); if (got) return got; }
+    } catch (e) {}
+    try {
+      if (v !== undefined) localStorage.setItem('pl.ai.key', v);
+      return localStorage.getItem('pl.ai.key') || '';
+    } catch (e) { return ''; }
+  }
+  function ensureAiConv(on) {
+    if (on) {
+      if (!S.dms[AI_PEER]) S.dms[AI_PEER] = { name: aiName(), roomId: AI_RID, local: true };
+      S.dms[AI_PEER].name = aiName();
+      S.dms[AI_PEER].local = true;
+    } else if (S.dms[AI_PEER]) {
+      delete S.dms[AI_PEER];
+      if (S.cur === AI_RID) { S.cur = null; $('#chat').classList.add('hidden'); showTab(S.tab || 'chats'); }
+    }
+    try { localStorage.setItem(LK('dms'), JSON.stringify(S.dms)); } catch (e) {}
+    renderRooms();
+  }
+  function aiReady() { return !!(S.ai && S.ai.on && S.ai.base && S.ai.model && aiKeyStore()); }
+  function refreshAiStat() {
+    var el = $('#aiStat');
+    if (!el) return;
+    if (!S.ai || !S.ai.on) { el.textContent = '未开启'; return; }
+    if (!aiKeyStore()) { el.textContent = '还没填 API key'; return; }
+    el.textContent = '已开启 · ' + S.ai.model + ' · ' + (S.ai.base || '').replace(/^https?:\/\//, '');
+  }
+  function renderAiPanel() {
+    var a = S.ai || {};
+    if ($('#aiOn')) $('#aiOn').checked = !!a.on;
+    if ($('#aiBase')) $('#aiBase').value = a.base || '';
+    if ($('#aiModel')) $('#aiModel').value = a.model || '';
+    if ($('#aiName')) $('#aiName').value = a.name || 'AI 助手';
+    if ($('#aiKey')) { var k = aiKeyStore(); $('#aiKey').value = k ? '••••••••' : ''; }
+    refreshAiStat();
+  }
+  function aiApply(on) {
+    var a = S.ai || (S.ai = {});
+    a.on = !!on;
+    a.base = normAiBase($('#aiBase') ? $('#aiBase').value : a.base);
+    a.model = (($('#aiModel') && $('#aiModel').value) || a.model || 'deepseek-chat').trim().slice(0, 60);
+    a.name = (($('#aiName') && $('#aiName').value) || 'AI 助手').trim().slice(0, 16) || 'AI 助手';
+    var kEl = $('#aiKey');
+    var kv = kEl ? kEl.value.trim() : '';
+    if (kv && kv.indexOf('••') !== 0) aiKeyStore('', kv);     // 只有真改过才覆盖
+    save();
+    ensureAiConv(!!a.on);
+    refreshAiStat();
+    toast(a.on ? ('AI 助手已开启（' + a.model + '）') : 'AI 助手已关闭');
+  }
+  function normAiBase(v) {
+    var t = String(v || '').trim().replace(/\s+/g, '');
+    if (!t) return 'https://api.deepseek.com/v1';
+    if (!/^https?:\/\//i.test(t)) t = 'https://' + t;
+    return t.replace(/\/+$/, '').replace(/\/chat\/completions$/i, '');
+  }
+  // 聊天里给 AI 发消息：把最近几条历史一起发过去，回复直接落到会话里
+  var aiPending = [];      // 原生回调是按顺序回来的，这里按 FIFO 取
+  function aiDoneCb(fn) { aiPending.push(fn); }
+  window.__aiReply = function (payload) {
+    var fn = aiPending.shift();
+    if (!fn) return;
+    var j = null;
+    try { j = JSON.parse(payload); } catch (e) {}
+    if (j && j.ok) fn(String(j.text || '(模型没返回内容)').trim());
+    else fn('连不上模型：' + ((j && j.error) || '未知错误'));
+  };
+  function askAi(text, tid) {
+    var hist = loadHist(AI_RID).filter(function (m) { return m && m.text && !m.sys; });
+    var msgs = [{ role: 'system', content: '你是纸鸢里的 AI 助手，中文口语回答，简洁，不要用 Markdown 列表。' }];
+    hist.slice(-16).forEach(function (m) {
+      if (m.id === tid) return;                     // 刚发的那条单独加，免得重复
+      var out = (m.from === S.deviceId || m.from === S.me || m.from === 'me');
+      msgs.push({ role: out ? 'user' : 'assistant', content: String(m.text || '').slice(0, 4000) });
+    });
+    msgs.push({ role: 'user', content: text });
+
+    var ph = { id: 'ai' + Date.now(), from: AI_PEER, name: aiName(), text: '思考中…', ts: Date.now(), sys: true, typing: true };
+    addMsg(AI_RID, ph); saveHist(AI_RID); renderMsgs(true);
+
+    var done = function (outText) {
+      var list = loadHist(AI_RID);
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (list[i] && list[i].id === ph.id) {
+          list[i].text = outText; list[i].sys = false; list[i].typing = false;
+          break;
+        }
+      }
+      saveHist(AI_RID);
+      S.last[AI_RID] = { id: ph.id, text: outText, name: aiName(), ts: Date.now() };
+      save();
+      if (S.cur === AI_RID) renderMsgs(true);
+      renderRooms();
+    };
+
+    var msgsJson = JSON.stringify(msgs);
+    aiDoneCb(done);
+    // 原生发请求：WebView 里 fetch 会被 CORS / file:// 拦住，浏览器调试时才走 fetch
+    try {
+      if (window.PaperNative && window.PaperNative.aiAsk) {
+        window.PaperNative.aiAsk(S.ai.base || '', S.ai.model || '', msgsJson);
+        return;
+      }
+    } catch (e) {}
+    try {
+      fetch((S.ai.base || '') + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aiKeyStore() },
+        body: JSON.stringify({ model: S.ai.model, messages: msgs, stream: false })
+      }).then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + ' ' + String(t || '').slice(0, 120)); });
+        return r.json();
+      }).then(function (j) {
+        var t = j && j.choices && j.choices[0] && (j.choices[0].message || {}).content;
+        aiPending.shift(); done(String(t || '(模型没返回内容)').trim());
+      }).catch(function (e) { aiPending.shift(); done('连不上模型：' + (e && e.message ? e.message : e)); });
+    } catch (e) { aiPending.shift(); done('请求没发出去：' + e.message); }
+  }
+
   /* ---------------- 用户接入（Agent 作为真账号） ---------------- */
   function agentUserOn() { return !!(window.PaperNative && window.PaperNative.agentUserApply); }
   function renderAgentUserPanel() {
@@ -1297,6 +1427,16 @@
     S.last[S.cur] = { id: tid, text: text, name: '', ts: m.ts }; save();
     clearReply(); renderMentionBox();
     renderMsgs(true); renderRooms();
+    if (S.cur === AI_RID) {
+      // 自带 AI 助手：不走服务器，也不占用「本地用户」的 Agent 通道
+      var mineAi = null, listA = loadHist(AI_RID);
+      for (var ai2 = listA.length - 1; ai2 >= 0; ai2--) if (listA[ai2].id === tid) { mineAi = listA[ai2]; break; }
+      if (mineAi) { mineAi.pending = false; saveHist(AI_RID); }
+      if (!S.ai || !S.ai.on) { toast('先在「我的 → AI 助手」里开启'); renderMsgs(false); return; }
+      renderMsgs(false);
+      askAi(text, tid);
+      return;
+    }
     if (S.cur === LOCAL_RID) {
       // 本地用户：只交给本机 Agent，不走服务器
       var sent = false;
@@ -2431,6 +2571,18 @@
       };
       img.onerror = function () { toast('这张图打不开'); };
       img.src = url;
+    });
+    on('#btnAi', 'click', function () {
+      renderAiPanel();
+      var el = $('#aiSheet');
+      el.classList.remove('hidden');
+      requestAnimationFrame(function () { el.classList.add('open'); });
+    });
+    on('#aiApply', 'click', function () { aiApply($('#aiOn').checked); });
+    on('#aiClose', 'click', function () {
+      var el = $('#aiSheet');
+      el.classList.remove('open');
+      setTimeout(function () { el.classList.add('hidden'); }, 200);
     });
     on('#agentApply', 'click', function () {
       agentApply($('#agentOn').checked, Number($('#agentPort').value) || 6721, $('#agentLan').checked);

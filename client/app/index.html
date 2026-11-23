@@ -176,6 +176,30 @@
   </div>
 </div>
 
+<!-- AI 助手（自带模型，填 key 就能用） -->
+<div id="aiSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="AI 助手">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">AI 助手</h3>
+    <p class="remark-sub">填上 API key，会话列表里会多一个「AI 助手」，发消息它就回。和上面的「本地用户」互不影响，两个都开也行。</p>
+    <label class="me-row agent-row"><span class="me-ico">🤖</span>开启 AI 助手
+      <input id="aiOn" type="checkbox" class="agent-switch"></label>
+    <label class="me-row agent-row"><span class="me-ico">🔗</span>接口地址
+      <input id="aiBase" class="agent-input" type="text" inputmode="url" placeholder="https://api.deepseek.com/v1"></label>
+    <label class="me-row agent-row"><span class="me-ico">🧠</span>模型
+      <input id="aiModel" class="agent-input" type="text" placeholder="deepseek-chat"></label>
+    <label class="me-row agent-row"><span class="me-ico">🔑</span>API key
+      <input id="aiKey" class="agent-input" type="password" placeholder="sk-…"></label>
+    <label class="me-row agent-row"><span class="me-ico">🏷</span>名称
+      <input id="aiName" class="agent-input agent-name" type="text" maxlength="16" placeholder="AI 助手"></label>
+    <p class="hint" id="aiStat">未开启</p>
+    <p class="hint" id="aiHint">接口按 OpenAI 兼容格式请求（/chat/completions），DeepSeek、通义、自建 vLLM 都能填。key 只存在本机，不经过纸鸢服务器。回复需要 App 在前台或后台没被系统冻结。</p>
+    <button id="aiApply" class="primary" type="button">保存</button>
+    <button id="aiClose" class="action-cancel" type="button">关闭</button>
+  </div>
+</div>
+
 <!-- 本地用户（Agent 接入） -->
 <div id="agentSheet" class="action-layer hidden">
   <button class="action-scrim" type="button" aria-label="关闭"></button>
@@ -380,6 +404,7 @@
       <button id="btnCheckUpdate" class="me-row" type="button"><span class="me-ico">🔄</span>检查更新<span class="me-arrow">›</span></button>
       <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
       <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
+      <button id="btnAi" class="me-row" type="button"><span class="me-ico">🤖</span>AI 助手<span class="me-arrow">›</span></button>
       <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
       <button id="btnBeauty" class="me-row" type="button" aria-expanded="false">
         <span class="me-ico">🎨</span>美化设置<span class="me-arrow beauty-arrow" id="beautyArrow">›</span></button>

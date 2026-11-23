@@ -313,6 +313,96 @@ public class MainActivity extends Activity {
             return act.notificationsAllowed();
         }
 
+        /**
+         * 自带 AI 助手：把请求交给原生发（WebView 里 fetch 会被 CORS 和 file:// 拦住）。
+         * base/model/messages 由 JS 给，key 从本机保险箱取，不回传 JS。
+         */
+        @JavascriptInterface
+        public void aiAsk(final String base, final String model, final String messagesJson) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    String out;
+                    try {
+                        out = aiRequest(base, model, messagesJson);
+                    } catch (Exception e) {
+                        out = "{\"ok\":false,\"error\":\"" + esc4j(String.valueOf(e.getMessage())) + "\"}";
+                    }
+                    final String payload = out;
+                    try {
+                        act.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    act.web.evaluateJavascript(
+                                        "try{window.__aiReply&&window.__aiReply("
+                                        + org.json.JSONObject.quote(payload) + ")}catch(e){}", null);
+                                } catch (Exception e) { }
+                            }
+                        });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
+        private String aiRequest(String base, String model, String messagesJson) throws Exception {
+            String key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
+            if (key == null || key.length() == 0) return "{\"ok\":false,\"error\":\"还没填 API key\"}";
+            String url = base.replaceAll("/+$", "") + "/chat/completions";
+            org.json.JSONArray msgs = new org.json.JSONArray(messagesJson == null ? "[]" : messagesJson);
+            org.json.JSONObject body = new org.json.JSONObject();
+            body.put("model", model);
+            body.put("messages", msgs);
+            body.put("stream", false);
+            byte[] bytes = body.toString().getBytes("UTF-8");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            conn.setConnectTimeout(12000);
+            conn.setReadTimeout(120000);
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("Authorization", "Bearer " + key);
+            conn.setFixedLengthStreamingMode(bytes.length);
+            java.io.OutputStream os = conn.getOutputStream();
+            os.write(bytes);
+            os.flush();
+            os.close();
+            int code = conn.getResponseCode();
+            java.io.InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is, "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            String resp = sb.toString();
+            if (code >= 400) {
+                return "{\"ok\":false,\"error\":\"HTTP " + code + " " + esc4j(resp.length() > 160 ? resp.substring(0, 160) : resp) + "\"}";
+            }
+            org.json.JSONObject j = new org.json.JSONObject(resp);
+            String text = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
+            return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\"}";
+        }
+
+        private String esc4j(String s) {
+            if (s == null) return "";
+            return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "").replace("\t", "  ");
+        }
+
+        /** 本机私有小保险箱：AI 助手的 API key 存这里，不进 WebView 的 localStorage */
+        @JavascriptInterface
+        public void secretSet(String name, String value) {
+            try {
+                act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).edit()
+                    .putString("s_" + name, value == null ? "" : value).apply();
+            } catch (Exception e) { }
+        }
+
+        @JavascriptInterface
+        public String secretGet(String name) {
+            try {
+                return act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE)
+                    .getString("s_" + name, "");
+            } catch (Exception e) { return ""; }
+        }
+
         @JavascriptInterface
         public String agentStatus() {
             return act.agentStatusJson();
