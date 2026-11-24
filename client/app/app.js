@@ -2653,6 +2653,11 @@
     try { var ts = $('#themeState'); if (ts) ts.textContent = t === 'dark' ? '深色' : (t === 'light' ? '浅色' : '跟随系统'); } catch (e) {}
     try { applyChatBg(); } catch (e) {}
     try { renderBeautyPanel(); } catch (e) {}
+    // 启动时把已有的照片底图预先模糊好，运行时就不再用全屏 filter
+    setTimeout(function () {
+      try { if ((bgOf('chat').image || '').length && Number(bgOf('chat').blur) > 0) refreshWallBlur('chat'); } catch (e) {}
+      try { if ((bgOf('list').image || '').length && Number(bgOf('list').blur) > 0) refreshWallBlur('list'); } catch (e) {}
+    }, 900);
   }
   function toggleTheme() {
     var cur = document.documentElement.getAttribute('data-theme');
@@ -2719,9 +2724,53 @@
     if (!S.bg.chat || !S.bg.list) S.bg = normalizeBg(S.bg);
     return key === 'list' ? S.bg.list : S.bg.chat;
   }
+  // 背景预模糊：把模糊做在图片上（一次），而不是让合成器每帧去 filter blur 一张全屏图。
+  // 后者在安卓 WebView 上既贵又会让壁纸跟着滚动一起抖。
+  var __blurCache = {};
+  function blurImage(src, px) {
+    return new Promise(function (resolve) {
+      if (!src) return resolve('');
+      var key = src.length + ':' + px;
+      if (__blurCache[key]) return resolve(__blurCache[key]);
+      try {
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var max = 720, w = img.width, h = img.height;
+            if (w > max || h > max) { var sc = max / Math.max(w, h); w = Math.round(w * sc); h = Math.round(h * sc); }
+            var c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            var ctx = c.getContext('2d');
+            ctx.filter = 'blur(' + Math.max(1, px * 0.5).toFixed(1) + 'px)';
+            ctx.drawImage(img, 0, 0, w, h);
+            ctx.filter = 'none';
+            var out = c.toDataURL('image/jpeg', 0.7);
+            __blurCache = {};
+            __blurCache[key] = out;
+            resolve(out);
+          } catch (e) { resolve(''); }
+        };
+        img.onerror = function () { resolve(''); };
+        img.src = src;
+      } catch (e) { resolve(''); }
+    });
+  }
+  function refreshWallBlur(scope) {
+    var cfg = bgOf(scope);
+    if (!cfg.image) return;
+    var px = Number(cfg.blur) || 0;
+    if (px <= 0) { cfg.imageBlurSrc = ''; applyChatBg(); return; }
+    blurImage(cfg.image, px).then(function (out) {
+      if (out) { cfg.imageBlurSrc = out; applyChatBg(); }
+    });
+  }
+
   function wallFor(cfg) {
     if (!cfg) return { wall: 'none', dark: false, image: false };
-    if (cfg.key === 'custom' && cfg.image) return { wall: 'url("' + cfg.image + '")', dark: !!cfg.imageDark, image: true };
+    if (cfg.key === 'custom' && cfg.image) {
+      var src = (Number(cfg.blur) > 0 && cfg.imageBlurSrc) ? cfg.imageBlurSrc : cfg.image;
+      return { wall: 'url("' + src + '")', dark: !!cfg.imageDark, image: true, preblurred: !!(Number(cfg.blur) > 0 && cfg.imageBlurSrc) };
+    }
     if (cfg.key && cfg.key !== 'none') {
       var p = bgPreset(cfg.key);
       if (p) return { wall: p.css, dark: !!p.dark, image: false };
@@ -2822,7 +2871,7 @@
     var cDark = root.getAttribute('data-theme') === 'dark';
     if (cDark && cw.image) cd = Math.min(0.9, cd + 0.16);
     root.style.setProperty('--chat-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + cd.toFixed(2) + ')');
-    var cblur = cw.image ? Math.min(80, Number(chat.blur) || 0) : 0;
+    var cblur = (cw.image && !cw.preblurred) ? Math.min(80, Number(chat.blur) || 0) : 0;
     root.style.setProperty('--chat-wall-blur', cblur + 'px');
     root.classList.toggle('wall-blur', cblur > 0);
 
@@ -2874,7 +2923,7 @@
     var blur = 2 + lv * 0.66;
     var alpha = 0.04 + lv * 0.0088;
     var tint = 0.01 + lv * 0.0026;
-    var sat = 120 + lv * 2.4;
+    var sat = Math.min(220, 110 + lv * 1.6);   // 110%–220%，再高就开始发怪了
     var mul = clamp((typeof S.glassMul === 'number' ? S.glassMul : 100) / 100, 0.2, 3.0);
     var cardK = clamp((typeof S.glassCard === 'number' ? S.glassCard : 100) / 100, 0, 1.4);
     var thinK = clamp((typeof S.glassThin === 'number' ? S.glassThin : 100) / 100, 0, 1.4);
@@ -5392,6 +5441,13 @@
         if (e.target.closest('[data-more]')) { e.preventDefault(); loadEarlier(); }
         if (e.target.closest('[data-cont]')) { e.preventDefault(); rpContinue(); }
       });
+      var scrollTimer = 0;
+      box.addEventListener('scroll', function () {
+        var de = document.documentElement;
+        if (!de.classList.contains('msgs-scrolling')) de.classList.add('msgs-scrolling');
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(function () { de.classList.remove('msgs-scrolling'); }, 140);
+      }, { passive: true });
       var lastLoad = 0;
       box.addEventListener('scroll', function () {
         if (box.scrollTop > 90) return;
@@ -5538,7 +5594,9 @@
         try { URL.revokeObjectURL(url); } catch (e2) {}
         var cfg = bgOf();
         cfg.imageDark = dark;
+        cfg.imageBlurSrc = '';
         setChatBg('custom', data);
+        refreshWallBlur();
         toast('背景已更新');
       };
       img.onerror = function () { toast('这张图打不开'); };
@@ -5563,9 +5621,13 @@
     on('#bgBlur', 'input', function (e) {
       var cfg = bgOf();
       cfg.blur = Math.min(80, Number(e.target.value) || 0);
+      // 拖的时候先用运行时模糊顶着，松手再换成预模糊图（省掉每帧全屏 blur）
       applyChatBg();
     });
-    on('#bgBlur', 'change', function () { save(); });
+    on('#bgBlur', 'change', function () {
+      save();
+      refreshWallBlur();
+    });
     on('#bgReset', 'click', function () {
       var scope = (S.bg && S.bg.scope) || 'chat';
       S.bg = normalizeBg(S.bg);
@@ -5657,34 +5719,59 @@
       var el = $(sel);
       if (el) el.addEventListener('input', paintGlassPreview);
     });
+    // 玻璃滑杆：拖动时每帧只合并一次，并切到「轻量」渲染（降低模糊半径、去掉高光渐变），
+    // 松手后再按真实数值完整渲染。之前是每个 input 事件都整套重算 + 全屏 backdrop 重模糊，
+    // 所以手感是「拖完才生效」。
+    var __glassRaf = 0, __glassFast = false, __glassIdle = 0;
+    function applyGlassSoon(fast) {
+      __glassFast = __glassFast || fast;
+      if (__glassRaf) return;
+      __glassRaf = requestAnimationFrame(function () {
+        __glassRaf = 0;
+        var fastNow = __glassFast;
+        __glassFast = false;
+        document.documentElement.classList.toggle('glass-dragging', !!fastNow);
+        try { applyChatBg(); } catch (e) {}
+        paintGlassVals();
+        paintGlassPreview();
+        // 兜底：万一只收到 input 没收到 change（某些 WebView 会这样），
+        // 停手 600ms 后自动恢复完整渲染，不能一直贴着轻量档
+        clearTimeout(__glassIdle);
+        if (fastNow) __glassIdle = setTimeout(function () { endGlassDrag(); }, 600);
+      });
+    }
+    function endGlassDrag() {
+      if (__glassRaf) { cancelAnimationFrame(__glassRaf); __glassRaf = 0; }
+      __glassFast = false;
+      document.documentElement.classList.remove('glass-dragging');
+      try { applyChatBg(); } catch (e) {}
+      save();
+    }
     on('#glassMul', 'input', function (e) {
-      S.glassMul = Math.max(40, Math.min(180, Number(e.target.value) || 100));
-      applyChatBg();
-      paintGlassVals();
-      paintGlassPreview();
+      S.glassMul = Math.max(20, Math.min(300, Number(e.target.value) || 100));
+      applyGlassSoon(true);
     });
+    on('#glassMul', 'change', endGlassDrag);
     on('#glassMul', 'change', function () { save(); });
     on('#glassCard', 'input', function (e) {
       S.glassCard = Math.max(0, Math.min(140, Number(e.target.value)));
-      applyChatBg();
-      paintGlassVals();
-      paintGlassPreview();
+      S.gpFocus = 'card';
+      paintGpFocus();
+      applyGlassSoon(true);
     });
-    on('#glassCard', 'change', function () { save(); });
+    on('#glassCard', 'change', endGlassDrag);
     on('#glassThin', 'input', function (e) {
       S.glassThin = Math.max(0, Math.min(140, Number(e.target.value)));
-      applyChatBg();
-      paintGlassVals();
-      paintGlassPreview();
+      S.gpFocus = 'thin';
+      paintGpFocus();
+      applyGlassSoon(true);
     });
-    on('#glassThin', 'change', function () { save(); });
+    on('#glassThin', 'change', endGlassDrag);
     on('#glassLevel', 'input', function (e) {
       S.glassLevel = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-      applyChatBg();
-      paintGlassVals();
-      paintGlassPreview();
+      applyGlassSoon(true);
     });
-    on('#glassLevel', 'change', function () { save(); });
+    on('#glassLevel', 'change', endGlassDrag);
     on('#btnGlass', 'click', function () {
       S.glass = !S.glass;
       applyChatBg();

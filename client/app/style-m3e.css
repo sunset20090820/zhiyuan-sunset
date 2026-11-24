@@ -2300,3 +2300,77 @@ html[data-wall] #hintBar {
   text-shadow: 0 1px 2px rgba(255, 255, 255, .72), 0 0 8px rgba(255, 255, 255, .5);
 }
 html[data-wall] [data-theme="dark"] .topbar .brand { text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+
+/* =========================================================
+   性能：拖动玻璃滑杆 / 聊天滚动时降低合成成本
+   —— 安卓 WebView 上全屏 backdrop-filter 每帧重算是最贵的一步，
+      拖动和滚动时先降到「够看」的档位，停下来恢复完整效果
+   ========================================================= */
+html.glass-dragging .topbar,
+html.glass-dragging .chat-top,
+html.glass-dragging .tabbar,
+html.glass-dragging .composer,
+html.glass-dragging .me-group,
+html.glass-dragging .me-card,
+html.glass-dragging #roomList,
+html.glass-dragging #friendList,
+html.glass-dragging #roomList .room,
+html.glass-dragging #friendList .room,
+html.glass-dragging .me-row,
+html.glass-dragging .msgs .msg .bubble {
+  -webkit-backdrop-filter: blur(10px) saturate(150%) !important;
+  backdrop-filter: blur(10px) saturate(150%) !important;
+  background-image: none !important;
+  transition: none !important;
+}
+html.glass-dragging .topbar,
+html.glass-dragging .tabbar,
+html.glass-dragging .composer { box-shadow: inset 0 1px 0 rgba(255,255,255,.55) !important; }
+
+/* 聊天滚动中：气泡不再单独做背景模糊（一条条的 backdrop 最耗），
+   只保留底色，滚动停下 140ms 后恢复 */
+html.msgs-scrolling .msgs .msg .bubble {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.msgs-scrolling .msgs .msg:not(.out) .bubble {
+  background-color: color-mix(in srgb, var(--m3e-surface) calc((var(--glass-thin-a) + .12) * 100%), transparent) !important;
+}
+html.msgs-scrolling .msgs .msg.out .bubble { background-color: var(--m3e-primary) !important; }
+
+/* =========================================================
+   设备性能：减少 backdrop-filter 图层数量
+   —— 每一层 backdrop 都要单独渲染一遍背景。之前卡片/行/按钮/气泡
+      几十个元素各带一层，中低端机就是这里卡。
+      现在只让「大面积玻璃」（顶栏/底栏/输入条/面板）做背景模糊，
+      行、卡片、按钮靠不透明度 + 高光 + 镜面边保持玻璃观感。
+   ========================================================= */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room,
+html[data-skin] .friend-list .friend-row,
+html[data-skin] .me-row,
+html[data-skin] .agent-row,
+html[data-skin] .me-row .mini-btn,
+html[data-skin] .icon-btn,
+html[data-skin] .ai-model-chip,
+html[data-skin] #aiSheet .ai-fetch,
+html[data-skin] #aiSheet .ai-eff,
+html[data-skin] .ai-input,
+html[data-skin] .search-input {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* 大面层：模糊半径封顶，够厚但别让整屏都在重算 */
+html[data-skin] .topbar,
+html[data-skin] .chat-top,
+html[data-skin] .tabbar,
+html[data-skin] .composer,
+html[data-skin] .action-card,
+html[data-skin] .sheet-body,
+html[data-skin] #roomList,
+html[data-skin] #friendList,
+html[data-skin] .me-group,
+html[data-skin] .me-card {
+  -webkit-backdrop-filter: blur(min(var(--m3e-glass-blur, 26px), 24px)) saturate(var(--m3e-glass-sat, 1.8));
+  backdrop-filter: blur(min(var(--m3e-glass-blur, 26px), 24px)) saturate(var(--m3e-glass-sat, 1.8));
+}

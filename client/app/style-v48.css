@@ -2126,18 +2126,20 @@ html[data-theme="dark"] .bg-chip span { background: rgba(30, 32, 46, .72); color
 
 /* ---------- 1) 自定义背景：可选模糊层 ---------- */
 html.wall-blur .msgs { background-image: none; }
-html.wall-blur .msgs::after {
+/* 模糊壁纸挂在聊天页上（静止层），不要挂在消息区里 ——
+   消息区滚动/拉伸时会把壁纸一起带走，看着像「壁纸在动」，而且每帧都要重算滤镜 */
+html.wall-blur .chat::before {
   content: '';
-  position: absolute; inset: -10px;
-  z-index: -2;
+  position: absolute; inset: -12px;
+  z-index: 0;
   pointer-events: none;
   background-image: var(--chat-wall, none);
   background-size: cover;
   background-position: center;
   filter: blur(var(--chat-wall-blur, 10px)) saturate(115%);
-  transform: scale(1.04);
+  transform: translateZ(0);
 }
-.msgs { will-change: background-image; }
+html.wall-blur .chat > * { position: relative; z-index: 1; }
 
 /* ---------- 2) 主题色（换一套主色，全套跟着变） ---------- */
 :root {
