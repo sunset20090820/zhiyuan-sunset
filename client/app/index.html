@@ -743,6 +743,24 @@
   </div>
 </div>
 
+<!-- ===== 反馈箱（普通用户：写反馈，不是聊天会话） ===== -->
+<div id="fbPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="fbClose" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">反馈箱</div>
+    <span class="logout-chip" style="visibility:hidden">·</span>
+  </header>
+  <div class="me-body">
+    <p class="hint">写给开发者的反馈会直接进他的反馈箱，他回复时你会在这里收到通知。写清楚版本号、操作步骤、看到什么会更方便定位。</p>
+    <label class="field"><span>反馈内容</span>
+      <textarea id="fbText" rows="6" maxlength="2000" placeholder="例如：13.37 在扮演页点导入角色包时，选 PNG 卡没有反应"></textarea>
+    </label>
+    <button id="fbSend" class="primary" type="button">发送反馈</button>
+    <div class="me-sec-head" style="cursor:default"><span class="me-ico">🗂</span>我发过的</div>
+    <div id="fbHist" class="fb-hist"></div>
+  </div>
+</div>
+
 <!-- ===== 导入角色包（PNG / JSON / 文本 → AI 拆解） ===== -->
 <div id="rpImportPage" class="me-page hidden">
   <header class="topbar">

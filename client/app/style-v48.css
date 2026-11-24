@@ -3025,3 +3025,8 @@ html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom));
 .ri-prev .ri-dials { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .ri-prev .ri-chip { font-size: 11.5px; padding: 3px 8px; border-radius: 99px;
   background: color-mix(in srgb, var(--tg-blue) 12%, transparent); color: var(--tg-blue); }
+.fb-hist { margin-top: 8px; }
+.fb-item { padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); margin-bottom: 8px; }
+.fb-meta { font-size: 11.5px; color: var(--tg-sub); margin-bottom: 4px; }
+.fb-text { font-size: 13px; line-height: 1.5; }
+.fb-reply { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--tg-blue); }

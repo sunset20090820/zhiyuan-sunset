@@ -60,6 +60,36 @@ const PART_MAX = 600 * 1024;      // 单片 base64 上限，避免超大帧
 
 /* ------------------------- 账号 ------------------------- */
 const DATA_DIR = path.join(__dirname, 'data');
+// 开发者（收反馈的账号）：DEV_UID=100002 或 DEV_UIDS=100002,100016（可配多个）
+const DEV_UIDS = (function () {
+  const raw = process.env.DEV_UIDS || process.env.DEV_UID || '100002';
+  const list = String(raw).split(',').map(x => Number(String(x).trim())).filter(n => n > 0);
+  return list.length ? list : [100002];
+})();
+const DEV_UID = DEV_UIDS[0];   // 旧代码兼容：回复时用第一个
+
+// ---- 反馈箱：所有用户的反馈都落到这一份，开发者登录就能看到 ----
+const FB_FILE = path.join(DATA_DIR, 'feedback.json');
+let feedback = [];
+try { feedback = JSON.parse(fs.readFileSync(FB_FILE, 'utf8')) || []; } catch (e) { feedback = []; }
+const FB_MAX = 800;
+function saveFeedback() {
+  try {
+    const cut = feedback.length > FB_MAX ? feedback.slice(feedback.length - FB_MAX) : feedback;
+    fs.writeFileSync(FB_FILE, JSON.stringify(cut, null, 1));
+  } catch (e) { console.log('[feedback] 保存失败', e.message); }
+}
+function isDevAccount(acc) { return !!acc && DEV_UIDS.indexOf(Number(acc.uid)) >= 0; }
+function devClients() {
+  return [...clients].filter(c => c.account && isDevAccount(accounts[c.account]));
+}
+function fbPublic(f) {
+  return { id: f.id, from: f.from || '', fromUid: f.fromUid || 0, name: f.name || '', text: f.text || '', ts: f.ts || 0, replied: !!f.replied, reply: f.reply || '' };
+}
+function pushFeedback(f) {
+  const out = { t: 'fb', msg: fbPublic(f) };
+  for (const c of devClients()) send(c, out);
+}
 const ACC_FILE = path.join(DATA_DIR, 'accounts.json');
 let accounts = {};
 try { accounts = JSON.parse(fs.readFileSync(ACC_FILE, 'utf8')) || {}; } catch (e) { accounts = {}; }
@@ -653,6 +683,58 @@ function handleMessage(c, buf, opcode) {
     return;
   }
 
+  // ---------- 反馈箱 ----------
+  if (d.t === 'fb') {
+    const text = clean(d.text, MAX_TEXT);
+    if (!text) return;
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const fb = {
+      id: uid(), from: dmIdOf(c), fromUid: (acc && acc.uid) || 0, name: c.name || '',
+      text: text, ts: now(), replied: false, dmRoom: ''
+    };
+    feedback.push(fb);
+    saveFeedback();
+    pushFeedback(fb);
+    send(c, { t: 'fb_ok', id: fb.id, ts: fb.ts });
+    return;
+  }
+  if (d.t === 'fb_list') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!isDevAccount(acc)) { send(c, { t: 'fb_list', items: [] }); return; }
+    const items = feedback.slice(Math.max(0, feedback.length - 300)).map(fbPublic);
+    send(c, { t: 'fb_list', items: items });
+    return;
+  }
+  if (d.t === 'fb_reply') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!isDevAccount(acc)) { send(c, { t: 'error', message: '只有开发者能回复反馈' }); return; }
+    const text = clean(d.text, MAX_TEXT);
+    const toUid = Number(d.toUid || 0);
+    if (!text || !toUid) return;
+    const target = accountByUid(toUid);
+    if (!target) { send(c, { t: 'error', message: '这个用户已经不在了' }); return; }
+    const fb = feedback.find(x => Number(x.fromUid) === toUid && !x.replied) || null;
+    if (fb) { fb.replied = true; fb.reply = text; saveFeedback(); }
+    // 回复以私信送回用户（离线也能收到，下次登录拉历史即可）
+    const me = 'uid:' + DEV_UID;
+    const other = 'uid:' + target.uid;
+    const key = dmKey(me, other);
+    const msg = {
+      id: uid(), room: key, from: me, name: c.name || '开发者', text: text, ts: now(),
+      avatar: '', tempId: null, deviceId: me, fromUid: DEV_UID, replyTo: null, mentions: []
+    };
+    const arr = roomHistory(key);
+    arr.push(msg);
+    if (arr.length > HIST_MAX) arr.splice(0, arr.length - HIST_MAX);
+    saveDm(key);
+    const out = { t: 'pm', msg: publicMessage(msg), room: key, with: other };
+    const peerKey = uidIndex[String(target.uid)];
+    const targets = peerKey ? [...clients].filter(x => x.account === peerKey) : [];
+    for (const peer of targets) send(peer, out);
+    send(c, { t: 'fb_ok', id: fb ? fb.id : '', ts: msg.ts, reply: true });
+    return;
+  }
+
   if (d.t === 'pm') {
     const asked = clean(d.to, 64);
     if (!asked) return;
@@ -682,6 +764,16 @@ function handleMessage(c, buf, opcode) {
     arr.push(msg);
     if (arr.length > HIST_MAX) arr.splice(0, arr.length - HIST_MAX);
     saveDm(key);
+    // 发给开发者的私信 = 反馈：进反馈库，开发者登录/在线都能收到
+    if (peerAcc && DEV_UIDS.indexOf(Number(peerAcc.uid)) >= 0) {
+      const fb = {
+        id: msg.id, from: me, fromUid: (myAcc && myAcc.uid) || 0, name: c.name || '',
+        text: text, ts: msg.ts, replied: false, dmRoom: key
+      };
+      feedback.push(fb);
+      saveFeedback();
+      pushFeedback(fb);
+    }
     const peerKey = other.indexOf('uid:') === 0 ? uidIndex[other.slice(4)] : null;
     const targets = peerKey ? [...clients].filter(x => x.account === peerKey) : clientsById(other);
     const out = { t: 'pm', msg: publicMessage(msg), room: key, with: other };
@@ -774,7 +866,7 @@ function handleMessage(c, buf, opcode) {
     accounts[user].token = crypto.randomBytes(24).toString('hex');
     saveAccounts();
     uidIndex[String(nextUid)] = user;
-    send(c, { t: 'auth', ok: true, action: 'register', user: user, nick: c.name, uid: nextUid, token: accounts[user].token, question: question });
+    send(c, { t: 'auth', ok: true, action: 'register', user: user, nick: c.name, uid: nextUid, token: accounts[user].token, question: question, dev: DEV_UIDS.indexOf(Number(nextUid)) >= 0, devUids: DEV_UIDS });
     pressPeople();
     return;
   }
@@ -796,7 +888,7 @@ function handleMessage(c, buf, opcode) {
     ensureFriendFields(acc);
     if (!acc.uid) rebuildUidIndex();
     if (!acc.token) { acc.token = crypto.randomBytes(24).toString('hex'); saveAccounts(); }
-    send(c, { t: 'auth', ok: true, action: 'login', user: key, nick: c.name, uid: acc.uid, token: acc.token });
+    send(c, { t: 'auth', ok: true, action: 'login', user: key, nick: c.name, uid: acc.uid, token: acc.token, dev: isDevAccount(acc), devUids: DEV_UIDS });
     pressPeople();
     return;
   }
@@ -820,7 +912,7 @@ function handleMessage(c, buf, opcode) {
     }
     c.account = hit;
     c.name = acc.nick || hit;
-    send(c, { t: 'auth', ok: true, action: 'resume', user: hit, nick: c.name, uid: acc.uid, token: acc.token });
+    send(c, { t: 'auth', ok: true, action: 'resume', user: hit, nick: c.name, uid: acc.uid, token: acc.token, dev: isDevAccount(acc), devUids: DEV_UIDS });
     pressPeople();
     return;
   }

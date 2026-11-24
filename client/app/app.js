@@ -10,7 +10,11 @@
   var FEEDBACK_PEER = 'feedback';
   var FEEDBACK_RID = 'dm:feedback';
   var DEV_UID = 'uid:100002';
-  var isDeveloper = false;   // 自己就是开发者时，反馈只在本地留档
+  var isDeveloper = false;   // 自己是开发者：会话列表里有反馈箱，能收到所有人的反馈
+  function isDevUid(n) {
+    var list = (S && S.devUids && S.devUids.length) ? S.devUids : [100002];
+    return list.indexOf(Number(n)) >= 0;
+  }
   var AI_PEER = 'ai';
   var ROOMS_DEFAULT = [
     { id: 'lobby', name: '公共大厅', emoji: '💬', color: '#3390ec' },
@@ -557,7 +561,12 @@
       refreshDMs();
       checkVersion();
       flushQueue();
-      try { isDeveloper = (S.uid === 100002); } catch (e) {}
+      try {
+        if (Array.isArray(d.devUids) && d.devUids.length) S.devUids = d.devUids.map(Number);
+        if (!S.devUids || !S.devUids.length) S.devUids = [100002];
+        isDeveloper = (d.dev === true) || (S.devUids.indexOf(Number(S.uid)) >= 0);
+      } catch (e) {}
+      try { if (isDeveloper) { S.fbLastUid = S.fbLastUid || 0; wsSend({ t: 'fb_list' }); } } catch (e) {}
       try { flushFeedback(); } catch (e) {}
       toast((d.action === 'register' ? '注册成功，' : d.action === 'reset' ? '密码已重置，' : '登录成功，') + '欢迎 ' + S.nick);
       return;
@@ -711,7 +720,8 @@
     }
     if (d.t === 'pm_history') {
       var peerId = d.with || '';
-      if (peerId === AI_PEER || peerId === LOCAL_PEER || /^dm:(ai|local)(\||$)/.test(String(d.room || ''))) {
+      if (peerId === AI_PEER || peerId === LOCAL_PEER || peerId === FEEDBACK_PEER ||
+          peerId === DEV_UID || /^dm:(ai|local|feedback)(\||$)/.test(String(d.room || ''))) {
         return;      // AI / 本地是本机的，服务端别拿它的私信房间号覆盖我们
       }
       upsertDm(peerId, d.room, d.peer && d.peer.name, d.peer && d.peer.uid, d.peer && d.peer.dev);
@@ -729,12 +739,68 @@
       save(); renderRooms();
       return;
     }
+    if (d.t === 'fb') {
+      // 开发者收到一条新反馈：直接进反馈箱，记住是谁发的，回复走 fb_reply
+      if (!isDeveloper) return;
+      var f = d.msg || {};
+      S.fbLastUid = Number(f.fromUid) || 0;
+      addMsg(FEEDBACK_RID, {
+        id: f.id, name: f.name || ('uid:' + f.fromUid), text: f.text || '',
+        ts: f.ts || Date.now(), fromUid: f.fromUid, deviceId: 'uid:' + f.fromUid,
+        fbIn: true, serverFrom: 'uid:' + f.fromUid
+      });
+      if (S.cur !== FEEDBACK_RID) { S.unread[FEEDBACK_RID] = (S.unread[FEEDBACK_RID] || 0) + 1; }
+      try { S.last[FEEDBACK_RID] = { id: f.id, text: f.text, name: f.name, ts: f.ts }; } catch (e) {}
+      save(); renderRooms();
+      if (S.cur === FEEDBACK_RID) renderMsgs(false);
+      return;
+    }
+    if (d.t === 'fb_list') {
+      if (!isDeveloper) return;
+      var items = Array.isArray(d.items) ? d.items : [];
+      var have = {};
+      (loadHist(FEEDBACK_RID) || []).forEach(function (m) { have[m.id] = 1; });
+      var tail = items.slice(-120).filter(function (x) { return x && x.id && !have[x.id]; });
+      tail.forEach(function (x) {
+        addMsg(FEEDBACK_RID, {
+          id: x.id, name: x.name || ('uid:' + x.fromUid), text: x.text || '', ts: x.ts || 0,
+          fromUid: x.fromUid, deviceId: 'uid:' + x.fromUid, fbIn: true, serverFrom: 'uid:' + x.fromUid
+        });
+        if (x.fromUid) S.fbLastUid = Number(x.fromUid);
+      });
+      if (tail.length) { save(); renderRooms(); if (S.cur === FEEDBACK_RID) renderMsgs(false); }
+      return;
+    }
+    if (d.t === 'fb_ok') {
+      if (d.reply) toast('已回复这个用户');
+      return;
+    }
     if (d.t === 'pm_saved') {
       if (S.last[d.room]) S.last[d.room].offline = true;
       toast(d.message || '对方不在线，稍后送达');
       return;
     }
     if (d.t === 'pm') {
+      // 普通用户收到开发者的回复：进「反馈箱」页里的回信，不新建私信会话
+      var fromDev = (d.msg && isDevUid(d.msg.fromUid)) ||
+                    (d.with && /^uid:\d+$/.test(d.with) && isDevUid(d.with.slice(4))) ||
+                    (d.msg && /^uid:\d+$/.test(String(d.msg.deviceId || '')) && isDevUid(String(d.msg.deviceId).slice(4)));
+      if (!isDeveloper && fromDev) {
+        var replyText = (d.msg && d.msg.text) || '';
+        var sent2 = [];
+        try { sent2 = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || []; } catch (e) { sent2 = []; }
+        var target = null;
+        for (var si = sent2.length - 1; si >= 0; si--) { if (sent2[si] && !sent2[si].reply) { target = sent2[si]; break; } }
+        if (target) { target.reply = replyText; target.replyTs = Date.now(); }
+        else { sent2.push({ text: '（开发者来信）', time: fmtTime(Date.now()), ts: Date.now(), reply: replyText, replyTs: Date.now() }); }
+        try { localStorage.setItem(LK('fbSent'), JSON.stringify(sent2.slice(-40))); } catch (e) {}
+        S.fbUnread = (Number(S.fbUnread) || 0) + 1;
+        save();
+        try { toast('开发者回复了你的反馈'); } catch (e) {}
+        try { syncFbBadge(); } catch (e) {}
+        if ($('#fbPage') && !$('#fbPage').classList.contains('hidden')) renderFbHistory();
+        return;
+      }
       // 开发者（uid:100002）的回信直接进反馈箱，不单开一个「开发者」私信
       try {
         var fbPeer = (d.msg && d.msg.fromUid ? ('uid:' + d.msg.fromUid) : (d.with || ''));
@@ -752,7 +818,7 @@
           if (d.with) S.avatars[d.with] = d.msg.avatar;
         }
       } catch (e) {}
-      if (d.room === FEEDBACK_RID && d.msg && d.msg.fromUid === 100002) {
+      if (d.room === FEEDBACK_RID && d.msg && isDevUid(d.msg.fromUid)) {
         d.msg.name = '开发者';
         d.msg.feedbackReply = true;
       }
@@ -971,8 +1037,18 @@
       var d2 = S.dms[peerId];
       if (d2 && dmRoomOf(peerId) === FEEDBACK_RID) { delete S.dms[peerId]; changed = true; }
     });
-    if (!S.dms[FEEDBACK_PEER]) {
-      S.dms[FEEDBACK_PEER] = { name: '反馈箱', roomId: FEEDBACK_RID, local: true, feedback: true };
+    // 反馈箱只给开发者：普通用户不该在会话列表里看到它（他们从「我的 → 反馈箱」写）
+    if (isDeveloper) {
+      if (!S.dms[FEEDBACK_PEER]) {
+        S.dms[FEEDBACK_PEER] = { name: '反馈箱', roomId: FEEDBACK_RID, local: true, feedback: true };
+        changed = true;
+      } else {
+        var fbx = S.dms[FEEDBACK_PEER];
+        if (fbx.roomId !== FEEDBACK_RID) { fbx.roomId = FEEDBACK_RID; changed = true; }
+        if (fbx.feedback !== true) { fbx.feedback = true; changed = true; }
+      }
+    } else if (S.dms[FEEDBACK_PEER] && S.dms[FEEDBACK_PEER].local === true) {
+      delete S.dms[FEEDBACK_PEER];
       changed = true;
     } else {
       var fb = S.dms[FEEDBACK_PEER];
@@ -1235,7 +1311,7 @@
         var it = arr[i];
         if (!it || it.sent) continue;
         var head = '【反馈】' + (window.APP_VERSION || '') + ' · ' + (S.nick || '匿名') + ' · uid:' + (S.uid || 0);
-        if (wsSend({ t: 'pm', to: DEV_UID, text: head + '\n' + it.text })) it.sent = true;
+        if (wsSend({ t: 'fb', text: head + '\n' + it.text })) it.sent = true;
         else left.push(it);
       }
       if (left.length !== arr.filter(function (x) { return x && !x.sent; }).length) {
@@ -1243,6 +1319,50 @@
       }
     } catch (e) {}
   }
+  // 普通用户的反馈页：写一段 → 发给开发者（服务端进反馈库，开发者登录就能看到）
+  function openFbPage() {
+    hideTabShell();
+    var pageEl = $('#fbPage');
+    if (!pageEl) return;
+    pageEl.classList.remove('hidden');
+    S.fbUnread = 0; save(); try { syncFbBadge(); } catch (e) {}
+    $('#fbText').value = '';
+    renderFbHistory();
+  }
+  function syncFbBadge() {
+    var btn = $('#btnFeedback');
+    if (!btn) return;
+    var n = Number(S.fbUnread) || 0;
+    var arrow = btn.querySelector('.me-arrow');
+    if (arrow) arrow.textContent = n > 0 ? (n > 9 ? '9+' : String(n)) + ' 条新回复 ›' : '›';
+  }
+  function renderFbHistory() {
+    var box = $('#fbHist');
+    if (!box) return;
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || []; } catch (e) { arr = []; }
+    if (!arr.length) { box.innerHTML = '<div class="hint">还没发过反馈。截图、版本、复现步骤写清楚会好查很多。</div>'; return; }
+    box.innerHTML = arr.slice(-8).reverse().map(function (x) {
+      return '<div class="fb-item"><div class="fb-meta">' + esc(x.time || '') + (x.reply ? ' · 开发者回复' : '') + '</div>' +
+        '<div class="fb-text">' + esc(String(x.text || '').slice(0, 120)) + '</div>' +
+        (x.reply ? '<div class="fb-reply">' + esc(String(x.reply).slice(0, 160)) + '</div>' : '') + '</div>';
+    }).join('');
+  }
+  function fbPageSend() {
+    var text = ($('#fbText').value || '').trim();
+    if (!text) { toast('先写点内容'); return; }
+    var head = '【反馈】' + (window.APP_VERSION || '') + ' · ' + (S.nick || '匿名') + ' · uid:' + (S.uid || 0) + '\n';
+    var sent = false;
+    try { sent = wsSend({ t: 'fb', text: head + text }); } catch (e) {}
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || []; } catch (e) { arr = []; }
+    arr.push({ text: text, time: fmtTime(Date.now()), ts: Date.now(), sent: !!sent });
+    try { localStorage.setItem(LK('fbSent'), JSON.stringify(arr.slice(-40))); } catch (e) {}
+    $('#fbText').value = '';
+    renderFbHistory();
+    toast(sent ? '发过去了，开发者会看到' : '没连上服务器，先存在本机（下次发别的会一起带上）');
+  }
+
   function openFeedback() {
     aiNormalize();
     if (!S.dms[FEEDBACK_PEER]) {
@@ -2072,7 +2192,9 @@
     } else if (isDM(rid)) {
       var peerId = dmPeerOf(rid);
       // 本地用户是纯本机会话，不能把它的对端告诉服务器
-      if (peerId && peerId !== LOCAL_PEER) wsSend({ t: 'pm_open', with: peerId, withName: room(rid).name });
+      if (peerId && peerId !== LOCAL_PEER && peerId !== FEEDBACK_PEER && peerId !== AI_PEER) {
+        wsSend({ t: 'pm_open', with: peerId, withName: room(rid).name });
+      }
     } else {
       wsSend({ t: 'room', room: rid });
     }
@@ -2137,6 +2259,7 @@
     Object.keys(S.dms || {}).forEach(function (peer) {
       if (peer === LOCAL_PEER) return;      // 本地用户不向服务器登记
       if (peer === AI_PEER) return;         // AI 助手是本机的，不该让服务器去找这个「用户」
+      if (peer === FEEDBACK_PEER) return;   // 反馈箱是本机的，数据走 fb / fb_list
       wsSend({ t: 'pm_open', with: peer, withName: S.dms[peer].name || '' });
     });
   }
@@ -2200,17 +2323,23 @@
       for (var fi = listF.length - 1; fi >= 0; fi--) if (listF[fi].id === tid) { mineFb = listF[fi]; break; }
       if (mineFb) { mineFb.pending = false; saveHist(FEEDBACK_RID); }
       var myUid = 'uid:' + (S.uid || 0);
-      var toDev = myUid !== DEV_UID;
-      if (toDev) {
+      if (isDeveloper) {
+        // 开发者在这里说话 = 回复最近一条反馈的用户
+        var toUid = Number(S.fbLastUid) || 0;
+        if (!toUid) { toast('还没有可回复的反馈'); }
+        else {
+          var ok = false;
+          try { ok = wsSend({ t: 'fb_reply', toUid: toUid, text: text }); } catch (e) {}
+          toast(ok ? ('已回复 uid:' + toUid) : '没连上服务器，没发出去');
+        }
+      } else {
         var head = '【反馈】' + (window.APP_VERSION || '') + ' · ' + (S.nick || '匿名') + ' · ' + myUid;
         var sentFb = false;
-        try { sentFb = wsSend({ t: 'pm', to: DEV_UID, text: head + '\n' + text }); } catch (e) {}
+        try { sentFb = wsSend({ t: 'fb', text: head + '\n' + text }); } catch (e) {}
         if (!sentFb) toast('网络没连上，反馈先存在本机，连上后会自动补发');
         else toast('反馈已发送给开发者');
-        try { if (ws) ws.send(''); } catch (e) {}
-      } else {
-        toast('你就是开发者，反馈只在本地留档');
       }
+      rememberFeedback(text);
       renderMsgs(false); renderRooms();
       return;
     }
@@ -3626,6 +3755,7 @@
     try { syncAiModelUi(); } catch (e) {}
     rpSyncCounts();
     try { rpModelTip(); } catch (e) {}
+    try { syncFbBadge(); } catch (e) {}
     try { cfPaintKeyInfo(); } catch (e) {}
     if (!silent) toast('已保存 · ' + (S.ai.base || '没填地址') + ' · ' + (S.ai.model || '没选模型'));
     return true;
@@ -7004,7 +7134,12 @@
         });
       });
     })();
-    on('#btnFeedback', 'click', function (e) { e.preventDefault(); openFeedback(); });
+    on('#btnFeedback', 'click', function (e) {
+      e.preventDefault();
+      if (isDeveloper) openFeedback(); else openFbPage();
+    });
+    on('#fbClose', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#fbSend', 'click', function (e) { e.preventDefault(); fbPageSend(); });
 
     on('#btnFlush', 'click', function () {
       save();
