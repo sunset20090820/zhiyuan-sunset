@@ -453,6 +453,40 @@ function pressPresence(roomId) {
   broadcast(roomId, { t: 'members', room: roomId, members: membersIn(roomId) });
 }
 
+/* ------------------------- 限流 ------------------------- */
+// 令牌桶：每类动作一个上限，超了就回一句错误，不封连接（家用/手机场景够了）
+const RL_STATE = new Map();
+function rlKey(c, kind) {
+  const who = (c && (c.deviceId || c.id)) || 'anon';
+  return who + '|' + kind;
+}
+function rateOk(c, kind, limit, windowMs) {
+  const now = Date.now();
+  const k = rlKey(c, kind);
+  let rec = RL_STATE.get(k);
+  if (!rec || now - rec.start > windowMs) { rec = { start: now, n: 0 }; RL_STATE.set(k, rec); }
+  rec.n += 1;
+  return rec.n <= limit;
+}
+function ipRateOk(req, kind, limit, windowMs) {
+  const ip = (req && (req.headers['x-forwarded-for'] || '').split(',')[0].trim()) ||
+    (req && req.socket && req.socket.remoteAddress) || 'anon';
+  const now = Date.now();
+  const k = 'ip:' + ip + '|' + kind;
+  let rec = RL_STATE.get(k);
+  if (!rec || now - rec.start > windowMs) { rec = { start: now, n: 0 }; RL_STATE.set(k, rec); }
+  rec.n += 1;
+  return rec.n <= limit;
+}
+setInterval(() => {           // 定期丢过期桶，免得 Map 无限长
+  const now = Date.now();
+  for (const [k, rec] of RL_STATE) if (now - rec.start > 120000) RL_STATE.delete(k);
+}, 60000).unref();
+
+function tooFast(c, what) {
+  send(c, { t: 'error', message: what || '发得太快了，歇一秒再试' });
+}
+
 /* ------------------------- WebSocket 帧 ------------------------- */
 function writeFrame(socket, opcode, payload) {
   if (socket.destroyed) return;
@@ -511,8 +545,8 @@ function readFrames(buf) {
 }
 
 /* ------------------------- 连接处理 ------------------------- */
-function onConnection(socket) {
-  const c = { socket, id: uid().slice(0, 6), deviceId: null, name: '路人', room: null, buf: Buffer.alloc(0), alive: true, frag: null, fragOp: 0, hits: [] };
+function onConnection(socket, req) {
+  const c = { socket, id: uid().slice(0, 6), deviceId: null, name: '路人', room: null, buf: Buffer.alloc(0), alive: true, frag: null, fragOp: 0, hits: [], __req: req || null };
   clients.add(c);
 
   socket.on('data', chunk => {
@@ -616,6 +650,7 @@ function handleMessage(c, buf, opcode) {
   }
 
   if (d.t === 'msg') {
+    if (!rateOk(c, 'msg', 12, 5000)) { tooFast(c); return; }
     if (!c.room) return;
     const text = clean(d.text, MAX_TEXT);
     if (!text) return;
@@ -689,6 +724,7 @@ function handleMessage(c, buf, opcode) {
 
   // ---------- 反馈箱 ----------
   if (d.t === 'fb') {
+    if (!rateOk(c, 'fb', 5, 60000)) { tooFast(c, '反馈发得太频繁了'); return; }
     const text = clean(d.text, MAX_TEXT);
     if (!text) return;
     const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
@@ -745,6 +781,7 @@ function handleMessage(c, buf, opcode) {
   }
 
   if (d.t === 'pm') {
+    if (!rateOk(c, 'pm', 12, 5000)) { tooFast(c); return; }
     const asked = clean(d.to, 64);
     if (!asked) return;
     const me = dmIdOf(c);
@@ -794,6 +831,7 @@ function handleMessage(c, buf, opcode) {
 
   // ---------- 图片 / 表情 ----------
   if (d.t === 'img') {
+    if (!rateOk(c, 'img', 3, 10000)) { tooFast(c, '图片发得太快了'); return; }
     const to = d.to ? clean(d.to, 64) : '';
     const me = c.deviceId || c.id;
     let imagePath = null;
@@ -844,6 +882,7 @@ function handleMessage(c, buf, opcode) {
 
   // ---------- 账号 ----------
   if (d.t === 'register') {
+    if (!ipRateOk(c.__req, 'reg', 6, 60000)) { tooFast(c, '注册太频繁，等一分钟'); return; }
     const user = clean(d.user, 16);
     const pass = String(d.pass || '');
     const question = clean(d.question, 40);
@@ -881,6 +920,7 @@ function handleMessage(c, buf, opcode) {
   }
 
   if (d.t === 'login') {
+    if (!ipRateOk(c.__req, 'login', 10, 60000)) { tooFast(c, '试太多次了，等一分钟'); return; }
     const user = clean(d.user, 16);
     const key = findUser(user);
     if (!key) { send(c, { t: 'auth', ok: false, err: '没有这个账号' }); return; }
@@ -1000,6 +1040,7 @@ function handleMessage(c, buf, opcode) {
   }
 
   if (d.t === 'group_msg') {
+    if (!rateOk(c, 'msg', 12, 5000)) { tooFast(c); return; }
     const me = dmIdOf(c);
     const g = groups[clean(d.id, 32)];
     if (!g || (g.members.indexOf(me) < 0 && g.members.indexOf(c.deviceId || c.id) < 0)) return;
@@ -1452,7 +1493,7 @@ server.on('upgrade', (req, socket) => {
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
   socket.setNoDelay(true);
-  onConnection(socket);
+  onConnection(socket, req);
 });
 
 // 游戏阶段推进：每秒检查一次超时
@@ -1469,6 +1510,32 @@ setInterval(() => {
 }, 30000).unref();
 
 rebuildUidIndex();
+// 同一个请求处理函数可以挂到两个监听器上：明文 + TLS（wss）
+function makeServer(secure) {
+  if (secure) {
+    return require('https').createServer({ cert: fs.readFileSync(process.env.CERT), key: fs.readFileSync(process.env.KEY) }, reqHandler);
+  }
+  return http.createServer(reqHandler);
+}
+const TLS_PORT = Number(process.env.TLS_PORT || 0);
+let tlsServer = null;
+if (TLS_PORT && process.env.CERT && process.env.KEY) {
+  try {
+    tlsServer = require('https').createServer({ cert: fs.readFileSync(process.env.CERT), key: fs.readFileSync(process.env.KEY) }, reqHandler);
+    tlsServer.on('upgrade', (req, socket) => {
+      const key = req.headers['sec-websocket-key'];
+      if (!key) { socket.destroy(); return; }
+      const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+      socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
+      socket.setNoDelay(true);
+      onConnection(socket, req);
+    });
+    tlsServer.listen(TLS_PORT, HOST, () => {
+      console.log('  wss 监听：' + 'wss://<你的域名或IP>:' + TLS_PORT + '（证书：' + process.env.CERT + '）');
+    });
+  } catch (e) { console.log('[tls] 启动失败：' + e.message); }
+}
+
 server.listen(PORT, HOST, () => {
   const nets = require('os').networkInterfaces();
   const ips = [];

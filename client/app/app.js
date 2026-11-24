@@ -5007,6 +5007,14 @@
     on('#btnSave', 'click', function () {
       var nick = ($('#setNick').value || '').trim();
       var s = normServer($('#setServer').value);
+      // 明文 ws 连公网 IP = 密码和消息都是明文，提醒一次
+      try {
+        var plain = /^ws:\/\//i.test(s) && !/^ws:\/\/(10\.|192\.168\.|127\.|localhost)/i.test(s);
+        if (plain && !localStorage.getItem('pl.seenWsWarn')) {
+          localStorage.setItem('pl.seenWsWarn', '1');
+          toast('这是明文连接：同一网络下别人能抓到密码。有域名的话建议换 wss://');
+        }
+      } catch (e) {}
       var switched = useServer(s);
       if (nick) S.nick = nick;
       S.server = s;
