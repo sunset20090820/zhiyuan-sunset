@@ -758,6 +758,63 @@
   </div>
 </div>
 
+
+<!-- ===== 导出 / 导入 ===== -->
+<div id="exportPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="expBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">导出 / 导入</div>
+  </header>
+  <div class="me-body">
+    <div class="me-sec open" data-sec="export">
+      <button class="me-sec-head" type="button"><span class="me-ico">📤</span>导出<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <div class="bg-dim-row"><span class="hint">剧情原文</span>
+          <label class="mini-check"><input id="expRaw" type="checkbox">连原文一起打包</label></div>
+        <div class="me-row" style="justify-content:space-between">
+          <span>每天自动备份</span>
+          <input id="expAuto" type="checkbox" class="agent-switch" checked>
+        </div>
+        <p class="hint">不含原文时只存设定与摘要，文件很小；含原文能完整还原每一句话。</p>
+        <button id="expBackup" class="me-row" type="button"><span class="me-ico">📦</span>全量备份<span class="me-arrow">›</span></button>
+        <button id="expStory" class="me-row" type="button"><span class="me-ico">🎬</span>剧情存档（当前会话）<span class="me-arrow">›</span></button>
+        <button id="expCard" class="me-row" type="button"><span class="me-ico">🎭</span>角色卡<span class="me-arrow">›</span></button>
+        <button id="expWorld" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow">›</span></button>
+        <div id="expPick" class="pick-list"></div>
+      </div>
+    </div>
+    <div class="me-sec open" data-sec="import">
+      <button class="me-sec-head" type="button"><span class="me-ico">📥</span>导入<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <p class="hint">支持角色卡 / 世界包 / 剧情存档 / 全量备份。导入前会自动导出一份快照，出问题能退回去。</p>
+        <button id="impPick" class="me-row" type="button"><span class="me-ico">📄</span>选择文件…<span class="me-arrow">›</span></button>
+        <input id="impInput" type="file" accept=".json,application/json" class="hidden">
+        <div id="impPreview" class="imp-preview hidden"></div>
+        <div class="seg" id="impStrategy">
+          <button class="seg-item on" type="button" data-s="new">仅新增</button>
+          <button class="seg-item" type="button" data-s="overwrite">覆盖同名</button>
+          <button class="seg-item" type="button" data-s="merge">合并会话</button>
+        </div>
+        <button id="impGo" class="primary" type="button">导入</button>
+      </div>
+    </div>
+    <p class="hint" id="expDiag"></p>
+  </div>
+</div>
+
+<!-- 卷列表（人设扮演） -->
+<div id="volSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="剧情卷">
+    <div class="action-grip"></div>
+    <h3 class="remark-title" id="volTitle">剧情卷</h3>
+    <p class="remark-sub" id="volSub">上下文满了会自动换卷，历史不会丢。</p>
+    <div id="volList" class="vol-list"></div>
+    <button id="volNow" class="ai-fetch" type="button">现在压缩一次</button>
+    <button id="volClose" class="action-cancel" type="button">关闭</button>
+  </div>
+</div>
+
 <!-- 图片查看器 -->
 <div id="imgViewer" class="img-viewer hidden">
   <div class="viewer-head">
@@ -793,6 +850,8 @@
 <script src="version.js"></script>
 <script src="game.js"></script>
 <script src="cards.js"></script>
+<script src="roll.js"></script>
+<script src="export.js"></script>
 <script src="ctx.js"></script>
 <script src="app.js"></script>
 </body>

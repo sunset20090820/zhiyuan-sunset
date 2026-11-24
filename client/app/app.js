@@ -1914,6 +1914,11 @@
       var nextM = arr[mi + 1];
       // 同一个人连着发、且间隔小于 5 分钟 = 同一组；组的最后一条才画尾巴
       var isLast = !nextM || nextM.from !== m.from || nextM.ts - m.ts > 5 * 60000 || fmtDay(nextM.ts) !== day;
+      if (m.from === 'sys' || m.volMark) {
+        html += '<div class="day vol-day">第 ' + esc(String(m.volMark || '')) + ' 卷</div>';
+        prevFrom = ''; prevTs = 0;
+        return;
+      }
       var out = m.from === S.deviceId || m.from === S.me || m.from === 'me' || (!!m.deviceId && m.deviceId === S.deviceId);
       var tail = (prevFrom === m.from && m.ts - prevTs < 5 * 60000 && prevDay === day);
       var uid = m.deviceId || (out ? '' : m.from);
@@ -2821,6 +2826,7 @@
       if (S.cur === rid) { renderMsgs(true); setTimeout(function () { snapBottom($('#msgs')); }, 20); }
       renderRooms();
       if (err) toast(String(err).slice(0, 40));
+      else { try { rpAfterReply(rid); } catch (e2) {} }
     };
 
     var base = (S.ai && S.ai.base) || '';
@@ -2846,6 +2852,151 @@
       // 浏览器里没有原生桥：退回 fetch 非流式，至少能测通
       finalize('', '当前环境没有原生 AI 桥，只能在 App 里用');
     }
+  }
+
+  /* ---------- 卷与记忆：压缩、换卷 ---------- */
+  var rpBusy = {};      // roomId → 'sum'（正在压缩）
+  var rpRolling = {};   // roomId → 正在换卷（压缩 + 交接）
+  function rpBudget() { try { return RP.settings().budget || 8192; } catch (e) { return 8192; } }
+  function rpStyleAnchor(card) {
+    var st = (card && card.style) || {};
+    var bits = [];
+    if (st.len === 'short') bits.push('短句，每次 1–3 句');
+    if (st.len === 'mid') bits.push('每次 1–2 段');
+    if (st.person === 'first') bits.push('第一人称');
+    if (st.person === 'third') bits.push('第三人称');
+    if (st.banned && st.banned.length) bits.push('不用 ' + st.banned.join('、'));
+    return bits.join('；');
+  }
+  function rpHistEst(hist) {
+    var tail = (hist || []).slice(-30).map(function (m) { return String(m.text || ''); }).join('');
+    return CTX.est(tail);
+  }
+  function rpAfterReply(rid) {
+    var card = rpCardOf(rid);
+    if (!card) return;
+    if (rpBusy[rid] || rpRolling[rid]) return;
+    var hist = loadHist(rid);
+    var budget = rpBudget();
+    var roll = ROLL.get(rid);
+    var est = rpHistEst(hist);
+    if (ROLL.shouldRoll(roll, est, budget)) { rpRollVolume(rid, card, roll, hist); return; }
+    if (ROLL.shouldSummarize(roll, hist, budget, est)) rpSummarize(rid, card, roll, hist, null);
+  }
+  function rpSummarize(rid, card, roll, hist, cb) {
+    if (rpBusy[rid] === 'sum') return;      // 同一会话只跑一份压缩请求
+    var pend = ROLL.pendingRange(roll, hist, '');
+    if (pend.length < 4) { if (cb) cb(false); return; }
+    if (!aiConfigured()) { if (cb) cb(false); return; }
+    rpBusy[rid] = 'sum';
+    var base = (S.ai && S.ai.base) || '';
+    var model = (S.ai && S.ai.sumModel) || card.model || (S.ai && S.ai.model) || '';
+    var msgs = [
+      { role: 'system', content: '你是对话压缩器，只输出 JSON。' },
+      { role: 'user', content: ROLL.summaryPrompt(ROLL.dialogText(pend), 600) }
+    ];
+    var okFlag = false, finished = false;
+    var finish = function (good, sum) {
+      if (finished) return;
+      finished = true;
+      if (rpBusy[rid] === 'sum') delete rpBusy[rid];
+      if (good) {
+        ROLL.archive(rid, pend);
+        ROLL.set(rid, roll);
+        try { if (S.cur === rid) paintPathSub(); } catch (e) {}
+      } else {
+        try { ROLL.curVol(roll).degraded = true; ROLL.set(rid, roll); } catch (e) {}
+      }
+      if (cb) cb(good, sum);
+    };
+    var timer = setTimeout(function () { finish(false); }, 90000);
+    try {
+      aiAskNative(base, model, JSON.stringify(msgs), function (txt) {
+        clearTimeout(timer);
+        if (!okFlag) { finish(false); return; }
+        var sum = ROLL.parseSummary(txt);
+        ROLL.applySummary(roll, sum, pend);
+        finish(true, sum);
+      }, function (payload, j) {
+        okFlag = !!(j && j.ok);
+      }, { maxTokens: 1400, temperature: 0.2, effort: 'low' });
+    } catch (e) {
+      clearTimeout(timer);
+      finish(false);
+    }
+  }
+  function rpRollVolume(rid, card, roll, hist) {
+    if (rpRolling[rid] || rpBusy[rid]) return;
+    rpRolling[rid] = 1;
+    var go = function () {
+      delete rpRolling[rid];
+      var tail = (hist || []).filter(function (m) { return m && !m.sys && String(m.text || '').length; }).slice(-3);
+      var handoff = ROLL.handoffPrompt(roll, tail, rpStyleAnchor(card));
+      ROLL.startVolume(roll, handoff);
+      ROLL.set(rid, roll);
+      addMsg(rid, { id: 'vol' + Date.now().toString(36), from: 'sys', sys: true, volMark: roll.cur,
+                    text: '（第 ' + roll.cur + ' 卷开始 · 前面的剧情收进摘要）', ts: Date.now() });
+      saveHist(rid);
+      try { RP.setVol(rid, roll.cur); } catch (e) {}
+      if (S.cur === rid) { renderMsgs(true); paintPathSub(); }
+      renderRooms();
+      toast('上下文满了，已接续到第 ' + roll.cur + ' 卷');
+    };
+    rpSummarize(rid, card, roll, hist, go);
+  }
+
+  /* ---------- 卷列表浮层 ---------- */
+  function openVolSheet() {
+    var rid = S.cur;
+    if (!isRpRoom(rid)) return;
+    var roll = ROLL.get(rid);
+    var card = rpCardOf(rid);
+    $('#volTitle').textContent = (card ? card.name : '剧情') + ' · 共 ' + Math.max(1, (roll.vols || []).length) + ' 卷';
+    $('#volSub').textContent = ROLL.report(roll);
+    var vols = roll.vols || [];
+    $('#volList').innerHTML = vols.length ? vols.map(function (v) {
+      var cur = v.n === roll.cur;
+      var facts = Object.keys(v.facts || {}).length;
+      return '<div class="vol-row' + (cur ? ' on' : '') + '">' +
+        '<span class="vol-n">第 ' + v.n + ' 卷' + (cur ? ' · 当前' : '') + '</span>' +
+        '<span class="vol-lore">' + esc(String(v.lore || '（还没压过）').slice(0, 120)) + (facts ? ' · ' + facts + ' 项事实' : '') + '</span>' +
+        (cur ? '' : '<button class="vol-go" type="button" data-vol="' + v.n + '">回到这卷</button>') +
+        '</div>';
+    }).join('') : '<p class="hint">还没压过。聊满 12 条或上下文到 70% 会自动压。</p>';
+    $('#volSheet').classList.remove('hidden');
+  }
+  function bindVolSheet() {
+    on('#volList', 'click', function (e) {
+      var b = e.target.closest('[data-vol]');
+      if (!b) return;
+      var rid = S.cur;
+      var n = Number(b.getAttribute('data-vol')) || 1;
+      var roll = ROLL.get(rid);
+      roll.cur = n;
+      ROLL.set(rid, roll);
+      try { RP.setVol(rid, n); } catch (e) {}
+      $('#volSheet').classList.add('hidden');
+      paintPathSub();
+      renderMsgs(true);
+      toast('已回到第 ' + n + ' 卷（可从这里继续，等于开了分支）');
+    });
+    on('#volNow', 'click', function (e) {
+      e.preventDefault();
+      var rid = S.cur;
+      var card = rpCardOf(rid);
+      if (!card) return;
+      var hist = loadHist(rid), roll = ROLL.get(rid);
+      if (ROLL.pendingRange(roll, hist, '').length < 4) { toast('还没攒够内容，先聊几句'); return; }
+      toast('正在压缩这段剧情…');
+      rpSummarize(rid, card, roll, hist, function (good, sum) {
+        if (!good) { toast('压缩失败（模型没回或报错），剧情原文还在'); return; }
+        paintPathSub();
+        toast('已压成 ' + String((sum && sum.lore) || '').length + ' 字摘要');
+        if (S.cur === rid) { renderMsgs(true); openVolSheet(); }
+      });
+    });
+    on('#volClose', 'click', function (e) { e.preventDefault(); $('#volSheet').classList.add('hidden'); });
+    on('#chatSub', 'click', function () { if (isRpRoom(S.cur)) openVolSheet(); });
   }
 
   /* ---------- 页面：角色列表 ---------- */
@@ -3138,6 +3289,225 @@
   }
 
   /* ---------- 事件绑定 ---------- */
+  /* ---------- 导出 / 导入 ---------- */
+  var exParsed = null;      // 解析后的导入文件
+  var exStrategy = 'new';
+  var exPickMode = '';      // 'card' | 'world'
+
+  // 给 export.js 用的存取钩子（它不直接碰 app.js 的内部函数）
+  function exHookUp() {
+    try {
+      window.__takeHist = function (rid) { return loadHist(rid); };
+      window.__putHist = function (rid, arr) { S.msgs[rid] = arr; saveHist(rid); };
+      window.__aiConfSnap = function () {
+        var a = S.ai || {};
+        return { base: a.base || '', model: a.model || '', sumModel: a.sumModel || '', effort: a.effort || 'low' };
+      };
+    } catch (e) {}
+  }
+  function openExportPage() {
+    hideTabShell();
+    exHookUp();
+    ['#rolePage', '#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#mePage'].forEach(function (s) {
+      var el = $(s); if (el) el.classList.add('hidden');
+    });
+    $('#exportPage').classList.remove('hidden');
+    $('#expPick').innerHTML = '';
+    $('#expDiag').textContent = '上次备份：' + (function () {
+      try {
+        var k = localStorage.getItem('pl.global.exportLast') || '';
+        return k ? new Date(Number(k)).toLocaleString() : '还没有';
+      } catch (e) { return '还没有'; }
+    })();
+    try {
+      var st0 = RP.settings();
+      $('#expRaw').checked = !!st0.withRawDefault;
+      if ($('#expAuto')) $('#expAuto').checked = !!st0.autoBackup;
+    } catch (e) {}
+  }
+  function exWriteFile(name, obj) {
+    var text = EX.text(obj);
+    if (text.length > EX.MAX_FILE) { toast('太大了（' + Math.round(text.length / 1024) + ' KB），改成不含原文再试'); return false; }
+    try {
+      if (window.PaperNative && window.PaperNative.exportFile) {
+        window.PaperNative.exportFile(name, text);
+        toast('正在写入 Download/DSH-Go/纸鸢备份/');
+        return true;
+      }
+    } catch (e) {}
+    toast('这个版本的原生不支持导出文件');
+    return false;
+  }
+  function exStampLast() {
+    try { localStorage.setItem('pl.global.exportLast', String(Date.now())); } catch (e) {}
+  }
+  window.__exportResult = function (ok, path) {
+    if (ok) {
+      exStampLast();
+      toast('已保存：' + path);
+      try { $('#expDiag').textContent = '刚导出：' + path; } catch (e) {}
+    } else {
+      toast('保存失败：' + path);
+    }
+  };
+
+  function exDoBackup() {
+    var withRaw = $('#expRaw').checked;
+    var obj = EX.backup({ withRaw: withRaw, takeHist: loadHist });
+    if (exWriteFile('纸鸢-备份-' + EX.stamp() + '.zybackup.json', obj)) {}
+  }
+  function exDoStory() {
+    var rid = S.cur;
+    if (!isRpRoom(rid)) {
+      // 不在扮演会话里：导出最近一个有记录的
+      var rooms = RP.rooms();
+      var keys = Object.keys(rooms);
+      if (!keys.length) { toast('还没有扮演会话'); return; }
+      keys.sort(function (a, b) { return (rooms[b].ts || 0) - (rooms[a].ts || 0); });
+      rid = keys[0];
+    }
+    var card = rpCardOf(rid);
+    var obj = EX.story(rid, { withRaw: $('#expRaw').checked, msgs: loadHist(rid) });
+    exWriteFile('纸鸢-剧情-' + EX.safeName(card ? card.name : '会话') + '-' + EX.stamp() + '.zystory.json', obj);
+  }
+  function exPickCard() {
+    exPickMode = 'card';
+    var box = $('#expPick');
+    var cards = RP.cards();
+    box.innerHTML = cards.length ? cards.map(function (c) {
+      return '<button class="pick-row" type="button" data-excard="' + esc(c.id) + '">🎭 ' + esc(c.name) +
+        ' <small>' + ((c.mesExample || []).length ? '含示例对话' : '') + '</small></button>';
+    }).join('') : '<p class="hint">还没有角色卡</p>';
+  }
+  function exPickWorld() {
+    exPickMode = 'world';
+    var box = $('#expPick');
+    var ws = RP.worlds();
+    box.innerHTML = ws.length ? ws.map(function (w) {
+      return '<button class="pick-row" type="button" data-exworld="' + esc(w.id) + '">🌍 ' + esc(w.name) +
+        ' <small>' + (w.lore || []).length + ' 条词条</small></button>';
+    }).join('') : '<p class="hint">还没有世界包</p>';
+  }
+  function exDoCard(id) {
+    var c = RP.card(id);
+    if (!c) return;
+    var withWorld = c.worldId ? true : false;
+    exWriteFile('纸鸢-角色-' + EX.safeName(c.name) + '.zycard.json', EX.card(c, withWorld));
+  }
+  function exDoWorld(id) {
+    var w = RP.world(id);
+    if (!w) return;
+    exWriteFile('纸鸢-世界-' + EX.safeName(w.name) + '.zyworld.json', EX.world(w));
+  }
+
+  function impPreviewRender(parsed) {
+    var el = $('#impPreview');
+    el.classList.remove('hidden');
+    var m = parsed.meta;
+    var when = m.exportedAt ? new Date(m.exportedAt).toLocaleString() : '未知时间';
+    var lines = ['类型：' + ({ card: '角色卡', world: '世界包', story: '剧情存档', backup: '全量备份' }[parsed.kind])];
+    if (m.cards) lines.push('角色卡：' + m.cards + ' 张');
+    if (m.worlds) lines.push('世界包：' + m.worlds + ' 个');
+    if (m.stories) lines.push('剧情：' + m.stories + ' 段');
+    if (m.msgs) lines.push('原文：' + m.msgs + ' 条');
+    lines.push('导出时间：' + when + (m.appVersion ? '（' + m.appVersion + '）' : ''));
+    lines.push('是否含原文：' + (m.withRaw ? '是' : '否'));
+    el.textContent = lines.join('\n');
+  }
+  /* 每天一次自动备份：写应用私有目录（同名覆盖，不占空间、不用权限） */
+  var exAutoLast = 0;
+  function exAutoBackupIfDue() {
+    try {
+      var st = RP.settings();
+      if (!st.autoBackup) return;
+      var last = Number(localStorage.getItem('pl.global.autoLast') || 0);
+      if (Date.now() - last < 22 * 3600 * 1000) return;
+      if (!(window.PaperNative && window.PaperNative.exportFilePrivate)) return;
+      exHookUp();
+      var obj = EX.backup({ withRaw: st.withRawDefault, takeHist: loadHist });
+      var text = EX.text(obj);
+      if (text.length > EX.MAX_FILE) return;
+      window.PaperNative.exportFilePrivate('纸鸢-自动备份.zybackup.json', text);
+      try { localStorage.setItem('pl.global.autoLast', String(Date.now())); } catch (e) {}
+    } catch (e) {}
+  }
+
+  function bindExportPage() {
+    on('#btnRoleExport', 'click', function (e) { e.preventDefault(); openExportPage(); });
+    on('#expBack', 'click', function (e) {
+      e.preventDefault();
+      $('#exportPage').classList.add('hidden');
+      if ($('#rolePage')) { openRolePage(); } else { backToMe(); }
+    });
+    on('#expAuto', 'change', function (e) {
+      var on = !!e.target.checked;
+      RP.saveSettings({ autoBackup: on });
+      toast(on ? '已开启每天自动备份（存在手机本机）' : '已关闭自动备份');
+    });
+    on('#expBackup', 'click', function (e) { e.preventDefault(); exDoBackup(); });
+    on('#expStory', 'click', function (e) { e.preventDefault(); exDoStory(); });
+    on('#expCard', 'click', function (e) { e.preventDefault(); exPickCard(); });
+    on('#expWorld', 'click', function (e) { e.preventDefault(); exPickWorld(); });
+    on('#expPick', 'click', function (e) {
+      var c = e.target.closest('[data-excard]');
+      var w = e.target.closest('[data-exworld]');
+      if (c) { exDoCard(c.getAttribute('data-excard')); return; }
+      if (w) { exDoWorld(w.getAttribute('data-exworld')); }
+    });
+    on('#impPick', 'click', function (e) {
+      e.preventDefault();
+      var f = $('#impInput');
+      if (f) { f.value = ''; f.click(); }
+    });
+    on('#impInput', 'change', function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (file.size > EX.MAX_FILE) { toast('文件超过 8 MB'); return; }
+      var fr = new FileReader();
+      fr.onload = function () {
+        var parsed = EX.parse(String(fr.result || ''));
+        exParsed = parsed.ok ? parsed : null;
+        if (!parsed.ok) {
+          $('#impPreview').classList.remove('hidden');
+          $('#impPreview').textContent = '这个文件不能导入：' + parsed.err;
+          $('#impGo').disabled = true;
+          return;
+        }
+        $('#impGo').disabled = false;
+        impPreviewRender(parsed);
+      };
+      fr.onerror = function () { toast('读不出这个文件'); };
+      fr.readAsText(file, 'utf-8');
+    });
+    on('#impStrategy', 'click', function (e) {
+      var b = e.target.closest('[data-s]');
+      if (!b) return;
+      exStrategy = b.getAttribute('data-s');
+      Array.prototype.forEach.call(document.querySelectorAll('#impStrategy .seg-item'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+    on('#impGo', 'click', function (e) {
+      e.preventDefault();
+      if (!exParsed) { toast('先选一个导出文件'); return; }
+      // 导入前自动快照（出问题能退回去）
+      var snap = EX.backup({ withRaw: false, takeHist: loadHist });
+      exHookUp();
+      exWriteFile('纸鸢-导入前快照-' + EX.stamp() + '.zybackup.json', snap);
+      var res = EX.import(exParsed, exStrategy);
+      if (!res.ok) { toast('导入失败：' + res.err); return; }
+      var st = res.stat;
+      rpSyncCounts();
+      renderRooms();
+      toast('导入完成：新角色 ' + st.cards + ' · 世界 ' + st.worlds + ' · 剧情 ' + st.stories +
+        (st.linked ? '（' + st.linked + ' 个同名已存在，只接了剧情）' : '') + (st.renamed ? '（' + st.renamed + ' 个换了新 id）' : ''));
+      $('#impPreview').classList.add('hidden');
+      exParsed = null;
+      $('#impGo').disabled = true;
+      $('#expDiag').textContent = '刚导入：角色 ' + st.cards + ' / 世界 ' + st.worlds + ' / 剧情 ' + st.stories;
+    });
+  }
+
+
   function bindRole() {
     on('#btnRole', 'click', function (e) { e.preventDefault(); openRolePage(); });
     on('#btnAiConf', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
@@ -3252,10 +3622,7 @@
     });
     // 世界包
     on('#btnRoleWorlds', 'click', function (e) { e.preventDefault(); openWorldPage(); });
-    on('#btnRoleExport', 'click', function (e) {
-      e.preventDefault();
-      toast('导出/导入正在做（下一版）：先能存到手机，再能整包搬走');
-    });
+
     on('#worldBack', 'click', function (e) { e.preventDefault(); $('#worldPage').classList.add('hidden'); openRolePage(); });
     on('#worldNew', 'click', function (e) { e.preventDefault(); openWorldEditor(''); });
     on('#worldList', 'click', function (e) {
@@ -6059,6 +6426,9 @@
     bind();
     try { RP.load(); } catch (e) {}
     try { bindRole(); } catch (e) {}
+    try { bindVolSheet(); } catch (e) {}
+    try { bindExportPage(); } catch (e) {}
+    setTimeout(function () { try { exAutoBackupIfDue(); } catch (e) {} }, 6000);
     try { rpSyncCounts(); } catch (e) {}
     try { rpSyncBudgetUi(); } catch (e) {}
     try { applyAgentProfile(); } catch (e) {}

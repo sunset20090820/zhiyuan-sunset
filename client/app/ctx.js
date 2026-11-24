@@ -211,7 +211,7 @@
     var left = B.total - estSys - B.reserve;
     var msgs = [];
     // 示例对话：只在第一轮（没有历史）时注入，省 token
-    if (!hist.length && card && card.mesExample && card.mesExample.length) {
+    if (hist.length < 4 && card && card.mesExample && card.mesExample.length) {
       for (var i = 0; i < card.mesExample.length && i < 3; i++) {
         var ex = card.mesExample[i];
         if (ex.u) msgs.push({ role: 'user', content: ex.u });

@@ -879,6 +879,117 @@ public class MainActivity extends Activity {
             return j == null ? "" : j;
         }
 
+        /**
+         * 导出文本到「下载/DSH-Go/纸鸢备份/」。
+         * Android 10+ 走 MediaStore（不需要权限）；老系统退到应用外部私有目录。
+         */
+        @JavascriptInterface
+        public void exportFile(final String name, final String text) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    String safe = String.valueOf(name == null ? "export.json" : name)
+                            .replaceAll("[\\/:*?\"<>|]", "_");
+                    String path = "";
+                    boolean ok = false;
+                    try {
+                        if (Build.VERSION.SDK_INT >= 29) {
+                            android.content.ContentValues cv = new android.content.ContentValues();
+                            cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safe);
+                            cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/json");
+                            cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                                    Environment.DIRECTORY_DOWNLOADS + "/DSH-Go/纸鸢备份");
+                            android.net.Uri uri = act.getContentResolver().insert(
+                                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                            if (uri == null) throw new Exception("建不了文件");
+                            java.io.OutputStream os = act.getContentResolver().openOutputStream(uri);
+                            os.write(String.valueOf(text).getBytes("UTF-8"));
+                            os.flush(); os.close();
+                            path = "Download/DSH-Go/纸鸢备份/" + safe;
+                            ok = true;
+                        } else {
+                            java.io.File dir = new java.io.File(Environment.getExternalStorageDirectory(),
+                                    "Download/DSH-Go/纸鸢备份");
+                            if (!dir.exists()) dir.mkdirs();
+                            java.io.File f = new java.io.File(dir, safe);
+                            java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
+                            fo.write(String.valueOf(text).getBytes("UTF-8"));
+                            fo.flush();
+                            try { fo.getFD().sync(); } catch (Exception e2) { }
+                            fo.close();
+                            path = f.getAbsolutePath();
+                            ok = true;
+                        }
+                    } catch (Exception e) {
+                        // 再退一步：应用自己的外部目录（一定能写）
+                        try {
+                            java.io.File dir = new java.io.File(act.getExternalFilesDir(null), "纸鸢备份");
+                            if (!dir.exists()) dir.mkdirs();
+                            java.io.File f = new java.io.File(dir, safe);
+                            java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
+                            fo.write(String.valueOf(text).getBytes("UTF-8"));
+                            fo.close();
+                            path = f.getAbsolutePath();
+                            ok = true;
+                        } catch (Exception e3) { path = String.valueOf(e3.getMessage()); ok = false; }
+                    }
+                    final boolean okf = ok;
+                    final String pathf = path;
+                    try {
+                        act.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    act.web.evaluateJavascript(
+                                        "try{window.__exportResult&&window.__exportResult(" + okf + ","
+                                        + org.json.JSONObject.quote(pathf) + ")}catch(e){}", null);
+                                } catch (Exception e) { }
+                            }
+                        });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
+        /** 自动备份：写到应用私有目录，同名覆盖，不占 Downloads、不需要权限 */
+        @JavascriptInterface
+        public void exportFilePrivate(final String name, final String text) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    boolean ok = false;
+                    String path = "";
+                    try {
+                        String safe = String.valueOf(name == null ? "auto.zybackup.json" : name)
+                                .replaceAll("[\\/:*?\"<>|]", "_");
+                        java.io.File dir = new java.io.File(act.getFilesDir(), "backups");
+                        if (!dir.exists()) dir.mkdirs();
+                        java.io.File f = new java.io.File(dir, safe);
+                        java.io.File tmp = new java.io.File(f.getAbsolutePath() + ".tmp");
+                        java.io.FileOutputStream fo = new java.io.FileOutputStream(tmp);
+                        fo.write(String.valueOf(text).getBytes("UTF-8"));
+                        fo.flush();
+                        try { fo.getFD().sync(); } catch (Exception e2) { }
+                        fo.close();
+                        if (f.exists()) f.delete();
+                        tmp.renameTo(f);
+                        path = f.getAbsolutePath();
+                        ok = true;
+                    } catch (Exception e) { path = String.valueOf(e.getMessage()); }
+                    final boolean okf = ok;
+                    final String pathf = path;
+                    try {
+                        act.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    act.web.evaluateJavascript(
+                                        "try{window.__exportResult&&window.__exportResult(" + okf + ","
+                                        + org.json.JSONObject.quote(pathf) + ")}catch(e){}", null);
+                                } catch (Exception e) { }
+                            }
+                        });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public void flushStorage() {
             flushWebViewStorage();
