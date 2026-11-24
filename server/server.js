@@ -718,15 +718,19 @@ function handleMessage(c, buf, opcode) {
     if (DEV_UIDS.indexOf(toUid) >= 0) { send(c, { t: 'error', message: '不能把反馈回复给开发者自己' }); return; }
     const target = accountByUid(toUid);
     if (!target) { send(c, { t: 'error', message: '这个用户已经不在了' }); return; }
-    const fb = feedback.find(x => Number(x.fromUid) === toUid && !x.replied) || null;
-    if (fb) { fb.replied = true; fb.reply = text; saveFeedback(); }
+    const wantId = d.fbId ? String(d.fbId) : '';
+    let fb = wantId ? feedback.find(x => String(x.id) === wantId) : null;
+    if (!fb) fb = feedback.find(x => Number(x.fromUid) === toUid && !x.replied) || null;
+    if (!fb) fb = feedback.slice().reverse().find(x => Number(x.fromUid) === toUid) || null;
+    if (fb) { fb.replied = true; fb.reply = text; fb.repliedAt = now(); saveFeedback(); }
     // 回复以私信送回用户（离线也能收到，下次登录拉历史即可）
     const me = 'uid:' + DEV_UID;
     const other = 'uid:' + target.uid;
     const key = dmKey(me, other);
     const msg = {
       id: uid(), room: key, from: me, name: c.name || '开发者', text: text, ts: now(),
-      avatar: '', tempId: null, deviceId: me, fromUid: DEV_UID, replyTo: null, mentions: []
+      avatar: '', tempId: null, deviceId: me, fromUid: DEV_UID, replyTo: null, mentions: [],
+      fbId: fb ? String(fb.id) : ''      // 让用户端知道这条回复对应哪一条反馈
     };
     const arr = roomHistory(key);
     arr.push(msg);

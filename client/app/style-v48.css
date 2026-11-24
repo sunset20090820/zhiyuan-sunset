@@ -3032,3 +3032,29 @@ html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom));
 .fb-reply { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--tg-blue); }
 /* 这些整页要盖住底下的页面：玻璃皮肤下 --bg 半透明，会透出下层，必须用实底 */
 .me-page, #blockPage { background: var(--bg-solid, var(--bg)); }
+
+/* 分页：加载更早 */
+.load-earlier {
+  display: block; width: calc(100% - 28px); margin: 6px 14px 10px; padding: 9px 12px;
+  border-radius: 12px; border: 1px dashed var(--line); background: transparent;
+  color: var(--tg-sub); font-size: 12.5px;
+}
+.load-earlier:active { background: var(--bg-soft); }
+
+/* 字号档位：只影响读文字的地方，不动图标和布局尺寸 */
+html[data-fs="s"]  { --fs: 0.92; }
+html[data-fs="m"]  { --fs: 1; }
+html[data-fs="l"]  { --fs: 1.08; }
+html[data-fs="xl"] { --fs: 1.18; }
+html .msgs .msg .bubble { font-size: calc(16px * var(--fs, 1)); }
+html .msgs .msg .bubble .who { font-size: calc(12.5px * var(--fs, 1)); }
+html .msgs .msg .meta { font-size: calc(11px * var(--fs, 1)); }
+html .room-name { font-size: calc(15px * var(--fs, 1)); }
+html .room-last, html .room-time { font-size: calc(12.5px * var(--fs, 1)); }
+html .chat-name { font-size: calc(16px * var(--fs, 1)); }
+html .chat-sub { font-size: calc(11.5px * var(--fs, 1)); }
+html .me-row, html .me-sec-head { font-size: calc(15px * var(--fs, 1)); }
+html .hint { font-size: calc(12px * var(--fs, 1)); }
+html .day, html .vol-day { font-size: calc(11.5px * var(--fs, 1)); }
+.fb-quote-bar { background: color-mix(in srgb, var(--tg-blue) 10%, var(--bg)); }
+.fb-quote-bar .reply-accent { background: var(--tg-blue); }

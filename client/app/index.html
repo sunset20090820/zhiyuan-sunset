@@ -136,6 +136,11 @@
     <div class="reply-copy"><strong id="replyName"></strong><span id="replyText"></span></div>
     <button id="btnCancelReply" class="reply-close" type="button" aria-label="取消引用">×</button>
   </div>
+  <div id="fbQuoteBar" class="reply-bar fb-quote-bar hidden">
+    <div class="reply-accent"></div>
+    <div class="reply-copy"><strong>回复这条反馈</strong><span id="fbQuoteText"></span></div>
+    <button id="btnFbQuoteCancel" class="reply-close" type="button" aria-label="取消">×</button>
+  </div>
   <div id="mentionBox" class="mention-box hidden" role="listbox" aria-label="提及成员"></div>
   <div id="stickerPanel" class="sticker-panel hidden">
     <div class="sticker-tabs">
@@ -493,7 +498,15 @@
     <div class="me-sec" data-sec="look">
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🎨</span>外观与玻璃<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnTheme" class="me-row" type="button"><span class="me-ico">🌗</span>深色 / 浅色<span class="me-arrow">›</span></button>
+        <button id="btnTheme" class="me-row" type="button"><span class="me-ico">🌗</span>主题（跟随系统 / 浅色 / 深色）<span class="me-arrow" id="themeState">跟随时</span></button>
+        <div class="bg-dim-row"><span class="hint">字号</span>
+          <div class="seg" id="fsSeg">
+            <button class="seg-item" type="button" data-fs="s">小</button>
+            <button class="seg-item on" type="button" data-fs="m">标准</button>
+            <button class="seg-item" type="button" data-fs="l">大</button>
+            <button class="seg-item" type="button" data-fs="xl">特大</button>
+          </div>
+        </div>
         <button id="btnBeauty" class="me-row" type="button" aria-expanded="false">
         <span class="me-ico">🎨</span>美化设置<span class="me-arrow beauty-arrow" id="beautyArrow">›</span></button>
 <div id="beautyPanel" class="beauty-panel">

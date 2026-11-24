@@ -745,6 +745,7 @@
       var f = d.msg || {};
       if (isDevUid(f.fromUid)) return;          // 自己发的不回声
       S.fbLastUid = Number(f.fromUid) || 0;
+      if (!S.fbQuote) paintFbQuote();
       addMsg(FEEDBACK_RID, {
         id: f.id, name: f.name || ('uid:' + f.fromUid), text: f.text || '',
         ts: f.ts || Date.now(), fromUid: f.fromUid, deviceId: 'uid:' + f.fromUid,
@@ -773,7 +774,18 @@
       return;
     }
     if (d.t === 'fb_ok') {
+      if (!d.reply && d.id) {
+        // 记下服务端给这条反馈的 id，开发者回复时才知道对应哪一条
+        try {
+          var arr0 = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || [];
+          for (var i0 = arr0.length - 1; i0 >= 0; i0--) {
+            if (arr0[i0] && !arr0[i0].id) { arr0[i0].id = String(d.id); break; }
+          }
+          localStorage.setItem(LK('fbSent'), JSON.stringify(arr0.slice(-40)));
+        } catch (e) {}
+      }
       if (d.reply) toast('已回复这个用户');
+      else toast('已发送，开发者会看到');
       return;
     }
     if (d.t === 'pm_saved') {
@@ -790,8 +802,10 @@
         var replyText = (d.msg && d.msg.text) || '';
         var sent2 = [];
         try { sent2 = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || []; } catch (e) { sent2 = []; }
+        var wantId = (d.msg && d.msg.fbId) ? String(d.msg.fbId) : '';
         var target = null;
-        for (var si = sent2.length - 1; si >= 0; si--) { if (sent2[si] && !sent2[si].reply) { target = sent2[si]; break; } }
+        if (wantId) { for (var wi = sent2.length - 1; wi >= 0; wi--) { if (sent2[wi] && String(sent2[wi].id || '') === wantId) { target = sent2[wi]; break; } } }
+        if (!target) { for (var si = sent2.length - 1; si >= 0; si--) { if (sent2[si] && !sent2[si].reply) { target = sent2[si]; break; } } }
         if (target) { target.reply = replyText; target.replyTs = Date.now(); }
         else { sent2.push({ text: '（开发者来信）', time: fmtTime(Date.now()), ts: Date.now(), reply: replyText, replyTs: Date.now() }); }
         try { localStorage.setItem(LK('fbSent'), JSON.stringify(sent2.slice(-40))); } catch (e) {}
@@ -1367,6 +1381,7 @@
 
   function openFeedback() {
     aiNormalize();
+    S.fbQuote = null; try { paintFbQuote(); } catch (e) {}
     if (!S.dms[FEEDBACK_PEER]) {
       S.dms[FEEDBACK_PEER] = { name: '反馈箱', roomId: FEEDBACK_RID, local: true, feedback: true };
       save();
@@ -2026,21 +2041,48 @@
     });
   }
   /* ---------------- 渲染：聊天页 ---------------- */
-  function renderMsgs(force) {
+  // 只渲染最近 N 条：上滑或点顶部按钮再往前加 50 条（一次 innerHTML 重建整段历史会明显掉帧）
+  var MSG_PAGE_STEP = 50;
+  var msgShown = {};      // rid -> 当前渲染条数（仅在内存里，重开会话回到 50）
+  function msgShownOf(rid, total) {
+    var n = Number(msgShown[rid]) || MSG_PAGE_STEP;
+    if (n > total) n = total;
+    return n;
+  }
+  function loadEarlier() {
+    var rid = S.cur;
+    if (!rid) return;
+    var total = loadHist(rid).length;
+    var cur = msgShownOf(rid, total);
+    if (cur >= total) return;
+    msgShown[rid] = cur + MSG_PAGE_STEP;
+    renderMsgs(false, { keepScroll: true });
+  }
+
+  function renderMsgs(force, opts) {
     var rid = S.cur;
     if (!rid) return;
     var arr = loadHist(rid);
     var box = $('#msgs');
+    if (!box) return;
     var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    var prevH = box.scrollHeight, prevTop = box.scrollTop;
+    var total = arr.length;
+    var shown = msgShownOf(rid, total);
+    var start = Math.max(0, total - shown);
+    var vis = start > 0 ? arr.slice(start) : arr;
     var html = '', prevDay = '', prevFrom = '', prevTs = 0;
+    if (start > 0) {
+      html += '<button class="load-earlier" type="button" data-more="1">↑ 加载更早的 ' + Math.min(MSG_PAGE_STEP, start) + ' 条（还有 ' + start + ' 条）</button>';
+    }
 
-    arr.forEach(function (m, mi) {
+    vis.forEach(function (m, mi) {
       var day = fmtDay(m.ts);
       if (day !== prevDay) {
         html += '<div class="day">' + esc(day) + '</div>';
         prevDay = day; prevFrom = ''; prevTs = 0;
       }
-      var nextM = arr[mi + 1];
+      var nextM = vis[mi + 1];
       // 同一个人连着发、且间隔小于 5 分钟 = 同一组；组的最后一条才画尾巴
       var isLast = !nextM || nextM.from !== m.from || nextM.ts - m.ts > 5 * 60000 || fmtDay(nextM.ts) !== day;
       if (m.from === 'sys' || m.volMark) {
@@ -2073,7 +2115,9 @@
     });
 
     box.innerHTML = html || '<div class="day">还没有消息</div>';
-    if (force || nearBottom) snapBottom(box);
+    if (opts && opts.keepScroll) {
+      box.scrollTop = prevTop + (box.scrollHeight - prevH);   // 往前面插了内容，视觉上别跳
+    } else if (force || nearBottom) snapBottom(box);
   }
 
   /* 直接落到底部：.msgs 上有 scroll-behavior: smooth，赋值 scrollTop 会变成一段
@@ -2153,6 +2197,7 @@
       else if (pid === LOCAL_PEER) rid = LOCAL_RID;
     }
     S.cur = rid;
+    msgShown[rid] = MSG_PAGE_STEP;
     S.unread[rid] = 0; save(); renderRooms();
     showJumpButton(rid);
     var r = room(rid);
@@ -2327,13 +2372,15 @@
       var myUid = 'uid:' + (S.uid || 0);
       if (isDeveloper) {
         // 开发者在这里说话 = 回复最近一条反馈的用户
-        var toUid = Number(S.fbLastUid) || 0;
+        var q = S.fbQuote || null;
+        var toUid = q ? Number(q.uid) : (Number(S.fbLastUid) || 0);
         if (toUid && isDevUid(toUid)) { toast('这条是你自己发的，不用回复'); toUid = 0; }
-        if (!toUid) { toast('还没有可回复的反馈'); }
+        if (!toUid) { toast(q ? '这条对端不对' : '先点一条反馈，再回复'); }
         else {
           var ok = false;
-          try { ok = wsSend({ t: 'fb_reply', toUid: toUid, text: text }); } catch (e) {}
+          try { ok = wsSend({ t: 'fb_reply', toUid: toUid, text: text, fbId: (q && q.id) || '' }); } catch (e) {}
           toast(ok ? ('已回复 uid:' + toUid) : '没连上服务器，没发出去');
+          clearFbQuote();
         }
       } else {
         var head = '【反馈】' + (window.APP_VERSION || '') + ' · ' + (S.nick || '匿名') + ' · ' + myUid;
@@ -2409,12 +2456,26 @@
     if (t) document.documentElement.setAttribute('data-theme', t);
     else document.documentElement.removeAttribute('data-theme');
     try { localStorage.setItem('paperlite.theme', t || ''); } catch (e) {}
+    try { var ts = $('#themeState'); if (ts) ts.textContent = t === 'dark' ? '深色' : (t === 'light' ? '浅色' : '跟随系统'); } catch (e) {}
     try { applyChatBg(); } catch (e) {}
     try { renderBeautyPanel(); } catch (e) {}
   }
   function toggleTheme() {
     var cur = document.documentElement.getAttribute('data-theme');
     applyTheme(cur === 'dark' ? 'light' : 'dark');
+  }
+
+  /* ---------------- 字号 ---------------- */
+  var FS_NAMES = { s: '小', m: '标准', l: '大', xl: '特大' };
+  function applyFs(k) {
+    var v = /^(s|m|l|xl)$/.test(String(k || '')) ? k : 'm';
+    S.fs = v;
+    if (v === 'm') document.documentElement.removeAttribute('data-fs');
+    else document.documentElement.setAttribute('data-fs', v);
+    try { localStorage.setItem('paperlite.fs', v); } catch (e) {}
+    Array.prototype.forEach.call(document.querySelectorAll('#fsSeg .seg-item'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-fs') === v);
+    });
   }
 
   /* ---------------- 皮肤：安卓 16（Material 3 Expressive）/ 小清新 ---------------- */
@@ -2807,6 +2868,17 @@
     $('#toneSheet').classList.remove('hidden');
     requestAnimationFrame(function () { $('#toneSheet').classList.add('open'); });
   }
+  function paintFbQuote() {
+    var bar = $('#fbQuoteBar');
+    if (!bar) return;
+    var q = S.fbQuote;
+    if (!q) { bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    var t = $('#fbQuoteText');
+    if (t) t.textContent = '回复 uid:' + q.uid + ' · ' + (q.text || '').slice(0, 40);
+  }
+  function clearFbQuote() { S.fbQuote = null; paintFbQuote(); }
+
   function closeToneSheet() {
     var el = $('#toneSheet');
     el.classList.remove('open');
@@ -4915,6 +4987,44 @@
       };
     })();
 
+    // 消息分页：点顶部按钮，或滚到最上面自动往前加载
+    (function bindMsgPaging() {
+      var box = $('#msgs');
+      if (!box || box.__paging) return;
+      box.__paging = true;
+      box.addEventListener('click', function (e) {
+        if (e.target.closest('[data-more]')) { e.preventDefault(); loadEarlier(); }
+      });
+      var lastLoad = 0;
+      box.addEventListener('scroll', function () {
+        if (box.scrollTop > 90) return;
+        var now = Date.now();
+        if (now - lastLoad < 400) return;
+        lastLoad = now;
+        loadEarlier();
+      }, { passive: true });
+    })();
+
+    // 反馈箱：点某一条反馈 = 指定回复这一条（不是只能回最新那条）
+    (function bindFbQuote() {
+      var box = $('#msgs');
+      if (!box || box.__fbQuote) return;
+      box.__fbQuote = true;
+      box.addEventListener('click', function (e) {
+        if (!isDeveloper || S.cur !== FEEDBACK_RID) return;
+        var m = e.target.closest('.msg');
+        if (!m) return;
+        var rid = m.getAttribute('data-uid') || '';
+        if (!/^uid:\d+$/.test(rid)) return;
+        var id = m.getAttribute('data-id') || '';
+        var txt = (m.querySelector('.bubble') || {}).textContent || '';
+        var uid = Number(rid.slice(4));
+        if (isDevUid(uid)) return;
+        S.fbQuote = { uid: uid, id: id, text: txt.slice(0, 60) };
+        paintFbQuote();
+      });
+    })();
+
     // 卡片玻璃：滚动时不画模糊，停手 200ms 再恢复（WebView 里 blur 是重活）
     (function bindGlassScroll() {
       var timer = null;
@@ -5065,6 +5175,13 @@
       toast('已恢复默认背景');
     });
     // 深色 / 浅色：自动 → 深色 → 浅色 循环（这一行之前没绑事件，点了没反应）
+    on('#fsSeg', 'click', function (e) {
+      var b = e.target.closest('[data-fs]');
+      if (!b) return;
+      applyFs(b.getAttribute('data-fs'));
+      save();
+      toast('字号：' + FS_NAMES[S.fs || 'm']);
+    });
     on('#btnTheme', 'click', function () {
       var cur = document.documentElement.getAttribute('data-theme') || '';
       var next = cur === '' ? 'dark' : (cur === 'dark' ? 'light' : '');
@@ -7012,6 +7129,7 @@
     loadRemarks();
     loadStickers();
     try { applySkin(); } catch (e) {}
+    try { applyFs(S.fs || localStorage.getItem('paperlite.fs') || 'm'); } catch (e) {}
     try { setTimeout(watchLists, 120); } catch (e) {}
     try {
       // 三个主页面：首屏动画播完就不再重播
@@ -7143,6 +7261,8 @@
       if (isDeveloper) openFeedback(); else openFbPage();
     });
     on('#fbClose', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#btnFbQuoteCancel', 'click', function (e) { e.preventDefault(); clearFbQuote(); });
+    // 进反馈箱时清掉上一次的引用（openFeedback 里处理）
     on('#fbSend', 'click', function (e) { e.preventDefault(); fbPageSend(); });
 
     on('#btnFlush', 'click', function () {
