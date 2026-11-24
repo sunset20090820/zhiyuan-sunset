@@ -125,6 +125,15 @@
     try { el.addEventListener(ev, fn, capture || false); } catch (e) {}
     return el;
   }
+  // 统一空状态：图标 + 一句解释 + 可选主行动
+  function emptyState(icon, title, sub, btnText, btnAttr) {
+    return '<div class="empty-state">' +
+      '<div class="empty-ico">' + esc(icon || '✳') + '</div>' +
+      '<div class="empty-title">' + esc(title || '') + '</div>' +
+      (sub ? '<div class="empty-sub">' + esc(sub) + '</div>' : '') +
+      (btnText ? '<button class="empty-btn" type="button" ' + (btnAttr || '') + '>' + esc(btnText) + '</button>' : '') +
+      '</div>';
+  }
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -1391,7 +1400,8 @@
     if (isRpRoom(S.cur)) {
       var vol = 1;
       try { vol = RP.volOf(S.cur) || 1; } catch (e) {}
-      el.textContent = '卷 ' + vol + ' · 模型走 API · 聊天不上服务器';
+      // 顶栏一行放得下：只留最要紧的「卷 + 模型来源」，细节放长按/设置里
+      el.textContent = '卷 ' + vol + ' · API 模型';
       return true;
     }
     return false;
@@ -1499,11 +1509,17 @@
     if (!box) return;
     var arr = [];
     try { arr = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || []; } catch (e) { arr = []; }
-    if (!arr.length) { box.innerHTML = '<div class="hint">还没发过反馈。截图、版本、复现步骤写清楚会好查很多。</div>'; return; }
+    if (!arr.length) {
+      box.innerHTML = emptyState('📮', '还没发过反馈', '写清楚版本号、操作步骤、看到什么，会好查很多。');
+      return;
+    }
     box.innerHTML = arr.slice(-8).reverse().map(function (x) {
-      return '<div class="fb-item"><div class="fb-meta">' + esc(x.time || '') + (x.reply ? ' · 开发者回复' : '') + '</div>' +
+      var chip = x.reply ? '<span class="fb-chip ok">已回复</span>' : '<span class="fb-chip">等待回复</span>';
+      return '<div class="fb-item">' +
+        '<div class="fb-meta"><span>' + esc(x.time || '') + '</span>' + chip + '</div>' +
         '<div class="fb-text">' + esc(String(x.text || '').slice(0, 120)) + '</div>' +
-        (x.reply ? '<div class="fb-reply">' + esc(String(x.reply).slice(0, 160)) + '</div>' : '') + '</div>';
+        (x.reply ? '<div class="fb-reply"><b>开发者</b>' + esc(String(x.reply).slice(0, 160)) + '</div>' : '') +
+        '</div>';
     }).join('');
   }
   function fbPageSend() {
@@ -2322,9 +2338,17 @@
         (m.text ? '<div class="caption">' + renderMessageText(m.text, m.mentions) + '</div>' : '');
     }
     if (m.big) return '<span class="big-emoji">' + esc(m.text) + '</span>';
-    return '<span class="msg-text">' + renderMessageText(m.text, m.mentions) + '</span>';
+    return '<span class="msg-text">' + renderMessageText(m.text, m.mentions, /^rp:/.test(String(m.from || ''))) + '</span>';
   }
-  function renderMessageText(text, mentions) {
+  // 扮演：把（动作/神态）单独染色，和台词分开
+  function rpActHtml(text) {
+    var safe = esc(text || '');
+    return safe.replace(/（([^）]{1,400})）/g, '<span class="rp-act">（$1）</span>');
+  }
+  function renderMessageText(text, mentions, isRp) {
+    if (isRp) {
+      return rpActHtml(text);
+    }
     var safe = esc(text || '');
     (mentions || []).slice().sort(function (a, b) { return (b.name || '').length - (a.name || '').length; }).forEach(function (m) {
       if (!m || !m.name) return;
@@ -3118,7 +3142,7 @@
     var hist = loadHist(rid);
     if (hist.length) return;
     if (!card.firstMes) return;
-    addMsg(rid, { id: 'm' + Date.now().toString(36), from: 'rp', name: card.name, text: card.firstMes,
+    addMsg(rid, { id: 'm' + Date.now().toString(36), from: 'rp:' + card.id, name: card.name, text: card.firstMes,
                   ts: Date.now(), avatar: card.avatar || '' });
     saveHist(rid);
   }
@@ -3536,7 +3560,7 @@
     if (!box) return;
     var cards = RP.cards();
     if (!cards.length) {
-      box.innerHTML = '<div class="role-empty">还没有角色。点右上「＋ 新建」写一个：<br>名字、一句话设定、开场白就够了，其余可以慢慢补。</div>';
+      box.innerHTML = emptyState('🎭', '还没有角色', '名字、一句话设定、开场白就够了，其余可以慢慢补。', '新建角色', 'data-act="newcard"');
       return;
     }
     box.innerHTML = cards.map(function (c) {
@@ -3940,7 +3964,10 @@
   function renderWorldList() {
     var box = $('#worldList');
     var ws = RP.worlds();
-    if (!ws.length) { box.innerHTML = '<div class="role-empty">还没有世界包。世界包用来放「多张卡共享的大背景」，比如同一座城。</div>'; return; }
+    if (!ws.length) {
+      box.innerHTML = emptyState('🌍', '还没有世界包', '世界包放「多张卡共享的大背景」，比如同一座城。', '新建世界包', 'data-act="newworld"');
+      return;
+    }
     box.innerHTML = ws.map(function (w) {
       var cards = RP.cards().filter(function (c) { return c.worldId === w.id; });
       return '<div class="role-card" data-world="' + esc(w.id) + '">' +
@@ -4401,6 +4428,16 @@
       var on = !sec.classList.contains('open');
       sec.classList.toggle('open', on);
       head.setAttribute('aria-expanded', on ? 'true' : 'false');
+    });
+    on('#roleList', 'click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      if (b.getAttribute('data-act') === 'newcard') openRoleEditor();
+    });
+    on('#worldList', 'click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      if (b.getAttribute('data-act') === 'newworld') openWorldEditor('');
     });
     on('#roleNew', 'click', function (e) { e.preventDefault(); openRoleEditor(''); });
     on('#roleList', 'click', function (e) {
