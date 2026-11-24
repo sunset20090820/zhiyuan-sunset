@@ -2833,6 +2833,28 @@
     if (cDark && lw.image) ld = Math.min(0.9, ld + 0.16);
     root.style.setProperty('--list-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + ld.toFixed(2) + ')');
 
+    // 整页底图：会话列表没单独设就用聊天那张，保证「扮演 / 我的 / 子页面」也有背景
+    var lwHas = lw.wall !== 'none', cwHas = cw.wall !== 'none';
+    var pageWall = lwHas ? lw.wall : (cwHas ? cw.wall : 'none');
+    var pageDim = lwHas ? ld : cd;
+    var pageImage = lwHas ? !!lw.image : !!cw.image;
+    if (cDark && pageImage) pageDim = Math.min(0.9, pageDim + 0.16);
+    // 照片当底图时给整页垫一层最低 0.24 的白纱，否则「我的」里的灰字压在艳色上几乎看不清
+    if (pageImage) pageDim = Math.max(pageDim, 0.24);
+    root.style.setProperty('--page-wall', pageWall);
+    root.style.setProperty('--page-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + pageDim.toFixed(2) + ')');
+    root.style.setProperty('--page-wall-blur', (pageImage ? Math.min(40, Number(lwHas ? list.blur : chat.blur) || 0) : 0) + 'px');
+    // 直接写到元素上：.me-page 的 background 简写规则太多，靠 CSS 变量容易被覆盖掉
+    try {
+      var pages = document.querySelectorAll('#roles, .me-page');
+      Array.prototype.forEach.call(pages, function (el) {
+        el.style.backgroundImage = pageWall;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        el.style.backgroundRepeat = 'no-repeat';
+      });
+    } catch (e) {}
+
     // 顶栏文字：auto 跟背景走，也可以手动钉死成黑/白
     var mode = S.topbarText || 'auto';
     var wallDark = cw.dark || lw.dark;
@@ -2972,6 +2994,7 @@
     { key: 'peach',      name: '蜜桃',   css: 'linear-gradient(135deg,#f08a5d,#f5a06f)' },
     { key: 'mint',       name: '薄荷',   css: 'linear-gradient(135deg,#3fb39a,#57c9b3)' },
     { key: 'cream',      name: '奶油',   css: 'linear-gradient(135deg,#d9a544,#e8bd6d)' },
+    { key: 'frost',      name: '柔光玻璃', css: 'radial-gradient(circle at 30% 25%,rgba(255,255,255,.95),rgba(196,206,255,.75) 45%,rgba(226,214,255,.6) 75%,rgba(255,255,255,.9))' },
     { key: 'm3-periwinkle', name: 'M3 长春花', m3: true, css: 'linear-gradient(135deg,#515b92,#dee0ff)' },
     { key: 'm3-lavender',   name: 'M3 薰衣草', m3: true, css: 'linear-gradient(135deg,#625690,#e7deff)' },
     { key: 'm3-sakura',     name: 'M3 樱花',   m3: true, css: 'linear-gradient(135deg,#8c4a5d,#ffd9e1)' },

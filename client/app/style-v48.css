@@ -3219,3 +3219,42 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
   width: 0; height: 60%; border-radius: 2px; background: var(--tg-blue); opacity: 0;
   transition: width .2s ease, opacity .2s ease; }
 .bg-dim-row[data-gp-row].gp-focus::after { width: 3px; opacity: 1; }
+
+/* ---------- 整页底图：扮演（#roles）与所有子页面 ---------- */
+#roles {
+  position: relative;
+  isolation: isolate;
+  background-image: var(--page-wall, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: background-image .3s ease;
+}
+#roles::before {
+  content: '';
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--page-wall-dim, rgba(255, 255, 255, .18));
+  transition: background .3s ease;
+}
+/* 「我的」优先用整页底图（之前只有会话列表那张） */
+#mePage { background-image: var(--page-wall, none); }
+
+/* ---------- 柔光玻璃主题色：几乎透明的玻璃 + 柔光 ---------- */
+:root[data-accent="frost"] {
+  --accent: #8fa4f5;
+  --accent-ink: #7c93ee;
+  --accent-2: #c9b8ff;
+  --tg-blue: #8195ee;
+  --line: rgba(126, 140, 205, .22);
+  --stroke: rgba(126, 140, 205, .2);
+  --sub: #6a7188;
+  --text: #232838;
+  --bg-soft: rgba(255, 255, 255, .42);
+  --card: rgba(255, 255, 255, .48);
+  --card-2: rgba(255, 255, 255, .34);
+  --in: rgba(255, 255, 255, .58);
+  --out: #8fa2ee;
+  --out-text: #ffffff;
+  --ring: rgba(143, 164, 245, .3);
+  --chat-wall-dim: rgba(255, 255, 255, .1);
+}

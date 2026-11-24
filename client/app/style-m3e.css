@@ -2102,14 +2102,20 @@ html[data-skin="m3e"] .tone-btn {
   font-size: 12.5px; font-weight: 600; border: 0; margin-right: 2px;
 }
 
-/* 整页（我的/编辑器/反馈页等）在玻璃皮肤下必须是实底，否则会与下层页面重叠 */
+/* 整页（我的/编辑器/反馈页等）在玻璃皮肤下要挡住下层页面。
+   注意：这里只能用 background-color，不能用 background 简写 ——
+   简写 + !important 会把 JS 写在元素上的底图（--page-wall）一起清零。 */
 html[data-skin] .me-page,
 html[data-skin] #blockPage {
-  background: var(--m3e-surface, #f6f4fb) !important;
+  background-color: var(--m3e-surface, #f6f4fb) !important;
+  background-image: var(--page-wall, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   z-index: 49;
 }
 html[data-skin][data-theme="dark"] .me-page,
-html[data-skin][data-theme="dark"] #blockPage { background: var(--m3e-surface, #17151d) !important; }
+html[data-skin][data-theme="dark"] #blockPage { background-color: var(--m3e-surface, #17151d) !important; }
 
 /* 字号档位：盖掉 m3e 里写死的气泡字号 */
 html[data-fs] .msgs .msg .bubble { font-size: calc(15px * var(--fs, 1)) !important; line-height: 1.45; }
@@ -2143,3 +2149,79 @@ html[data-skin][data-theme="dark"] .exp-summary { background: rgba(94,181,247,.1
 html[data-skin][data-theme="dark"] .glass-preview { background: linear-gradient(135deg, #2a2540 0%, #3a2740 50%, #1f3a38 100%); }
 html[data-skin][data-theme="dark"] .role-dot { border-color: #17151d; }
 html[data-skin][data-theme="dark"] .empty-btn { background: var(--m3e-primary, #7b8cff); }
+
+/* =========================================================
+   柔光玻璃主题色（frost）：几乎透明的面板 + 柔光边缘
+   —— 面板 alpha 压到 .2–.34，靠模糊和描边撑住层次
+   ========================================================= */
+html[data-skin][data-accent="frost"] {
+  --m3e-primary: #7d90ee;
+  --m3e-on-primary: #ffffff;
+  --m3e-primary-container: rgba(190, 202, 255, .55);
+  --m3e-on-primary-container: #39427a;
+  --m3e-secondary-container: rgba(214, 220, 255, .5);
+  --m3e-on-secondary-container: #454b74;
+  --m3e-surface: rgba(255, 255, 255, .30);
+  --m3e-surface-1: rgba(255, 255, 255, .26);
+  --m3e-surface-2: rgba(255, 255, 255, .22);
+  --m3e-surface-3: rgba(255, 255, 255, .18);
+  --m3e-on-surface: #22273a;
+  --m3e-on-variant: rgba(34, 39, 58, .62);
+  --m3e-outline: rgba(126, 140, 205, .26);
+  --m3e-glass-a: .30;
+  --m3e-glass-blur: var(--row-blur, 30px);
+  --m3e-glass-sat: var(--row-sat, 190%);
+  --m3e-glass-line: rgba(255, 255, 255, .78);
+  --m3e-glass-hi: rgba(255, 255, 255, .6);
+  --accent: #8fa4f5;
+  --accent-2: #c9b8ff;
+}
+html[data-skin][data-accent="frost"][data-theme="dark"] {
+  --m3e-primary: #a8b6ff;
+  --m3e-on-primary: #10142a;
+  --m3e-primary-container: rgba(90, 104, 180, .42);
+  --m3e-on-primary-container: #dfe3ff;
+  --m3e-secondary-container: rgba(96, 104, 160, .38);
+  --m3e-on-secondary-container: #e2e5ff;
+  --m3e-surface: rgba(22, 26, 44, .42);
+  --m3e-surface-1: rgba(26, 30, 50, .38);
+  --m3e-surface-2: rgba(30, 34, 56, .34);
+  --m3e-surface-3: rgba(36, 40, 64, .30);
+  --m3e-on-surface: #eceffc;
+  --m3e-on-variant: rgba(236, 239, 252, .68);
+  --m3e-outline: rgba(180, 190, 255, .26);
+  --m3e-glass-a: .26;
+  --m3e-glass-line: rgba(255, 255, 255, .22);
+  --m3e-glass-hi: rgba(255, 255, 255, .18);
+  --accent: #a8b6ff;
+  --accent-2: #d5c6ff;
+}
+/* 柔光：面板外发光更淡更散，像磨砂玻璃边缘的光晕 */
+html[data-skin][data-accent="frost"] .topbar,
+html[data-skin][data-accent="frost"] .chat-top,
+html[data-skin][data-accent="frost"] .tabbar,
+html[data-skin][data-accent="frost"] .composer,
+html[data-skin][data-accent="frost"] .me-group,
+html[data-skin][data-accent="frost"] .me-card,
+html[data-skin][data-accent="frost"] #roomList,
+html[data-skin][data-accent="frost"] #friendList {
+  box-shadow:
+    inset 0 1px 0 var(--m3e-glass-hi),
+    0 2px 10px rgba(150, 165, 255, .16),
+    0 14px 44px rgba(140, 156, 255, .22);
+}
+/* 子页面也吃整页底图：基础皮肤把它们刷成了 transparent */
+html[data-skin] .me-page,
+html[data-skin] #roles {
+  background-image: var(--page-wall, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+/* 注意：.me-page 是 position: fixed，别在这里改定位，否则整页会被顶出视口 */
+html[data-skin] .me-page { isolation: isolate; }
+html[data-skin] .me-page::before {
+  content: '';
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--page-wall-dim, rgba(255, 255, 255, .18));
+}
