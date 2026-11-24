@@ -3058,3 +3058,10 @@ html .hint { font-size: calc(12px * var(--fs, 1)); }
 html .day, html .vol-day { font-size: calc(11.5px * var(--fs, 1)); }
 .fb-quote-bar { background: color-mix(in srgb, var(--tg-blue) 10%, var(--bg)); }
 .fb-quote-bar .reply-accent { background: var(--tg-blue); }
+
+/* 扮演：继续写 */
+.rp-continue {
+  display: block; margin: 4px auto 14px; padding: 7px 16px; border-radius: 99px;
+  border: 1px solid var(--line); background: var(--bg-soft); color: var(--tg-sub); font-size: 12.5px;
+}
+.rp-continue:active { transform: scale(.97); }

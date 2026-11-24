@@ -356,7 +356,7 @@ public class MainActivity extends Activity {
         }
 
         private String aiModelsRequest(String base) throws Exception {
-            String key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
+            String key = secretPick("ai_key");
             String url = base.replaceAll("/+$", "") + "/models";
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
             conn.setConnectTimeout(10000);
@@ -468,7 +468,7 @@ public class MainActivity extends Activity {
                 @Override public void run() {
                     String key;
                     try {
-                        key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
+                        key = secretPick("ai_key");
                     } catch (Exception e) { key = ""; }
                     if (key == null || key.length() == 0) { aiCall("__aiOnError", ridKey, "还没填 API key"); return; }
 
@@ -702,7 +702,7 @@ public class MainActivity extends Activity {
         }
 
         private String aiRequest(String base, String model, String messagesJson, String optsJson) throws Exception {
-            String key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
+            String key = secretPick("ai_key");
             if (key == null || key.length() == 0) return "{\"ok\":false,\"error\":\"还没填 API key\"}";
             org.json.JSONArray msgs = new org.json.JSONArray(messagesJson == null ? "[]" : messagesJson);
             org.json.JSONObject body = new org.json.JSONObject();
@@ -785,7 +785,15 @@ public class MainActivity extends Activity {
                     if (firstErr == null) firstErr = "模型返回了空内容";
                     continue;
                 }
-                return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\",\"url\":\"" + esc4j(url.replaceFirst("^https?://", "")) + "\"}";
+                // 顺带把 token 用量带回去（有的中转不给 usage，前端会退回估算）
+                String usageOut = "";
+                try {
+                    if (j.has("usage")) {
+                        String u = j.getJSONObject("usage").toString();
+                        if (u != null && u.length() > 2) usageOut = ",\"usage\":" + u;
+                    }
+                } catch (Exception e) { }
+                return "{\"ok\":true,\"text\":\"" + esc4j(text) + "\",\"url\":\"" + esc4j(url.replaceFirst("^https?://", "")) + "\"" + usageOut + "}";
             }
             return "{\"ok\":false,\"error\":\"" + esc4j(firstErr == null ? "发不出去" : firstErr) + "\"}";
         }
@@ -824,20 +832,94 @@ public class MainActivity extends Activity {
             return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "").replace("\t", "  ");
         }
 
-        /** 本机私有小保险箱：AI 助手的 API key 存这里，不进 WebView 的 localStorage */
+        /* ---- 小保险箱：AES/GCM 加密后再写 SharedPreferences（密钥在 AndroidKeyStore 里） ---- */
+        private static final String KS_ALIAS = "paperlite_secrets_key";
+        private static final String ENC_TAG = "enc1:";
+
+        private javax.crypto.SecretKey ksKey() throws Exception {
+            java.security.KeyStore ks = java.security.KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            if (!ks.containsAlias(KS_ALIAS)) {
+                javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance(
+                    android.security.keystore.KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+                android.security.keystore.KeyGenParameterSpec.Builder b = new android.security.keystore.KeyGenParameterSpec.Builder(
+                    KS_ALIAS, android.security.keystore.KeyProperties.PURPOSE_ENCRYPT | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256);
+                if (android.os.Build.VERSION.SDK_INT >= 23) b.setRandomizedEncryptionRequired(true);
+                kg.init(b.build());
+                kg.generateKey();
+            }
+            return (javax.crypto.SecretKey) ks.getKey(KS_ALIAS, null);
+        }
+
+        private String secretEncrypt(String plain) {
+            try {
+                javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+                c.init(javax.crypto.Cipher.ENCRYPT_MODE, ksKey());
+                byte[] iv = c.getIV();
+                byte[] ct = c.doFinal(plain.getBytes("UTF-8"));
+                byte[] out = new byte[1 + iv.length + ct.length];
+                out[0] = (byte) iv.length;
+                System.arraycopy(iv, 0, out, 1, iv.length);
+                System.arraycopy(ct, 0, out, 1 + iv.length, ct.length);
+                return ENC_TAG + android.util.Base64.encodeToString(out, android.util.Base64.NO_WRAP);
+            } catch (Throwable e) { return null; }
+        }
+
+        private String secretDecrypt(String stored) {
+            try {
+                byte[] raw = android.util.Base64.decode(stored.substring(ENC_TAG.length()), android.util.Base64.NO_WRAP);
+                int ivLen = raw[0] & 0xff;
+                byte[] iv = new byte[ivLen], ct = new byte[raw.length - 1 - ivLen];
+                System.arraycopy(raw, 1, iv, 0, ivLen);
+                System.arraycopy(raw, 1 + ivLen, ct, 0, ct.length);
+                javax.crypto.Cipher c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+                c.init(javax.crypto.Cipher.DECRYPT_MODE, ksKey(), new javax.crypto.spec.GCMParameterSpec(128, iv));
+                return new String(c.doFinal(ct), "UTF-8");
+            } catch (Throwable e) { return ""; }
+        }
+
+        /** 本机私有小保险箱：AI 助手的 API key 加密后存这里，不进 WebView 的 localStorage */
         @JavascriptInterface
         public void secretSet(String name, String value) {
             try {
+                String plain = value == null ? "" : value;
+                String out = plain.length() == 0 ? "" : secretEncrypt(plain);
+                if (out == null || out.length() == 0) out = plain;      // Keystore 不可用才退回明文
                 act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).edit()
-                    .putString("s_" + name, value == null ? "" : value).apply();
+                    .putString("s_" + name, out).apply();
             } catch (Exception e) { }
         }
 
         @JavascriptInterface
         public String secretGet(String name) {
             try {
-                return act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE)
+                String v = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE)
                     .getString("s_" + name, "");
+                if (v == null || v.length() == 0) return "";
+                if (v.startsWith(ENC_TAG)) {
+                    String plain = secretDecrypt(v);
+                    return plain == null ? "" : plain;
+                }
+                // 老版本存的明文：读出来顺手加密回去
+                String enc = secretEncrypt(v);
+                if (enc != null && enc.length() > 0) {
+                    act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).edit()
+                        .putString("s_" + name, enc).apply();
+                }
+                return v;
+            } catch (Exception e) { return ""; }
+        }
+
+        /** 原生内部取 key（可能是加密的，这里统一解密） */
+        private String secretPick(String name) {
+            try {
+                String v = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_" + name, "");
+                if (v == null || v.length() == 0) return "";
+                if (v.startsWith(ENC_TAG)) { String p = secretDecrypt(v); return p == null ? "" : p; }
+                return v;
             } catch (Exception e) { return ""; }
         }
 

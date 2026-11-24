@@ -612,6 +612,7 @@
           </div>
         </div>
         <p class="hint">预算越大记得越多，也越费 token。8k 够日常；128k / 1M 要模型本身支持长上下文（如 Gemini、Qwen-Long、Claude）。默认 8k。</p>
+        <p class="hint" id="rpBudgetHint"></p>
         <button id="btnRoleImport" class="me-row" type="button"><span class="me-ico">📥</span>导入角色包（文件 / 文字）<span class="me-arrow">›</span></button>
         <button id="btnRoleModel" class="me-row" type="button"><span class="me-ico">🔗</span>模型接口（key / 模型）<span class="me-arrow">›</span></button>
         <button id="btnRoleWorlds" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow" id="worldCount">0</span></button>
@@ -856,6 +857,9 @@
     <label class="field"><span>主对话模型</span>
       <input id="cfModel" maxlength="120" placeholder="deepseek-chat" spellcheck="false" autocomplete="off"></label>
     <p class="hint" id="cfKeyInfo">还没保存 key</p>
+    <pre id="cfUsage" class="ai-test-out">还没有调用记录</pre>
+    <button id="cfUsageReset" class="ai-fetch" type="button">清零用量</button>
+    <p class="hint" id="cfCtxHint">模型上限会在选预算时自动生效</p>
     <div class="ai-test-row">
       <button id="cfSave" class="ai-fetch primary" type="button">保存</button>
       <button id="cfFetch" class="ai-fetch" type="button">刷新模型列表</button>

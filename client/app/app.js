@@ -215,7 +215,7 @@
   }
 
   function statePayload() {
-    return { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, ts: Date.now(), log: bootLog.slice(-12) };
+    return { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, fs: S.fs, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, aiUse: S.aiUse, devUids: S.devUids, fbUnread: S.fbUnread, ts: Date.now(), log: bootLog.slice(-12) };
   }
   function save() {
     if (!stateLoaded) { blockedSaves++; return; }   // 存档还没读进来，写下去会洗掉登录
@@ -267,6 +267,10 @@
         if (o.accent) S.accent = o.accent;
         if (o.topbarText) S.topbarText = o.topbarText;
         if (o.skin) S.skin = o.skin;
+        if (o.fs) S.fs = o.fs;
+        if (o.aiUse && typeof o.aiUse === 'object') S.aiUse = o.aiUse;
+        if (Array.isArray(o.devUids)) S.devUids = o.devUids;
+        if (typeof o.fbUnread === 'number') S.fbUnread = o.fbUnread;
         S.auth = !!o.auth;
         S.last = o.last || {};
         S.unread = o.unread || {};
@@ -903,6 +907,106 @@
     toast(on ? ('本地用户已开启，端口 ' + S.localAgent.port) : '本地用户已关闭');
   }
   /* ---------------- 自带 AI 助手（填 key 就能聊，和「本地用户」互不影响） ---------------- */
+  /* ---------- token 用量：有 usage 用真值，没有就按字数估 ---------- */
+  function aiUseTotal() {
+    if (!S.aiUse) S.aiUse = { p: 0, c: 0, calls: 0, byModel: {} };
+    return S.aiUse;
+  }
+  function aiUseAdd(prompt, completion, model) {
+    try {
+      var u = aiUseTotal();
+      u.p += Math.max(0, Math.round(prompt || 0));
+      u.c += Math.max(0, Math.round(completion || 0));
+      u.calls += 1;
+      var m = model || '未知模型';
+      u.byModel[m] = u.byModel[m] || { p: 0, c: 0 };
+      u.byModel[m].p += Math.max(0, Math.round(prompt || 0));
+      u.byModel[m].c += Math.max(0, Math.round(completion || 0));
+      save();
+      try { paintAiUsage(); } catch (e) {}
+    } catch (e) {}
+  }
+  // 原生回了 usage 就用真的（prompt_tokens / input_tokens 都认）
+  function aiUseFromPayload(j, msgsJson, text, model) {
+    var p = 0, c = 0, real = false;
+    try {
+      var u = j && j.usage;
+      if (u && (u.prompt_tokens || u.input_tokens || u.completion_tokens || u.output_tokens)) {
+        p = Number(u.prompt_tokens || u.input_tokens || 0);
+        c = Number(u.completion_tokens || u.output_tokens || 0);
+        real = p > 0 || c > 0;
+      }
+    } catch (e) {}
+    if (!real) {
+      try {
+        var arr = JSON.parse(msgsJson || '[]');
+        var all = '';
+        for (var i = 0; i < arr.length; i++) all += String(arr[i] && arr[i].content || '');
+        p = window.CTX ? CTX.est(all) : Math.ceil(all.length / 3);
+      } catch (e) { p = 0; }
+      c = window.CTX ? CTX.est(String(text || '')) : Math.ceil(String(text || '').length / 3);
+    }
+    aiUseAdd(p, c, model);
+    return real;
+  }
+  function fmtTok(n) {
+    n = Number(n) || 0;
+    if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function paintAiUsage() {
+    var el = $('#cfUsage');
+    if (!el) return;
+    var u = aiUseTotal();
+    var rows = Object.keys(u.byModel || {}).map(function (m) {
+      var x = u.byModel[m] || {};
+      return m + ' 入 ' + fmtTok(x.p) + ' / 出 ' + fmtTok(x.c);
+    }).slice(-4);
+    el.textContent = u.calls
+      ? ('累计 ' + u.calls + ' 次 · 输入 ' + fmtTok(u.p) + ' · 输出 ' + fmtTok(u.c) + ' tokens' + (rows.length ? '\n' + rows.join('\n') : ''))
+      : '还没有调用记录';
+  }
+
+  /* ---------- 模型真实上下文上限（用于把预算卡在模型能吃的范围里） ---------- */
+  var AI_CTX_LIMITS = [
+    [/qwen-long/i, 1000000],
+    [/gemini-1\.5-pro|gemini-2|gemini-3/i, 1048576],
+    [/gemini/i, 262144],
+    [/claude/i, 200000],
+    [/qwen/i, 131072],
+    [/moonshot|kimi/i, 131072],
+    [/gpt-4\.1|gpt-4o|gpt-4-turbo/i, 128000],
+    [/gpt-3\.5/i, 16385],
+    [/deepseek/i, 65536],
+    [/glm-4/i, 131072],
+    [/yi-|baichuan|internlm/i, 32768]
+  ];
+  function aiCtxLimit(model) {
+    var m = String(model || (S.ai && S.ai.model) || '');
+    for (var i = 0; i < AI_CTX_LIMITS.length; i++) {
+      if (AI_CTX_LIMITS[i][0].test(m)) return AI_CTX_LIMITS[i][1];
+    }
+    return 32768;      // 不认识的模型保守一点
+  }
+  var aiCtxWarned = '';
+  // 预算要被模型上限卡住：选了 1M 但模型只有 64k，就按 64k 跑（并提示一次）
+  function rpBudgetReal() {
+    var want = 8192;
+    try { want = RP.settings().budget || 8192; } catch (e) {}
+    var model = (S.ai && S.ai.model) || '';
+    var lim = aiCtxLimit(model);
+    if (want > lim) {
+      var key = model + '>' + lim;
+      if (aiCtxWarned !== key) {
+        aiCtxWarned = key;
+        try { toast('预算按模型上限走：' + (model || '当前模型') + ' 最多 ' + (lim / 1024) + 'k'); } catch (e) {}
+      }
+      return lim;
+    }
+    return want;
+  }
+
   function aiName() { return (S.ai && S.ai.name) || 'AI 助手'; }
   function aiKeyStore(k, v) {
     // key 优先放原生私有存储（Android SharedPreferences），没桥时退回 localStorage
@@ -1606,7 +1710,7 @@
   var aiRidSeq = 0, aiWait = {};
   function aiAskNative(base, model, msgs, onText, onRaw, extra) {
     var rid = 'q' + (++aiRidSeq) + Date.now();
-    aiWait[rid] = { text: onText, raw: onRaw };
+    aiWait[rid] = { text: onText, raw: onRaw, base: base, model: model, msgs: msgs, extra: extra, tries: 0 };
     try {
       if (window.PaperNative && window.PaperNative.aiAsk) {
         var opts = JSON.stringify(Object.assign({ effort: (S.ai && S.ai.effort) || 'low' }, extra || {}));
@@ -1630,6 +1734,26 @@
     try { j = JSON.parse(payload); } catch (e) {}
     // 原生可能换了地址才通（少写/多写 /v1）：把通的地址记下来，下次直接用
     if (j && j.ok && j.url) aiAdoptUrl(j.url);
+    // 用量记账（原生给了 usage 就用真值）
+    if (j && j.ok) { try { aiUseFromPayload(j, w.msgs, j.text, w.model); } catch (e) {} }
+    // 失败自动重试：网络/5xx/超时 这类值得再试一次，401/403 不重试
+    if (j && !j.ok && w && (w.tries || 0) < 2) {
+      var errTxt = String(j.error || '');
+      var retryable = /连不上|超时|timeout|HTTP 5\d\d|ECONNRESET|network|failed to connect|stream/i.test(errTxt)
+        && !/401|403|key|模型名|没有这个模型|not found/i.test(errTxt);
+      if (retryable) {
+        w.tries = (w.tries || 0) + 1;
+        var again = w.tries;
+        aiWait[rid] = w;
+        setTimeout(function () {
+          try {
+            var opts2 = JSON.stringify(Object.assign({ effort: (S.ai && S.ai.effort) || 'low' }, w.extra || {}, { __retry: again }));
+            if (window.PaperNative && window.PaperNative.aiAsk) window.PaperNative.aiAsk(w.base, w.model, w.msgs, rid, opts2);
+          } catch (e) {}
+        }, 700 * again);
+        return;
+      }
+    }
     if (w.raw) w.raw(payload, j);
     if (j && j.ok) w.text(String(j.text || '(模型没返回内容)').trim());
     else {
@@ -2114,6 +2238,12 @@
       prevFrom = m.from; prevTs = m.ts;
     });
 
+    // 扮演会话：最后一条是角色说的，就给一个「继续写」（模型被截断时可以接着写）
+    if (isRpRoom(rid) && vis.length) {
+      var lastM = vis[vis.length - 1];
+      var lastIsRp = lastM && lastM.from === 'rp:' + (rpCardOf(rid) || {}).id && !lastM.typing;
+      if (lastIsRp) html += '<button class="rp-continue" type="button" data-cont="1">继续写</button>';
+    }
     box.innerHTML = html || '<div class="day">还没有消息</div>';
     if (opts && opts.keepScroll) {
       box.scrollTop = prevTop + (box.scrollHeight - prevH);   // 往前面插了内容，视觉上别跳
@@ -2957,7 +3087,7 @@
   /* ---------- 流式请求（原生 SSE） ---------- */
   function aiStreamRun(base, model, msgsJson, opts, handlers) {
     var rid = 'q' + (++aiRidSeq) + Date.now().toString(36);
-    rpStream[rid] = handlers || {};
+    rpStream[rid] = Object.assign({}, handlers || {}, { msgs: msgsJson, model: model });
     try {
       if (window.PaperNative && window.PaperNative.aiAsk) {
         var o = JSON.stringify(Object.assign({ effort: (S.ai && S.ai.effort) || 'low' }, opts || {}, { stream: true }));
@@ -2980,7 +3110,10 @@
     var j = null;
     try { j = JSON.parse(json); } catch (e) {}
     if (j && j.ok && j.url) { try { aiAdoptUrl(j.url); } catch (e) {} }
-    if (j && j.ok) h.onDone(String(j.text || ''), j);
+    if (j && j.ok) {
+      try { aiUseFromPayload(j, h.msgs, j.text, h.model); } catch (e) {}
+      h.onDone(String(j.text || ''), j);
+    }
     else h.onError(String((j && (j.error || j.err)) || '没有返回内容'));
   };
   window.__aiOnError = function (rid, msg) {
@@ -3105,10 +3238,80 @@
     }
   }
 
+  /* ---------- 扮演：断点续写（模型被 max_tokens 截断时接着写） ---------- */
+  var rpContBusy = {};
+  function rpContinue() {
+    var rid = S.cur;
+    if (!isRpRoom(rid) || rpContBusy[rid]) return;
+    var card = rpCardOf(rid);
+    if (!card) { toast('这张卡不在本机了'); return; }
+    if (!aiConfigured()) { toast('先在「扮演设置 → 模型接口」里配好'); return; }
+    var list = loadHist(rid);
+    var last = null;
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (list[i] && list[i].from === 'rp:' + card.id) { last = list[i]; break; }
+    }
+    if (!last || !last.text) { toast('还没有可以续写的内容'); return; }
+    var budget = rpBudget();
+    var pack;
+    try { pack = CTX.build(rid, { card: card, hist: list, userText: '（接着写，不要重复已经写过的内容）', excludeId: last.id, budget: budget }); }
+    catch (e) { toast('拼上下文失败：' + e.message); return; }
+    var msgs = [{ role: 'system', content: pack.system }]
+      .concat(pack.messages.slice(-6))
+      .concat([
+        { role: 'assistant', content: String(last.text).slice(-1200) },
+        { role: 'user', content: '（接着上面，继续往下写，不要重复已经写过的内容）' }
+      ]);
+    rpContBusy[rid] = true;
+    var node = $('#msgs') ? $('#msgs').querySelector('.msg[data-id="' + last.id + '"]') : null;
+    var baseText = String(last.text);
+    var added = '';
+    if (node) {
+      var b = node.querySelector('.bubble');
+      if (b) b.classList.add('typing');
+    }
+    var reqId = aiStreamRun((S.ai && S.ai.base) || '', card.model || (S.ai && S.ai.model) || '',
+      JSON.stringify(msgs), { temperature: Number(card.temp) || 0.85, maxTokens: 700 }, {
+        onDelta: function (piece) {
+          added += piece;
+          if (!node) return;
+          if (node.__raf) return;
+          node.__raf = requestAnimationFrame(function () {
+            node.__raf = 0;
+            rpPatchNode(node, baseText + added);
+          });
+        },
+        onDone: function (full) {
+          delete rpContBusy[rid];
+          var add = String(full || added || '').trim();
+          var merged = (baseText + (add ? (baseText.slice(-1) === '\n' ? '' : '') + add : '')).trim();
+          var h = loadHist(rid);
+          for (var k = h.length - 1; k >= 0; k--) {
+            if (h[k] && h[k].id === last.id) { h[k].text = merged; h[k].typing = false; break; }
+          }
+          saveHist(rid);
+          if (S.cur === rid) { renderMsgs(true); setTimeout(function () { snapBottom($('#msgs')); }, 20); }
+          try { RP.touchRoom(rid); } catch (e) {}
+          save();
+        },
+        onError: function (msg) {
+          delete rpContBusy[rid];
+          if (node) { var b2 = node.querySelector('.bubble'); if (b2) b2.classList.remove('typing'); }
+          toast('续写失败：' + String(msg).slice(0, 40));
+        }
+      });
+    if (!reqId) {
+      delete rpContBusy[rid];
+      toast('当前环境没有原生 AI 桥');
+    }
+  }
+
   /* ---------- 卷与记忆：压缩、换卷 ---------- */
   var rpBusy = {};      // roomId → 'sum'（正在压缩）
   var rpRolling = {};   // roomId → 正在换卷（压缩 + 交接）
-  function rpBudget() { try { return RP.settings().budget || 8192; } catch (e) { return 8192; } }
+  function rpBudget() {
+    try { return rpBudgetReal(); } catch (e) { return 8192; }
+  }
   function rpStyleAnchor(card) {
     var st = (card && card.style) || {};
     var bits = [];
@@ -3280,6 +3483,7 @@
     rpSyncCounts();
     renderRoleList();
     rpModelTip();
+    try { rpSyncBudgetHint(); } catch (e) {}
     try { showTab('roles', { user: true }); } catch (e) {}
   }
   // 没配模型接口时给一个显眼的入口（扮演必须走 API，本地部署模型这条路不现实）
@@ -3766,6 +3970,8 @@
     $('#cfKey').placeholder = aiKeyStore() ? '已保存的 key：••••••••（要换就重填）' : 'sk-…';
     cfPaintKeyInfo();
     cfModels = aiModelList();
+    try { paintAiUsage(); } catch (e) {}
+    try { var lim = aiCtxLimit((S.ai && S.ai.model) || ''); var le = $('#cfCtxHint'); if (le) le.textContent = '模型上限约 ' + Math.round(lim / 1024) + 'k tokens · 预算超过会自动按上限跑'; } catch (e) {}
     cfRenderModels();
     Array.prototype.forEach.call(document.querySelectorAll('#cfEffort .seg-item'), function (b) {
       b.classList.toggle('on', b.getAttribute('data-eff') === (a.effort || 'low'));
@@ -4317,12 +4523,12 @@
       RP.saveSettings({ budget: want });
       rpSyncBudgetUi();
       var warn = '';
-      if (want > 131072) {
-        var bb = String((S.ai && S.ai.base) || '');
-        if (/deepseek/i.test(bb)) warn = '（DeepSeek 只有 128k，这一档得换长上下文模型）';
-        else if (/moonshot|bigmodel/i.test(bb)) warn = '（这家通常也到不了 1M，按模型实际上限来）';
-      }
+      var limNow = aiCtxLimit((S.ai && S.ai.model) || '');
+      if (want > limNow) warn = '（当前模型只有 ' + Math.round(limNow / 1024) + 'k，实际会按上限跑）';
+      var lim = aiCtxLimit((S.ai && S.ai.model) || '');
+      if (!warn && want > lim) warn = '（当前模型最多 ' + Math.round(lim / 1024) + 'k，实际会按上限跑）';
       toast('预算 ' + (want >= 1048576 ? '1M' : (want / 1024) + 'k') + warn);
+      try { rpSyncBudgetHint(); } catch (e) {}
       try { save(); } catch (e2) {}
     });
     // 重建扮演会话
@@ -4378,6 +4584,12 @@
     });
     on('#cfFilter', 'input', cfRenderModels);
     on('#cfSave', 'click', function (e) { e.preventDefault(); cfSave(); });
+    on('#cfUsageReset', 'click', function (e) {
+      e.preventDefault();
+      S.aiUse = { p: 0, c: 0, calls: 0, byModel: {} };
+      save(); paintAiUsage();
+      toast('用量已清零');
+    });
     on('#aiConfBack', 'click', function (e) {
       e.preventDefault();
       var ok = cfSave(true);
@@ -4436,6 +4648,17 @@
   function cfTakeModels(ids, err) {
     if (typeof cfFetchCb === 'function') { var f = cfFetchCb; cfFetchCb = null; f(ids, err); }
   }
+  function rpSyncBudgetHint() {
+    var el = $('#rpBudgetHint');
+    if (!el) return;
+    var want = 8192;
+    try { want = RP.settings().budget || 8192; } catch (e) {}
+    var model = (S.ai && S.ai.model) || '未配置模型';
+    var lim = aiCtxLimit(model);
+    var realized = Math.min(want, lim);
+    el.textContent = '当前模型：' + model + '（上限约 ' + Math.round(lim / 1024) + 'k）· 预算 ' +
+      (want >= 1048576 ? '1M' : (want / 1024) + 'k') + ' → 实际按 ' + (realized >= 1048576 ? '1M' : (realized / 1024) + 'k') + ' 跑';
+  }
   function rpSyncBudgetUi() {
     var s = { budget: 8192 };
     try { s = RP.settings(); } catch (e) {}
@@ -4455,6 +4678,7 @@
       return;
     }
     items.forEach(function (b) { b.classList.toggle('on', Number(b.getAttribute('data-b')) === cur); });
+    try { rpSyncBudgetHint(); } catch (e) {}
   }
 
   function bind() {
@@ -4994,6 +5218,7 @@
       box.__paging = true;
       box.addEventListener('click', function (e) {
         if (e.target.closest('[data-more]')) { e.preventDefault(); loadEarlier(); }
+        if (e.target.closest('[data-cont]')) { e.preventDefault(); rpContinue(); }
       });
       var lastLoad = 0;
       box.addEventListener('scroll', function () {
