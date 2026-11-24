@@ -3198,3 +3198,24 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
 
 /* 长句提示在窄屏别顶到边 */
 .me-body > .hint, .me-sec-body > .hint { padding-right: 4px; overflow-wrap: anywhere; }
+
+/* ---------- 玻璃样张：卡面 / 控件 可切换 ---------- */
+.gp-card, .gp-thin { transition: transform .22s cubic-bezier(.22,1.06,.34,1), opacity .2s ease,
+  border-color .2s ease, box-shadow .2s ease; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.gp-card.on, .gp-thin.on { transform: scale(1.06); border-color: rgba(255,255,255,calc(var(--gp-ring, .5) * 1.25)); }
+#glassPreview[data-focus="card"] .gp-thin { opacity: .55; transform: scale(.96); }
+#glassPreview[data-focus="thin"] .gp-card { opacity: .55; transform: scale(.96); }
+#glassPreview[data-focus="card"] .gp-card.on { box-shadow: 0 10px 24px rgba(80,70,140,.26); }
+#glassPreview[data-focus="thin"] .gp-thin.on { box-shadow: 0 10px 24px rgba(80,70,140,.26); }
+.gp-card.on span, .gp-thin.on span { font-weight: 600; }
+.gp-card:active, .gp-thin:active { transform: scale(.94); }
+
+/* 当前焦点那一层的滑杆行 */
+.bg-dim-row[data-gp-row] { position: relative; border-radius: 12px; padding-left: 6px; padding-right: 6px;
+  transition: background .2s ease; }
+.bg-dim-row[data-gp-row].gp-focus { background: color-mix(in srgb, var(--tg-blue) 10%, transparent); }
+.bg-dim-row[data-gp-row].gp-focus .hint { color: var(--tg-blue); font-weight: 600; }
+.bg-dim-row[data-gp-row]::after { content: ''; position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+  width: 0; height: 60%; border-radius: 2px; background: var(--tg-blue); opacity: 0;
+  transition: width .2s ease, opacity .2s ease; }
+.bg-dim-row[data-gp-row].gp-focus::after { width: 3px; opacity: 1; }

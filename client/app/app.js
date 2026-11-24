@@ -84,7 +84,7 @@
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
           list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
-    glass: true, glassLevel: 55, glassMul: 100, glassCard: 100, glassThin: 100, accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
+    glass: true, glassLevel: 55, glassMul: 100, glassCard: 100, glassThin: 100, gpFocus: 'card', accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
   };
   // 存档是否已经从磁盘读进来。启动阶段的模块级代码（aiNormalize 等）会调 save()，
   // 那时 S 还是空的，写下去就把 auth/token 洗成了未登录 —— 大退后要重新登录就是这么来的。
@@ -224,7 +224,7 @@
   }
 
   function statePayload() {
-    return { nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, fs: S.fs, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, aiUse: S.aiUse, devUids: S.devUids, fbUnread: S.fbUnread, ts: Date.now(), log: bootLog.slice(-12) };
+    return { gpFocus: S.gpFocus, nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, fs: S.fs, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, aiUse: S.aiUse, devUids: S.devUids, fbUnread: S.fbUnread, ts: Date.now(), log: bootLog.slice(-12) };
   }
   function save() {
     if (!stateLoaded) { blockedSaves++; return; }   // 存档还没读进来，写下去会洗掉登录
@@ -273,6 +273,7 @@
         if (typeof o.glassMul === 'number') S.glassMul = o.glassMul;
         if (typeof o.glassCard === 'number') S.glassCard = o.glassCard;
         if (typeof o.glassThin === 'number') S.glassThin = o.glassThin;
+        if (o.gpFocus === 'card' || o.gpFocus === 'thin') S.gpFocus = o.gpFocus;
         if (o.accent) S.accent = o.accent;
         if (o.topbarText) S.topbarText = o.topbarText;
         if (o.skin) S.skin = o.skin;
@@ -5452,7 +5453,10 @@
       }, { passive: true });
     })();
 
-    on('#btnBeauty', 'click', function () { toggleBeautyPanel(); });
+    on('#btnBeauty', 'click', function () {
+      toggleBeautyPanel();
+      try { paintGpFocus(); paintGlassPreview(); } catch (e) {}
+    });
     on('#bgScope', 'click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-scope]') : null;
       if (!b) return;
@@ -5571,6 +5575,33 @@
       box.style.setProperty('--gp-thin-a', (0.06 + 0.26 * lv * thinK).toFixed(3));
       box.style.setProperty('--gp-ring', (0.18 + 0.5 * lv).toFixed(2));
     }
+    function paintGpFocus() {
+      var box = $('#glassPreview');
+      if (!box) return;
+      var f = (S.gpFocus === 'thin') ? 'thin' : 'card';
+      box.setAttribute('data-focus', f);
+      Array.prototype.forEach.call(box.querySelectorAll('[data-gp]'), function (b) {
+        var on = b.getAttribute('data-gp') === f;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.classList.toggle('on', on);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-gp-row]'), function (r) {
+        r.classList.toggle('gp-focus', r.getAttribute('data-gp-row') === f);
+      });
+    }
+    on('#glassPreview', 'click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-gp]') : null;
+      if (!b) return;
+      var f = b.getAttribute('data-gp');
+      if (f !== 'card' && f !== 'thin') return;
+      S.gpFocus = f;
+      paintGpFocus();
+      paintGlassPreview();
+      try { save(); } catch (err) {}
+    });
+    // 拖哪一层的滑杆，就把焦点切到哪一层
+    on('#glassCard', 'input', function () { S.gpFocus = 'card'; paintGpFocus(); });
+    on('#glassThin', 'input', function () { S.gpFocus = 'thin'; paintGpFocus(); });
     ['#glassLevel', '#glassMul', '#glassCard', '#glassThin'].forEach(function (sel) {
       var el = $(sel);
       if (el) el.addEventListener('input', paintGlassPreview);
