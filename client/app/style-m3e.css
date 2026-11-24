@@ -2095,3 +2095,9 @@ html[data-skin] .role-btn { border-radius: 999px; }
 html[data-skin] .role-btn.primary-sm { background: var(--m3-primary, #a8c7fa); color: #0b1a2b; }
 html[data-skin] .role-ava { border-radius: 16px; }
 html[data-skin] .demo-ta, html[data-skin] .demo-key { border-radius: 12px; }
+/* 顶栏「浓度」按钮：m3e 下给一点实体感 */
+html[data-skin="m3e"] .tone-btn {
+  height: 36px; padding: 0 12px; border-radius: var(--m3e-full);
+  background: var(--m3e-secondary-container); color: var(--m3e-on-secondary-container);
+  font-size: 12.5px; font-weight: 600; border: 0; margin-right: 2px;
+}

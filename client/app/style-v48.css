@@ -2988,3 +2988,32 @@ html[data-wall="dark"] .chat-name {
 html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom)); }
 .ai-fetch.primary { background: var(--tg-blue); color: #fff; font-weight: 600; }
 .seg.rp-budget { flex-wrap: wrap; }
+
+/* 情感滑杆 */
+.rp-dial { margin: 10px 0 14px; }
+.rp-dial-head { display: flex; align-items: center; justify-content: space-between; font-size: 13.5px; margin-bottom: 6px; }
+.rp-dial-val { font-variant-numeric: tabular-nums; color: var(--tg-blue); font-weight: 600; font-size: 13px; }
+.rp-range { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; }
+.rp-range::-webkit-slider-runnable-track { height: 6px; border-radius: 99px;
+  background: linear-gradient(90deg, var(--tg-blue), color-mix(in srgb, var(--tg-blue) 35%, var(--line))); }
+.rp-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px;
+  border-radius: 50%; background: #fff; border: 2px solid var(--tg-blue);
+  box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.rp-dial-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--tg-sub); margin-top: 2px; }
+.rp-mood { flex-wrap: wrap; }
+.tone-list { max-height: 33vh; overflow-y: auto; padding-right: 2px; overscroll-behavior: contain; }
+#toneSheet .action-card { max-height: 84vh; overflow-y: auto; }
+.pin-btn.tone-btn { width: auto; min-width: 42px; padding: 0 8px; font-size: 12px; font-weight: 600; }
+.seg.rp-mood { width: 100%; }
+.seg.rp-mood .seg-item { flex: 1 1 0; white-space: nowrap; padding: 6px 4px; font-size: 12.5px; }
+.bg-dim-row:has(#reMood), .bg-dim-row:has(#toneMood) { flex-wrap: wrap; gap: 6px; }
+/* 聊天页顶栏「浓度」按钮（不用 pin-btn，那个类在 m3e 里是 mask 图标） */
+.tone-btn {
+  flex: 0 0 auto; height: 34px; padding: 0 10px; margin-right: 4px;
+  border-radius: 12px; border: 0; font-size: 12.5px; font-weight: 600;
+  color: var(--tg-blue); background: color-mix(in srgb, var(--tg-blue) 14%, transparent);
+}
+.tone-btn:active { transform: scale(.94); }
+.rp-dial.compact { margin: 8px 0 10px; }
+.rp-dial.compact .rp-dial-ends { display: none; }
+#toneSheet .tone-list { max-height: 47vh; }

@@ -2655,6 +2655,46 @@
   var reTrialShown = false;
 
   function isRpRoom(rid) { return !!rid && rid.indexOf('rp:') === 0; }
+
+  /* ---------- 语气与情感：聊天页随手调（直接写回这张卡） ---------- */
+  function openToneSheet() {
+    if (!isRpRoom(S.cur)) return;
+    var card = rpCardOf(S.cur);
+    if (!card) { toast('这张卡不在本机了'); return; }
+    var d = card.dials || {};
+    [['Emotion', d.emotion, 55], ['Intimacy', d.intimacy, 40], ['Initiative', d.initiative, 45], ['Action', d.action, 50], ['Drama', d.drama, 40]].forEach(function (x) {
+      var el = $('#tone' + x[0]); if (!el) return;
+      var v = Number(x[1]); if (isNaN(v)) v = x[2];
+      el.value = String(v);
+      var lb = $('#toneVal' + x[0]); if (lb) lb.textContent = String(v);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#toneMood .seg-item'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-v') === (card.mood || 'daily'));
+    });
+    $('#toneSub').textContent = card.name ? '· ' + card.name : '';
+    $('#toneSheet').classList.remove('hidden');
+    requestAnimationFrame(function () { $('#toneSheet').classList.add('open'); });
+  }
+  function closeToneSheet() {
+    var el = $('#toneSheet');
+    el.classList.remove('open');
+    setTimeout(function () { el.classList.add('hidden'); }, 180);
+  }
+  // 拖动即时生效：改的就是这张卡，下一句就用新浓度
+  function applyToneSheet() {
+    var card = rpCardOf(S.cur);
+    if (!card) return;
+    var moodOn = document.querySelector('#toneMood .seg-item.on');
+    card.mood = (moodOn && moodOn.getAttribute('data-v')) || 'daily';
+    card.dials = {
+      emotion: Number($('#toneEmotion').value),
+      intimacy: Number($('#toneIntimacy').value),
+      initiative: Number($('#toneInitiative').value),
+      action: Number($('#toneAction').value),
+      drama: Number($('#toneDrama').value)
+    };
+    try { RP.saveCard(card); } catch (e) {}
+  }
   function rpCardOf(rid) {
     try { var id = RP.cardIdOfRoom(rid); return id ? RP.card(id) : null; } catch (e) { return null; }
   }
@@ -3117,6 +3157,25 @@
     $('#reTemp').value = String(Math.round((Number(card.temp) || 0.85) * 100));
     $('#reTempVal').textContent = (Number(card.temp) || 0.85).toFixed(2);
     $('#reBanned').value = (card.style && card.style.banned || []).join('、');
+    $('#reCallUser').value = card.callUser || '';
+    $('#reRelation').value = card.relation || '';
+    $('#reTic').value = card.tic || '';
+    $('#reLikes').value = card.likes || '';
+    $('#reDislikes').value = card.dislikes || '';
+    $('#reSecret').value = card.secret || '';
+    $('#reLook').value = card.look || '';
+    $('#reLimits').value = card.limits || '';
+    $('#rePace').value = card.pace || '';
+    var d = card.dials || {};
+    [['Emotion', d.emotion, 55], ['Intimacy', d.intimacy, 40], ['Initiative', d.initiative, 45], ['Action', d.action, 50], ['Drama', d.drama, 40]].forEach(function (x) {
+      var el = $('#reDial' + x[0]);
+      var v = Number(x[1]); if (isNaN(v)) v = x[2];
+      if (el) el.value = String(v);
+      var lb = $('#reVal' + x[0]); if (lb) lb.textContent = String(v);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#reMood .seg-item'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-v') === (card.mood || 'daily'));
+    });
     // 世界包下拉
     var sel = $('#reWorld');
     var ws = RP.worlds();
@@ -3147,7 +3206,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('#reTabs .tab'), function (b) {
       b.classList.toggle('on', b.getAttribute('data-rp') === name);
     });
-    ['basic', 'persona', 'scene', 'demo', 'rules'].forEach(function (k) {
+    ['basic', 'persona', 'emotion', 'scene', 'demo', 'rules'].forEach(function (k) {
       var el = $('#rePane' + k.charAt(0).toUpperCase() + k.slice(1));
       if (el) el.classList.toggle('hidden', k !== name);
     });
@@ -3169,6 +3228,24 @@
     card.style.len = (len && len.getAttribute('data-v')) || 'short';
     card.style.person = (per && per.getAttribute('data-v')) || 'first';
     card.style.banned = ($('#reBanned').value || '').split(/[,，、\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    card.callUser = ($('#reCallUser').value || '').trim();
+    card.relation = ($('#reRelation').value || '').trim();
+    card.tic = ($('#reTic').value || '').trim();
+    card.likes = ($('#reLikes').value || '').trim();
+    card.dislikes = ($('#reDislikes').value || '').trim();
+    card.secret = ($('#reSecret').value || '').trim();
+    card.look = ($('#reLook').value || '').trim();
+    card.limits = ($('#reLimits').value || '').trim();
+    card.pace = ($('#rePace').value || '').trim();
+    var moodOn = document.querySelector('#reMood .seg-item.on');
+    card.mood = (moodOn && moodOn.getAttribute('data-v')) || 'daily';
+    card.dials = {
+      emotion: Number($('#reDialEmotion').value),
+      intimacy: Number($('#reDialIntimacy').value),
+      initiative: Number($('#reDialInitiative').value),
+      action: Number($('#reDialAction').value),
+      drama: Number($('#reDialDrama').value)
+    };
     card.mesExample = reDemo.filter(function (d) { return d.u || d.a; });
     return card;
   }
@@ -3554,6 +3631,25 @@
 
   function bindRole() {
     on('#btnRoleModel', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
+    on('#btnTone', 'click', function (e) { e.preventDefault(); openToneSheet(); });
+    on('#toneDone', 'click', function (e) { e.preventDefault(); closeToneSheet(); });
+    on('#toneSheet', 'click', function (e) {
+      if (e.target.closest('.action-scrim') || e.target.closest('.action-grip')) closeToneSheet();
+    });
+    ['Emotion', 'Intimacy', 'Initiative', 'Action', 'Drama'].forEach(function (k) {
+      var el = $('#tone' + k);
+      if (!el) return;
+      el.addEventListener('input', function () {
+        var lb = $('#toneVal' + k); if (lb) lb.textContent = String(el.value);
+        applyToneSheet();
+      });
+    });
+    on('#toneMood', 'click', function (e) {
+      var b = e.target.closest('[data-v]'); if (!b) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#toneMood .seg-item'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+      applyToneSheet();
+    });
     on('#roleNoModel', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
     on('#roles', 'click', function (e) {
       var head = e.target.closest('.me-sec-head');
@@ -3623,6 +3719,19 @@
       if (!d) return;
       reDemo.splice(Number(d.getAttribute('data-del-demo')), 1);
       renderDemoRows();
+    });
+    // 情感滑杆：拖动即时显示数值
+    ['Emotion', 'Intimacy', 'Initiative', 'Action', 'Drama'].forEach(function (k) {
+      var el = $('#reDial' + k);
+      if (!el) return;
+      el.addEventListener('input', function () {
+        var lb = $('#reVal' + k); if (lb) lb.textContent = String(el.value);
+      });
+    });
+    on('#reMood', 'click', function (e) {
+      var b = e.target.closest('[data-v]'); if (!b) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#reMood .seg-item'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
     });
     on('#reStyleLen', 'click', function (e) {
       var b = e.target.closest('[data-v]'); if (!b) return;
@@ -6331,6 +6440,8 @@
     var rid = S.cur || '';
     b.classList.toggle('off', !S.pins[rid]);
     b.textContent = S.pins[rid] ? '📌' : '📍';
+    var tone = $('#btnTone');
+    if (tone) tone.classList.toggle('hidden', !isRpRoom(rid));
   }
 
   function renderMeAvatar() {

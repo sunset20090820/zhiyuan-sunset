@@ -100,8 +100,29 @@
       },
       model: s(r.model, 80),
       temp: num(r.temp, 0.85, 0, 2),
+      // 人设扩展 + 情感滑杆（0–100，50 左右是「中性」）
+      callUser: s(r.callUser, 40),
+      relation: s(r.relation, 200),
+      tic: s(r.tic, 160),
+      likes: s(r.likes, 200),
+      dislikes: s(r.dislikes, 200),
+      secret: s(r.secret, 500),
+      look: s(r.look, 200),
+      limits: s(r.limits, 500),
+      pace: s(r.pace, 160),
+      mood: /^(daily|sweet|angst|mystery|comedy)$/.test(String(r.mood || '')) ? r.mood : 'daily',
+      dials: (function () {
+        var d = r.dials || {};
+        return {
+          emotion: num(d.emotion, 55, 0, 100),
+          intimacy: num(d.intimacy, 40, 0, 100),
+          initiative: num(d.initiative, 45, 0, 100),
+          action: num(d.action, 50, 0, 100),
+          drama: num(d.drama, 40, 0, 100)
+        };
+      })(),
       builtin: !!r.builtin,
-      v: 1
+      v: 2
     };
   }
 

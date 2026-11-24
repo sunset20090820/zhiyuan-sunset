@@ -126,6 +126,7 @@
       <div id="chatSub" class="chat-sub">连接中…</div>
       <button id="aiModelChip" class="ai-model-chip hidden" type="button">切换模型</button>
     </div>
+    <button id="btnTone" class="tone-btn hidden" type="button" aria-label="语气与情感">浓度</button>
     <button id="btnPinRoom" class="pin-btn" type="button" aria-label="置顶会话">📌</button>
   </header>
   <div id="msgs" class="msgs"></div>
@@ -618,6 +619,7 @@
     <div class="tabs role-tabs" id="reTabs">
       <button class="tab on" type="button" data-rp="basic">基本</button>
       <button class="tab" type="button" data-rp="persona">性格</button>
+      <button class="tab" type="button" data-rp="emotion">情感</button>
       <button class="tab" type="button" data-rp="scene">开场</button>
       <button class="tab" type="button" data-rp="demo">示例</button>
       <button class="tab" type="button" data-rp="rules">规则</button>
@@ -653,6 +655,53 @@
         </div>
       </div>
       <label class="field"><span>禁用词/符号（逗号分隔）</span><input id="reBanned" maxlength="200" placeholder="例如：~、呢、作为AI" autocomplete="off"></label>
+      <p class="hint">下面这些可以不填，填了角色会更立体。</p>
+      <label class="field"><span>怎么称呼你</span><input id="reCallUser" maxlength="40" placeholder="例如：老板、阿雨、你" autocomplete="off"></label>
+      <label class="field"><span>和你的关系</span><input id="reRelation" maxlength="120" placeholder="例如：认识三个月的熟客，互相有点在意" autocomplete="off"></label>
+      <label class="field"><span>口癖 / 说话习惯</span><input id="reTic" maxlength="120" placeholder="例如：句尾常带「嗯」，思考时会停顿、爱反问" autocomplete="off"></label>
+      <label class="field"><span>喜欢</span><input id="reLikes" maxlength="160" placeholder="例如：旧书、雨声、深夜的电台" autocomplete="off"></label>
+      <label class="field"><span>讨厌</span><input id="reDislikes" maxlength="160" placeholder="例如：被催、烟味、别人替她做决定" autocomplete="off"></label>
+      <label class="field"><span>秘密 / 心结（被问到才透露）</span><textarea id="reSecret" rows="2" maxlength="400" placeholder="例如：父亲三年前去世，书店年底要拆"></textarea></label>
+      <label class="field"><span>外貌（可选）</span><input id="reLook" maxlength="160" placeholder="例如：白衬衫、袖子挽到手肘、左手腕有旧疤" autocomplete="off"></label>
+    </div>
+
+    <div class="role-pane hidden" id="rePaneEmotion">
+      <p class="hint">这几根滑杆决定她说话的「浓度」，改完下一句就生效（聊天页右上角「浓度」也能随手调）。</p>
+      <div class="rp-dial" data-k="emotion">
+        <div class="rp-dial-head"><span>情绪强度</span><span class="rp-dial-val" id="reValEmotion">55</span></div>
+        <input type="range" class="rp-range" id="reDialEmotion" min="0" max="100" value="55">
+        <div class="rp-dial-ends"><span>克制、不外露</span><span>起伏明显、会情绪化</span></div>
+      </div>
+      <div class="rp-dial" data-k="intimacy">
+        <div class="rp-dial-head"><span>亲密程度</span><span class="rp-dial-val" id="reValIntimacy">40</span></div>
+        <input type="range" class="rp-range" id="reDialIntimacy" min="0" max="100" value="40">
+        <div class="rp-dial-ends"><span>保持距离</span><span>亲近、会主动靠近</span></div>
+      </div>
+      <div class="rp-dial" data-k="initiative">
+        <div class="rp-dial-head"><span>主动程度</span><span class="rp-dial-val" id="reValInitiative">45</span></div>
+        <input type="range" class="rp-range" id="reDialInitiative" min="0" max="100" value="45">
+        <div class="rp-dial-ends"><span>只回应你</span><span>自己推剧情、抛事件</span></div>
+      </div>
+      <div class="rp-dial" data-k="action">
+        <div class="rp-dial-head"><span>动作 / 神态描写</span><span class="rp-dial-val" id="reValAction">50</span></div>
+        <input type="range" class="rp-range" id="reDialAction" min="0" max="100" value="50">
+        <div class="rp-dial-ends"><span>几乎纯对话</span><span>多写动作与环境</span></div>
+      </div>
+      <div class="rp-dial" data-k="drama">
+        <div class="rp-dial-head"><span>戏剧性 / 冲突</span><span class="rp-dial-val" id="reValDrama">40</span></div>
+        <input type="range" class="rp-range" id="reDialDrama" min="0" max="100" value="40">
+        <div class="rp-dial-ends"><span>平稳日常</span><span>波折、转折、张力</span></div>
+      </div>
+      <div class="bg-dim-row"><span class="hint">基调</span>
+        <div class="seg rp-mood" id="reMood">
+          <button class="seg-item on" type="button" data-v="daily">日常</button>
+          <button class="seg-item" type="button" data-v="sweet">甜</button>
+          <button class="seg-item" type="button" data-v="angst">虐</button>
+          <button class="seg-item" type="button" data-v="mystery">悬疑</button>
+          <button class="seg-item" type="button" data-v="comedy">轻喜</button>
+        </div>
+      </div>
+      <label class="field"><span>按什么节奏回</span><input id="rePace" maxlength="120" placeholder="例如：一句一句地回，不用急着推进" autocomplete="off"></label>
     </div>
 
     <div class="role-pane hidden" id="rePaneScene">
@@ -669,6 +718,7 @@
 
     <div class="role-pane hidden" id="rePaneRules">
       <label class="field"><span>角色规则（写给模型的约束）</span><textarea id="reRules" rows="5" maxlength="2000" placeholder="不要写旁白心理描写；回复不超过 3 段；不要使用『作为AI』"></textarea></label>
+      <label class="field"><span>边界 / 雷区（这些一律不写）</span><textarea id="reLimits" rows="3" maxlength="500" placeholder="例如：不写自伤、不写未成年相关、不描写现实中的他人隐私"></textarea></label>
     </div>
 
     <div class="ai-test-row">
@@ -802,6 +852,33 @@
       </div>
     </div>
     <p class="hint" id="expDiag"></p>
+  </div>
+</div>
+
+<!-- 语气与情感：聊天里随手调 -->
+<div id="toneSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="语气与情感">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">语气与情感 <span class="hint" id="toneSub"></span></h3>
+    <div class="tone-list">
+      <div class="rp-dial compact"><div class="rp-dial-head"><span>情绪强度</span><span class="rp-dial-val" id="toneValEmotion">55</span></div><input type="range" class="rp-range" id="toneEmotion" min="0" max="100" value="55"><div class="rp-dial-ends"><span>克制</span><span>情绪化</span></div></div>
+      <div class="rp-dial compact"><div class="rp-dial-head"><span>亲密程度</span><span class="rp-dial-val" id="toneValIntimacy">40</span></div><input type="range" class="rp-range" id="toneIntimacy" min="0" max="100" value="40"><div class="rp-dial-ends"><span>保持距离</span><span>亲近</span></div></div>
+      <div class="rp-dial compact"><div class="rp-dial-head"><span>主动程度</span><span class="rp-dial-val" id="toneValInitiative">45</span></div><input type="range" class="rp-range" id="toneInitiative" min="0" max="100" value="45"><div class="rp-dial-ends"><span>只回应</span><span>推剧情</span></div></div>
+      <div class="rp-dial compact"><div class="rp-dial-head"><span>动作描写</span><span class="rp-dial-val" id="toneValAction">50</span></div><input type="range" class="rp-range" id="toneAction" min="0" max="100" value="50"><div class="rp-dial-ends"><span>纯对话</span><span>多动作</span></div></div>
+      <div class="rp-dial compact"><div class="rp-dial-head"><span>戏剧性</span><span class="rp-dial-val" id="toneValDrama">40</span></div><input type="range" class="rp-range" id="toneDrama" min="0" max="100" value="40"><div class="rp-dial-ends"><span>平稳</span><span>有张力</span></div></div>
+    </div>
+    <div class="bg-dim-row"><span class="hint">基调</span>
+      <div class="seg rp-mood" id="toneMood">
+        <button class="seg-item on" type="button" data-v="daily">日常</button>
+        <button class="seg-item" type="button" data-v="sweet">甜</button>
+        <button class="seg-item" type="button" data-v="angst">虐</button>
+        <button class="seg-item" type="button" data-v="mystery">悬疑</button>
+        <button class="seg-item" type="button" data-v="comedy">轻喜</button>
+      </div>
+    </div>
+    <p class="hint">改完这张卡就记住了，下一句开始生效。</p>
+    <button id="toneDone" class="primary" type="button">好了</button>
   </div>
 </div>
 

@@ -132,7 +132,14 @@
     if (st.person === 'first') styleBits.push('用第一人称');
     if (st.person === 'third') styleBits.push('用第三人称叙述');
     if (st.banned && st.banned.length) styleBits.push('不要出现这些词/符号：' + st.banned.join('、'));
+    if (card.tic) styleBits.push('口癖/说话习惯：' + card.tic);
+    if (card.look) styleBits.push('外貌：' + card.look);
     if (styleBits.length) persona.push('说话方式：' + styleBits.join('；') + '。');
+    if (card.callUser) persona.push('你称呼对方为「' + card.callUser + '」，不要用别的称呼。');
+    if (card.relation) persona.push('你和对方的关系：' + card.relation + '。');
+    if (card.likes) persona.push('你喜欢：' + card.likes + '。');
+    if (card.dislikes) persona.push('你讨厌：' + card.dislikes + '。');
+    if (card.secret) persona.push('你心里藏着的事（对方问起、或者时机到了才说，不要主动全盘倒出）：' + card.secret + '。');
     parts.persona = trim(persona.join('\n'), B.card);
     sys.push(parts.persona);
 
@@ -141,8 +148,38 @@
       sys.push(parts.world);
     }
 
+    // 情感浓度：把 5 根滑杆翻译成模型能听懂的行为指令
+    var tone = [];
+    var D = card.dials || {};
+    var mk = function (v, lo, mid, hi) {
+      v = Number(v); if (isNaN(v)) v = 50;
+      return v < 30 ? lo : (v < 60 ? mid : hi);
+    };
+    tone.push('情绪：' + mk(D.emotion, '情绪很克制，几乎不外露，用细节和沉默表达',
+      '情绪自然流露，但不夸张', '情绪起伏明显，可以激动、哽咽、发火、大笑'));
+    tone.push('亲密：' + mk(D.intimacy, '保持身体和心理距离，不主动靠近',
+      '朋友式的亲近，会关心对方的小事', '很亲近，可以贴近、牵手、靠在对方肩上，会主动要陪伴'));
+    tone.push('主动：' + mk(D.initiative, '主要回应对方，很少主动开新话题',
+      '偶尔主动抛话题', '主动推动剧情，会制造事件、提出邀请或要求'));
+    tone.push('动作描写：' + mk(D.action, '以对话为主，动作只写必要的',
+      '适度写动作和神态', '多写动作、神态、环境，让画面立起来'));
+    tone.push('张力：' + mk(D.drama, '平稳日常，不要硬造冲突',
+      '有一点小波折', '有明显冲突与转折，情节推进要快'));
+    var moodMap = {
+      daily: '整体基调：日常、温柔，像真的在过日子',
+      sweet: '整体基调：甜，暧昧与照顾多一点，克制地表达好感',
+      angst: '整体基调：虐，情绪有拉扯、有误会和未说出口的话',
+      mystery: '整体基调：悬疑，留线索、留疑点，别急着解释',
+      comedy: '整体基调：轻喜剧，节奏快，允许吐槽和玩笑'
+    };
+    if (moodMap[card.mood]) tone.push(moodMap[card.mood]);
+    if (card.pace) tone.push('节奏：' + card.pace);
+    parts.tone = trim('语气与情感浓度：' + tone.join('；') + '。', 260);
+    sys.push(parts.tone);
+
     var rules = [];
     if (card.rules) rules.push(card.rules);
+    if (card.limits) rules.push('这些内容一律不写：' + card.limits);
     if (world && world.rules && world.rules.length) rules.push('这个世界的规则：' + world.rules.join('；'));
     rules.push('不要出戏，不要提到「AI」「模型」「提示词」，不要解释自己在扮演。');
     parts.rules = trim(rules.join('\n'), 220);
