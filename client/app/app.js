@@ -743,6 +743,7 @@
       // 开发者收到一条新反馈：直接进反馈箱，记住是谁发的，回复走 fb_reply
       if (!isDeveloper) return;
       var f = d.msg || {};
+      if (isDevUid(f.fromUid)) return;          // 自己发的不回声
       S.fbLastUid = Number(f.fromUid) || 0;
       addMsg(FEEDBACK_RID, {
         id: f.id, name: f.name || ('uid:' + f.fromUid), text: f.text || '',
@@ -760,7 +761,7 @@
       var items = Array.isArray(d.items) ? d.items : [];
       var have = {};
       (loadHist(FEEDBACK_RID) || []).forEach(function (m) { have[m.id] = 1; });
-      var tail = items.slice(-120).filter(function (x) { return x && x.id && !have[x.id]; });
+      var tail = items.slice(-120).filter(function (x) { return x && x.id && !have[x.id] && !isDevUid(x.fromUid); });
       tail.forEach(function (x) {
         addMsg(FEEDBACK_RID, {
           id: x.id, name: x.name || ('uid:' + x.fromUid), text: x.text || '', ts: x.ts || 0,
@@ -1304,6 +1305,7 @@
     } catch (e) {}
   }
   function flushFeedback() {
+    if (isDeveloper) return;      // 开发者不发反馈给自己
     try {
       var arr = JSON.parse(localStorage.getItem(LK('fbQueue')) || '[]') || [];
       var left = [];
@@ -2326,6 +2328,7 @@
       if (isDeveloper) {
         // 开发者在这里说话 = 回复最近一条反馈的用户
         var toUid = Number(S.fbLastUid) || 0;
+        if (toUid && isDevUid(toUid)) { toast('这条是你自己发的，不用回复'); toUid = 0; }
         if (!toUid) { toast('还没有可回复的反馈'); }
         else {
           var ok = false;
@@ -3189,7 +3192,8 @@
     showTabShell();
   }
   function closeRpPages() {
-    ['#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#exportPage'].forEach(function (sel) {
+    ['#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#exportPage',
+     '#fbPage', '#rpImportPage'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
   }
@@ -6785,7 +6789,7 @@
     // 其他全屏页也要收起来，否则会盖在导航上面挡住点击
     ['#storagePage', '#groupPanel', '#imgViewer', '#dmSheet', '#msgActions', '#peerActions',
      '#groupSheet', '#remarkSheet', '#roleEditor', '#worldPage', '#worldEditor',
-     '#aiConfPage', '#exportPage', '#volSheet'].forEach(function (sel) {
+     '#aiConfPage', '#exportPage', '#volSheet', '#fbPage', '#rpImportPage'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
     if (name === 'roles') { try { rpSyncCounts(); renderRoleList(); rpModelTip(); } catch (e) {} }

@@ -3030,3 +3030,5 @@ html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom));
 .fb-meta { font-size: 11.5px; color: var(--tg-sub); margin-bottom: 4px; }
 .fb-text { font-size: 13px; line-height: 1.5; }
 .fb-reply { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--tg-blue); }
+/* 这些整页要盖住底下的页面：玻璃皮肤下 --bg 半透明，会透出下层，必须用实底 */
+.me-page, #blockPage { background: var(--bg-solid, var(--bg)); }

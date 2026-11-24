@@ -86,9 +86,13 @@ function devClients() {
 function fbPublic(f) {
   return { id: f.id, from: f.from || '', fromUid: f.fromUid || 0, name: f.name || '', text: f.text || '', ts: f.ts || 0, replied: !!f.replied, reply: f.reply || '' };
 }
-function pushFeedback(f) {
+function pushFeedback(f, except) {
   const out = { t: 'fb', msg: fbPublic(f) };
-  for (const c of devClients()) send(c, out);
+  for (const c of devClients()) {
+    if (except && c === except) continue;   // 自己发的不回给自己（否则开发者会一直收到自己的消息）
+    if (f.fromUid && DEV_UIDS.indexOf(Number(f.fromUid)) >= 0 && c === except) continue;
+    send(c, out);
+  }
 }
 const ACC_FILE = path.join(DATA_DIR, 'accounts.json');
 let accounts = {};
@@ -694,7 +698,7 @@ function handleMessage(c, buf, opcode) {
     };
     feedback.push(fb);
     saveFeedback();
-    pushFeedback(fb);
+    pushFeedback(fb, c);
     send(c, { t: 'fb_ok', id: fb.id, ts: fb.ts });
     return;
   }
@@ -711,6 +715,7 @@ function handleMessage(c, buf, opcode) {
     const text = clean(d.text, MAX_TEXT);
     const toUid = Number(d.toUid || 0);
     if (!text || !toUid) return;
+    if (DEV_UIDS.indexOf(toUid) >= 0) { send(c, { t: 'error', message: '不能把反馈回复给开发者自己' }); return; }
     const target = accountByUid(toUid);
     if (!target) { send(c, { t: 'error', message: '这个用户已经不在了' }); return; }
     const fb = feedback.find(x => Number(x.fromUid) === toUid && !x.replied) || null;
@@ -772,7 +777,7 @@ function handleMessage(c, buf, opcode) {
       };
       feedback.push(fb);
       saveFeedback();
-      pushFeedback(fb);
+      pushFeedback(fb, c);
     }
     const peerKey = other.indexOf('uid:') === 0 ? uidIndex[other.slice(4)] : null;
     const targets = peerKey ? [...clients].filter(x => x.account === peerKey) : clientsById(other);
