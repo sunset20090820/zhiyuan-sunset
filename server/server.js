@@ -738,6 +738,15 @@ function handleMessage(c, buf, opcode) {
     send(c, { t: 'fb_ok', id: fb.id, ts: fb.ts });
     return;
   }
+  if (d.t === 'fb_mine') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const uidNum = acc ? Number(acc.uid) : 0;
+    const items = uidNum
+      ? feedback.filter(f => Number(f.fromUid) === uidNum).slice(-60).map(fbPublic)
+      : [];
+    send(c, { t: 'fb_mine', items: items });
+    return;
+  }
   if (d.t === 'fb_list') {
     const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
     if (!isDevAccount(acc)) { send(c, { t: 'fb_list', items: [] }); return; }

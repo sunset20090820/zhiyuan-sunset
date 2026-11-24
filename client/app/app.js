@@ -570,7 +570,10 @@
         if (!S.devUids || !S.devUids.length) S.devUids = [100002];
         isDeveloper = (d.dev === true) || (S.devUids.indexOf(Number(S.uid)) >= 0);
       } catch (e) {}
-      try { if (isDeveloper) { S.fbLastUid = S.fbLastUid || 0; wsSend({ t: 'fb_list' }); } } catch (e) {}
+      try {
+        if (isDeveloper) { S.fbLastUid = S.fbLastUid || 0; wsSend({ t: 'fb_list' }); }
+        else { wsSend({ t: 'fb_mine' }); }        // 拿回开发者对我的反馈的回复（离线也补）
+      } catch (e) {}
       try { flushFeedback(); } catch (e) {}
       toast((d.action === 'register' ? '注册成功，' : d.action === 'reset' ? '密码已重置，' : '登录成功，') + '欢迎 ' + S.nick);
       return;
@@ -749,6 +752,7 @@
       var f = d.msg || {};
       if (isDevUid(f.fromUid)) return;          // 自己发的不回声
       S.fbLastUid = Number(f.fromUid) || 0;
+      S.fbLastId = String(f.id || '');
       if (!S.fbQuote) paintFbQuote();
       addMsg(FEEDBACK_RID, {
         id: f.id, name: f.name || ('uid:' + f.fromUid), text: f.text || '',
@@ -772,9 +776,42 @@
           id: x.id, name: x.name || ('uid:' + x.fromUid), text: x.text || '', ts: x.ts || 0,
           fromUid: x.fromUid, deviceId: 'uid:' + x.fromUid, fbIn: true, serverFrom: 'uid:' + x.fromUid
         });
-        if (x.fromUid) S.fbLastUid = Number(x.fromUid);
+        if (x.fromUid) { S.fbLastUid = Number(x.fromUid); S.fbLastId = String(x.id || ''); }
       });
       if (tail.length) { save(); renderRooms(); if (S.cur === FEEDBACK_RID) renderMsgs(false); }
+      return;
+    }
+    if (d.t === 'fb_mine') {
+      if (isDeveloper) return;
+      var mine = Array.isArray(d.items) ? d.items : [];
+      if (!mine.length) return;
+      var arrM = [];
+      try { arrM = JSON.parse(localStorage.getItem(LK('fbSent')) || '[]') || []; } catch (e) { arrM = []; }
+      var has = {}, fresh = 0;
+      arrM.forEach(function (x) { if (x && x.id) has[String(x.id)] = x; });
+      mine.forEach(function (f) {
+        if (!f || !f.id) return;
+        var id = String(f.id);
+        var rec = has[id];
+        if (rec) {
+          if (f.reply && rec.reply !== f.reply) { rec.reply = f.reply; rec.replyTs = f.repliedAt || Date.now(); fresh++; }
+        } else {
+          var raw = String(f.text || '');
+          // 服务端会把换行压成空格，所以这里按「【反馈】…uid:数字」整段剥掉表头
+          var body = raw.replace(/^【反馈】[\s\S]*?uid:\d+\s*/, '');
+          if (!body) body = raw;
+          arrM.push({ id: id, text: body, time: fmtTime(f.ts || Date.now()), ts: f.ts || Date.now(), sent: true, reply: f.reply || '' });
+          if (f.reply) fresh++;
+        }
+      });
+      try { localStorage.setItem(LK('fbSent'), JSON.stringify(arrM.slice(-40))); } catch (e) {}
+      if (fresh) {
+        S.fbUnread = (Number(S.fbUnread) || 0) + fresh;
+        save();
+        try { syncFbBadge(); } catch (e) {}
+        try { if ($('#fbPage') && !$('#fbPage').classList.contains('hidden')) renderFbHistory(); } catch (e) {}
+        try { toast('有 ' + fresh + ' 条开发者回复'); } catch (e) {}
+      }
       return;
     }
     if (d.t === 'fb_ok') {
@@ -1446,6 +1483,7 @@
     if (!pageEl) return;
     pageEl.classList.remove('hidden');
     S.fbUnread = 0; save(); try { syncFbBadge(); } catch (e) {}
+    try { wsSend({ t: 'fb_mine' }); } catch (e) {}
     $('#fbText').value = '';
     renderFbHistory();
   }
@@ -2504,11 +2542,12 @@
         // 开发者在这里说话 = 回复最近一条反馈的用户
         var q = S.fbQuote || null;
         var toUid = q ? Number(q.uid) : (Number(S.fbLastUid) || 0);
+        var fbIdNow = q ? (q.id || '') : (S.fbLastId || '');   // 没点某条就回到最近那条
         if (toUid && isDevUid(toUid)) { toast('这条是你自己发的，不用回复'); toUid = 0; }
-        if (!toUid) { toast(q ? '这条对端不对' : '先点一条反馈，再回复'); }
+        if (!toUid) { toast('还没有可回复的反馈'); }
         else {
           var ok = false;
-          try { ok = wsSend({ t: 'fb_reply', toUid: toUid, text: text, fbId: (q && q.id) || '' }); } catch (e) {}
+          try { ok = wsSend({ t: 'fb_reply', toUid: toUid, text: text, fbId: fbIdNow || '' }); } catch (e) {}
           toast(ok ? ('已回复 uid:' + toUid) : '没连上服务器，没发出去');
           clearFbQuote();
         }
