@@ -2978,3 +2978,11 @@ html[data-wall="dark"] .chat-name {
 .pick-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 11px;
   background: var(--in); border: 1px solid var(--line); font-size: 13.5px; text-align: left; color: var(--text); }
 .pick-row small { color: var(--sub); }
+
+/* 扮演分页（第 4 个 tab） */
+.roles-screen { padding-bottom: calc(56px + var(--safe-bottom)); box-sizing: border-box; }
+#roles .me-body { padding-bottom: calc(80px + var(--safe-bottom)); }
+.role-cta { display: block; width: 100%; text-align: left; border-radius: 14px;
+  background: var(--card-2); border: 1px solid var(--line); padding: 14px 14px;
+  color: var(--text); font-size: 13.5px; margin: 6px 0 4px; }
+html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom)); }

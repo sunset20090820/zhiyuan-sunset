@@ -1159,7 +1159,7 @@
     if (isRpRoom(S.cur)) {
       var vol = 1;
       try { vol = RP.volOf(S.cur) || 1; } catch (e) {}
-      el.textContent = '本机扮演 · 卷 ' + vol + ' · 不进服务器';
+      el.textContent = '卷 ' + vol + ' · 模型走 API · 聊天不上服务器';
       return true;
     }
     return false;
@@ -2686,7 +2686,7 @@
     renderRooms();
     openRoom(rid);
     setTimeout(function () {
-      if (!aiConfigured()) toast('先在「我的 → AI 接口」里填接口和 key');
+      if (!aiConfigured()) toast('先在「扮演 → 扮演设置 → 模型接口」里填接口和 key');
       else if (!(S.ai && S.ai.on)) toast('提示：AI 助手开关关着不影响扮演');
     }, 500);
   }
@@ -2773,7 +2773,7 @@
     var card = rpCardOf(rid);
     if (!card) { toast('这个会话没有对应角色卡'); return; }
     if (!aiConfigured()) {
-      toast('先在「我的 → AI 接口」里填接口地址、模型和 key');
+      toast('先在「扮演 → 扮演设置 → 模型接口」里填接口地址、模型和 key');
       return;
     }
     var budget = 8192;
@@ -3001,7 +3001,7 @@
 
   /* ---------- 页面：角色列表 ---------- */
   function hideTabShell() {
-    ['#chats', '#contacts', '#tabbar'].forEach(function (sel) { var el = $(sel); if (el) el.classList.add('hidden'); });
+    ['#chats', '#contacts', '#roles', '#tabbar'].forEach(function (sel) { var el = $(sel); if (el) el.classList.add('hidden'); });
   }
   function showTabShell() {
     var bar = $('#tabbar');
@@ -3013,7 +3013,7 @@
     showTabShell();
   }
   function closeRpPages() {
-    ['#rolePage', '#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage'].forEach(function (sel) {
+    ['#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#exportPage'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
   }
@@ -3025,13 +3025,16 @@
   }
   function openRolePage() {
     try { RP.load(); } catch (e) {}
-    hideTabShell();
     rpSyncCounts();
     renderRoleList();
-    $('#mePage').classList.add('hidden');
-    $('#rolePage').classList.remove('hidden');
-    var b = $('#roleBack');
-    if (b) b.classList.remove('hidden');
+    rpModelTip();
+    try { showTab('roles', { user: true }); } catch (e) {}
+  }
+  // 没配模型接口时给一个显眼的入口（扮演必须走 API，本地部署模型这条路不现实）
+  function rpModelTip() {
+    var el = $('#roleNoModel');
+    if (!el) return;
+    try { el.classList.toggle('hidden', aiConfigured()); } catch (e) {}
   }
   function renderRoleList() {
     var box = $('#roleList');
@@ -3129,8 +3132,7 @@
     $('#reDel').classList.toggle('hidden', !cardId);
     $('#reStart').textContent = cardId ? '开始扮演' : '保存并开始扮演';
     reTab('basic');
-    $('#rolePage').classList.add('hidden');
-    ['#worldPage', '#worldEditor', '#aiConfPage', '#mePage'].forEach(function (s) { var e = $(s); if (e) e.classList.add('hidden'); });
+    hideTabShell();
     $('#roleEditor').classList.remove('hidden');
     window.scrollTo && window.scrollTo(0, 0);
   }
@@ -3178,7 +3180,7 @@
   function openWorldPage() {
     hideTabShell();
     renderWorldList();
-    $('#rolePage').classList.add('hidden');
+    hideTabShell();
     $('#worldPage').classList.remove('hidden');
   }
   function renderWorldList() {
@@ -3285,7 +3287,8 @@
     try { refreshAiStat(); } catch (e) {}
     try { syncAiModelUi(); } catch (e) {}
     rpSyncCounts();
-    toast('AI 接口已保存');
+    try { rpModelTip(); } catch (e) {}
+    toast('模型接口已保存');
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -3308,7 +3311,7 @@
   function openExportPage() {
     hideTabShell();
     exHookUp();
-    ['#rolePage', '#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#mePage'].forEach(function (s) {
+    ['#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#mePage', '#roles'].forEach(function (s) {
       var el = $(s); if (el) el.classList.add('hidden');
     });
     $('#exportPage').classList.remove('hidden');
@@ -3437,7 +3440,7 @@
     on('#expBack', 'click', function (e) {
       e.preventDefault();
       $('#exportPage').classList.add('hidden');
-      if ($('#rolePage')) { openRolePage(); } else { backToMe(); }
+      openRolePage();
     });
     on('#expAuto', 'change', function (e) {
       var on = !!e.target.checked;
@@ -3509,10 +3512,9 @@
 
 
   function bindRole() {
-    on('#btnRole', 'click', function (e) { e.preventDefault(); openRolePage(); });
-    on('#btnAiConf', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
-    on('#roleBack', 'click', function (e) { e.preventDefault(); backToMe(); });
-    on('#rolePage', 'click', function (e) {
+    on('#btnRoleModel', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
+    on('#roleNoModel', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
+    on('#roles', 'click', function (e) {
       var head = e.target.closest('.me-sec-head');
       if (!head) return;
       var sec = head.parentElement;
@@ -3603,7 +3605,7 @@
       }
       var text = (inp.value || '').trim();
       if (!text) { toast('先写一句话'); return; }
-      if (!aiConfigured()) { toast('先在「我的 → AI 接口」里配好'); return; }
+      if (!aiConfigured()) { toast('先在「扮演 → 扮演设置 → 模型接口」里配好'); return; }
       var card = reCollect();
       var pack = CTX.build('rp:trial', { card: card, world: card.worldId ? RP.world(card.worldId) : null, hist: [], userText: text, budget: 8192 });
       var msgs = [{ role: 'system', content: pack.system }];
@@ -3683,7 +3685,7 @@
       })) return;
     });
     // AI 接口页
-    on('#aiConfBack', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#aiConfBack', 'click', function (e) { e.preventDefault(); openRolePage(); });
     on('#aiConfSave', 'click', function (e) { e.preventDefault(); cfSave(); });
     on('#aiConfPresets', 'click', function (e) {
       var b = e.target.closest('[data-base]');
@@ -6179,12 +6181,15 @@
     S.tab = name;
     $('#chats').classList.toggle('hidden', name !== 'chats');
     $('#contacts').classList.toggle('hidden', name !== 'contacts');
+    $('#roles').classList.toggle('hidden', name !== 'roles');
     $('#mePage').classList.toggle('hidden', name !== 'me');
     // 其他全屏页也要收起来，否则会盖在导航上面挡住点击
     ['#storagePage', '#groupPanel', '#imgViewer', '#dmSheet', '#msgActions', '#peerActions',
-     '#groupSheet', '#remarkSheet'].forEach(function (sel) {
+     '#groupSheet', '#remarkSheet', '#roleEditor', '#worldPage', '#worldEditor',
+     '#aiConfPage', '#exportPage', '#volSheet'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
+    if (name === 'roles') { try { rpSyncCounts(); renderRoleList(); rpModelTip(); } catch (e) {} }
     var animate = byUser && (Date.now() - navBootAt) > 200;
     var items = document.querySelectorAll('#tabbar .tab-item');
     Array.prototype.forEach.call(items, function (b) {
@@ -6430,6 +6435,7 @@
     try { bindExportPage(); } catch (e) {}
     setTimeout(function () { try { exAutoBackupIfDue(); } catch (e) {} }, 6000);
     try { rpSyncCounts(); } catch (e) {}
+    try { rpModelTip(); } catch (e) {}
     try { rpSyncBudgetUi(); } catch (e) {}
     try { applyAgentProfile(); } catch (e) {}
     try { renderAgentUserPanel(); } catch (e) {}

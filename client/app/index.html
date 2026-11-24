@@ -252,6 +252,7 @@
       </div>
     </div>
     <p class="hint" id="aiStat">未开启</p>
+    <p class="hint">这里的接口地址 / key / 模型和「扮演 → 模型接口」是同一份配置，改哪边都一样。</p>
     <p class="hint" id="aiHint">接口按 OpenAI 兼容格式请求（/chat/completions），DeepSeek、通义、自建 vLLM 都能填。key 只存在本机，不经过纸鸢服务器。回复需要 App 在前台或后台没被系统冻结。</p>
     <div class="ai-foot">
       <button id="aiApply" class="primary" type="button">保存</button>
@@ -482,8 +483,6 @@
     <div class="me-sec" data-sec="access">
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🔌</span>接入与助手<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnRole" class="me-row" type="button"><span class="me-ico">🎭</span>角色扮演<span class="me-arrow" id="roleCount">0</span></button>
-        <button id="btnAiConf" class="me-row" type="button"><span class="me-ico">🔗</span>AI 接口<span class="me-arrow">›</span></button>
         <button id="btnAi" class="me-row" type="button"><span class="me-ico">🤖</span>AI 助手<span class="me-arrow">›</span></button>
         <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
         <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
@@ -577,15 +576,15 @@
 </div>
 
 
-<!-- ===== 角色扮演：角色列表 ===== -->
-<div id="rolePage" class="me-page hidden">
+<!-- ===== 扮演（主分页） ===== -->
+<main id="roles" class="screen roles-screen hidden">
   <header class="topbar">
-    <button id="roleBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand">角色扮演</div>
-    <button id="roleNew" class="logout-chip" type="button">＋ 新建</button>
+    <div class="brand">扮演</div>
+    <button id="roleNew" class="icon-btn" type="button" aria-label="新建角色">＋</button>
   </header>
   <div class="me-body">
-    <p class="hint" id="roleTopHint">全在本机跑：不进服务器，断网也能演。</p>
+    <p class="hint" id="roleTopHint">设定和剧情都存在手机本机；回复由你填的 API 模型生成（跟「AI 助手」一样填接口地址和 key）。</p>
+    <button id="roleNoModel" class="role-empty role-cta hidden" type="button">还没填模型接口，点这里去配置 →</button>
     <div id="roleList" class="role-list"></div>
     <div class="me-sec open" data-sec="roleopts">
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">⚙️</span>扮演设置<span class="me-sec-arrow">›</span></button>
@@ -598,13 +597,14 @@
           </div>
         </div>
         <p class="hint">预算越大记得越多，也越费 token。默认 8k，长线扮演再往上调。</p>
+        <button id="btnRoleModel" class="me-row" type="button"><span class="me-ico">🔗</span>模型接口（key / 模型）<span class="me-arrow">›</span></button>
         <button id="btnRoleWorlds" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow" id="worldCount">0</span></button>
         <button id="btnRoleExport" class="me-row" type="button"><span class="me-ico">📦</span>导出 / 导入<span class="me-arrow">›</span></button>
         <button id="btnRoleClean" class="me-row" type="button"><span class="me-ico">🧹</span>重建所有扮演会话<span class="me-arrow">›</span></button>
       </div>
     </div>
   </div>
-</div>
+</main>
 
 <!-- ===== 角色编辑器 ===== -->
 <div id="roleEditor" class="me-page hidden">
@@ -631,7 +631,7 @@
       <label class="field"><span>所属世界包</span><select id="reWorld" class="field-select"></select></label>
       <label class="field"><span>一句话设定</span><textarea id="reDesc" rows="3" maxlength="2000" placeholder="27 岁，旧书店店主，说话慢，爱用反问"></textarea></label>
       <div class="bg-dim-row"><span class="hint">温度</span><input id="reTemp" type="range" min="0" max="200" value="85"><span class="hint" id="reTempVal">0.85</span></div>
-      <p class="hint">模型用「AI 接口」里配置的主对话模型；要单独指定就在这个角色里填。</p>
+      <p class="hint">模型用「模型接口」里配置的主对话模型；要单独指定就在这个角色里填。</p>
       <label class="field"><span>这个角色专用的模型（可留空）</span><input id="reModel" maxlength="80" placeholder="留空 = 用主对话模型" spellcheck="false" autocomplete="off"></label>
     </div>
 
@@ -716,7 +716,7 @@
 <div id="aiConfPage" class="me-page hidden">
   <header class="topbar">
     <button id="aiConfBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand">AI 接口</div>
+    <div class="brand">模型接口</div>
     <button id="aiConfSave" class="logout-chip" type="button">保存</button>
   </header>
   <div class="me-body">
@@ -828,6 +828,7 @@
   <span id="navPill" class="nav-pill" aria-hidden="true"><i></i></span>
   <button class="tab-item on" data-tab="chats" type="button"><span class="tab-ico">💬</span>对话</button>
   <button class="tab-item" data-tab="contacts" type="button"><span class="tab-ico">👥</span>联系人</button>
+  <button class="tab-item" data-tab="roles" type="button"><span class="tab-ico">🎭</span>扮演</button>
   <button class="tab-item" data-tab="me" type="button"><span class="tab-ico">☰</span>我的</button>
 </nav>
 
