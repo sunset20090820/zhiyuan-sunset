@@ -307,6 +307,9 @@ public class MainActivity extends Activity {
     public static class Bridge {
         private final MainActivity act;
         Bridge(MainActivity a) { this.act = a; }
+        // 正在跑的流式请求：rid → 连接，aiAbort / 退出页面时用来掐断
+        private final java.util.Map<String, java.net.HttpURLConnection> aiConns =
+                new java.util.concurrent.ConcurrentHashMap<String, java.net.HttpURLConnection>();
 
         @JavascriptInterface
         public void notify(String title, String body, String tag, String jump) {
@@ -395,6 +398,12 @@ public class MainActivity extends Activity {
          */
         @JavascriptInterface
         public void aiAsk(final String base, final String model, final String messagesJson, final String rid, final String optsJson) {
+            boolean stream = false;
+            try {
+                if (optsJson != null && optsJson.length() > 0)
+                    stream = new org.json.JSONObject(optsJson).optBoolean("stream", false);
+            } catch (Exception e) { stream = false; }
+            if (stream) { aiStream(base, model, messagesJson, rid, optsJson); return; }
             new Thread(new Runnable() {
                 @Override public void run() {
                     String out;
@@ -422,6 +431,258 @@ public class MainActivity extends Activity {
                     } catch (Exception e) { }
                 }
             }).start();
+        }
+
+        /** 打断一个正在跑的流式请求 */
+        @JavascriptInterface
+        public void aiAbort(String rid) {
+            try {
+                java.net.HttpURLConnection c = aiConns.remove(rid == null ? "" : rid);
+                if (c != null) c.disconnect();
+            } catch (Exception e) { }
+        }
+
+        private void aiJs(final String js) {
+            try {
+                act.runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        try { act.web.evaluateJavascript(js, null); } catch (Exception e) { }
+                    }
+                });
+            } catch (Exception e) { }
+        }
+        private void aiCall(String fn, String rid, String arg) {
+            aiJs("try{window." + fn + "&&window." + fn + "("
+                    + org.json.JSONObject.quote(rid == null ? "" : rid) + ","
+                    + org.json.JSONObject.quote(arg == null ? "" : arg) + ")}catch(e){}");
+        }
+
+        /**
+         * 流式请求（SSE）。每来一段就回调 __aiOnDelta，结束回 __aiOnDone，
+         * 出错回 __aiOnError。首个能连上的地址就用它，后面不再换。
+         */
+        private void aiStream(final String base, final String model, final String messagesJson,
+                              final String rid, final String optsJson) {
+            final String ridKey = rid == null ? "" : rid;
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    String key;
+                    try {
+                        key = act.getSharedPreferences("paperlite_secrets", MODE_PRIVATE).getString("s_ai_key", "");
+                    } catch (Exception e) { key = ""; }
+                    if (key == null || key.length() == 0) { aiCall("__aiOnError", ridKey, "还没填 API key"); return; }
+
+                    String effort = "";
+                    double temp = 0.85;
+                    int maxTokens = 0;
+                    try {
+                        org.json.JSONObject o = new org.json.JSONObject(optsJson == null ? "{}" : optsJson);
+                        effort = o.optString("effort", "");
+                        temp = o.optDouble("temperature", 0.85);
+                        maxTokens = o.optInt("maxTokens", 0);
+                    } catch (Exception e) { }
+
+                    org.json.JSONArray msgs;
+                    try { msgs = new org.json.JSONArray(messagesJson == null ? "[]" : messagesJson); }
+                    catch (Exception e) { aiCall("__aiOnError", ridKey, "消息格式不对"); return; }
+
+                    java.util.List<String> urls = aiUrlCandidates(base, "/chat/completions");
+                    String firstErr = null;
+                    for (int ui = 0; ui < urls.size(); ui++) {
+                        String url = urls.get(ui);
+                        java.net.HttpURLConnection conn = null;
+                        try {
+                            org.json.JSONObject body = new org.json.JSONObject();
+                            body.put("model", model);
+                            body.put("messages", msgs);
+                            body.put("stream", true);
+                            try { body.put("temperature", temp); } catch (Exception e) { }
+                            if (maxTokens > 0) body.put("max_tokens", maxTokens);
+                            if ("none".equals(effort)) {
+                                org.json.JSONObject think = new org.json.JSONObject();
+                                think.put("type", "disabled");
+                                body.put("thinking", think);
+                                body.put("enable_thinking", false);
+                            } else if ("low".equals(effort) || "medium".equals(effort) || "high".equals(effort)) {
+                                body.put("reasoning_effort", effort);
+                            }
+                            byte[] bytes = body.toString().getBytes("UTF-8");
+
+                            conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                            conn.setConnectTimeout(12000);
+                            conn.setReadTimeout(120000);
+                            conn.setRequestMethod("POST");
+                            conn.setDoOutput(true);
+                            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                            conn.setRequestProperty("Accept", "text/event-stream");
+                            conn.setRequestProperty("User-Agent", "okhttp/4.12.0");
+                            conn.setRequestProperty("Authorization", "Bearer " + key);
+                            conn.setFixedLengthStreamingMode(bytes.length);
+                            aiConns.put(ridKey, conn);
+                            java.io.OutputStream os = conn.getOutputStream();
+                            os.write(bytes); os.flush(); os.close();
+
+                            int code = conn.getResponseCode();
+                            if (code >= 400) {
+                                String head = readAll(code >= 400 ? conn.getErrorStream() : null, 400);
+                                if (code == 400 && effort.length() > 0) {
+                                    // 对方不认思考参数：去掉再试一次这个地址
+                                    aiConns.remove(ridKey);
+                                    conn.disconnect();
+                                    org.json.JSONObject plain = new org.json.JSONObject();
+                                    plain.put("model", model);
+                                    plain.put("messages", msgs);
+                                    plain.put("stream", true);
+                                    byte[] b2 = plain.toString().getBytes("UTF-8");
+                                    conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                                    conn.setConnectTimeout(12000);
+                                    conn.setReadTimeout(120000);
+                                    conn.setRequestMethod("POST");
+                                    conn.setDoOutput(true);
+                                    conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                                    conn.setRequestProperty("Accept", "text/event-stream");
+                                    conn.setRequestProperty("User-Agent", "okhttp/4.12.0");
+                                    conn.setRequestProperty("Authorization", "Bearer " + key);
+                                    conn.setFixedLengthStreamingMode(b2.length);
+                                    aiConns.put(ridKey, conn);
+                                    os = conn.getOutputStream();
+                                    os.write(b2); os.flush(); os.close();
+                                    code = conn.getResponseCode();
+                                    if (code >= 400) head = readAll(conn.getErrorStream(), 400);
+                                }
+                                if (code >= 400) {
+                                    if (code == 401 || code == 403) firstErr = "HTTP " + code + " " + head;
+                                    else if (firstErr == null) firstErr = "HTTP " + code + " " + head;
+                                    aiConns.remove(ridKey);
+                                    conn.disconnect();
+                                    if (code == 401 || code == 403) break;
+                                    continue;
+                                }
+                            }
+
+                            StringBuilder all = new StringBuilder();
+                            java.io.BufferedReader br = new java.io.BufferedReader(
+                                    new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+                            String line;
+                            String usageJson = "";
+                            boolean done = false;
+                            while ((line = br.readLine()) != null) {
+                                String t = line.trim();
+                                if (t.length() == 0) continue;
+                                if (t.startsWith("data:")) t = t.substring(5).trim();
+                                if ("[DONE]".equals(t)) { done = true; break; }
+                                if (t.indexOf('{') < 0) continue;
+                                try {
+                                    org.json.JSONObject j = new org.json.JSONObject(t);
+                                    if (j.has("usage")) usageJson = j.getJSONObject("usage").toString();
+                                    org.json.JSONArray ch = j.optJSONArray("choices");
+                                    if (ch == null || ch.length() == 0) continue;
+                                    org.json.JSONObject c0 = ch.getJSONObject(0);
+                                    org.json.JSONObject delta = c0.optJSONObject("delta");
+                                    String piece = delta == null ? "" : delta.optString("content", "");
+                                    if (piece.length() == 0 && delta != null) {
+                                        // 有的中转把增量放在 reasoning_content（思考内容），不显示但要吃掉
+                                        piece = "";
+                                    }
+                                    if (piece.length() > 0) {
+                                        all.append(piece);
+                                        aiCall("__aiOnDelta", ridKey, piece);
+                                    }
+                                } catch (Exception e) { }
+                            }
+                            br.close();
+                            String text = all.toString();
+                            if (text.length() == 0) {
+                                if (firstErr == null) firstErr = "模型没有返回内容（可能是对方不支持流式）";
+                                aiConns.remove(ridKey);
+                                conn.disconnect();
+                                continue;
+                            }
+                            String urlOut = url.replaceFirst("^https?://", "");
+                            String doneJson = "{\"ok\":true,\"text\":\"" + esc4j(text)
+                                    + "\",\"url\":\"" + esc4j(urlOut) + "\"";
+                            if (usageJson.length() > 0) doneJson = doneJson + ",\"usage\":" + usageJson;
+                            doneJson = doneJson + "}";
+                            aiConns.remove(ridKey);
+                            try { conn.disconnect(); } catch (Exception e) { }
+                            aiCall("__aiOnDone", ridKey, doneJson);
+                            return;
+                        } catch (Exception e) {
+                            String m = String.valueOf(e.getMessage());
+                            if (firstErr == null) firstErr = "连不上 " + url.replaceFirst("^https?://", "") + "：" + m;
+                            aiConns.remove(ridKey);
+                            try { if (conn != null) conn.disconnect(); } catch (Exception e2) { }
+                        }
+                    }
+                    aiCall("__aiOnError", ridKey, firstErr == null ? "发不出去" : firstErr);
+                }
+            }).start();
+        }
+
+        private String readAll(java.io.InputStream is, int max) {
+            StringBuilder sb = new StringBuilder();
+            try {
+                if (is == null) return "";
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(is, "UTF-8"));
+                String line;
+                while ((line = br.readLine()) != null && sb.length() < max) sb.append(line).append('\n');
+                br.close();
+            } catch (Exception e) { }
+            String s = sb.toString();
+            return s.length() > max ? s.substring(0, max) : s;
+        }
+
+        /* --- 本机键值存储：角色卡 / 世界包 / 卷 / 原文都放这里（不受清缓存影响） --- */
+        private java.io.File kvFile(String k) {
+            String name = String.valueOf(k).replaceAll("[^A-Za-z0-9._-]", "_");
+            if (name.length() > 60) name = name.substring(0, 60);
+            int h = String.valueOf(k).hashCode();
+            java.io.File dir = new java.io.File(act.getFilesDir(), "kv");
+            if (!dir.exists()) dir.mkdirs();
+            return new java.io.File(dir, name + "_" + Integer.toHexString(h) + ".json");
+        }
+
+        @JavascriptInterface
+        public void kvPut(String k, String v) {
+            java.io.File f = kvFile(k);
+            java.io.File tmp = new java.io.File(f.getAbsolutePath() + ".tmp");
+            try {
+                java.io.FileOutputStream fo = new java.io.FileOutputStream(tmp);
+                fo.write(String.valueOf(v).getBytes("UTF-8"));
+                fo.flush();
+                try { fo.getFD().sync(); } catch (Exception e) { }
+                fo.close();
+                if (f.exists()) f.delete();
+                tmp.renameTo(f);
+            } catch (Exception e) { Log.w("PaperLite", "kvPut " + k + ": " + e); }
+        }
+
+        @JavascriptInterface
+        public String kvGet(String k) {
+            try {
+                java.io.File f = kvFile(k);
+                if (!f.exists()) return "";
+                long n = f.length();
+                if (n <= 0 || n > 8 * 1024 * 1024) return "";
+                byte[] b = new byte[(int) n];
+                java.io.FileInputStream in = new java.io.FileInputStream(f);
+                int off = 0;
+                while (off < b.length) {
+                    int r = in.read(b, off, b.length - off);
+                    if (r <= 0) break;
+                    off += r;
+                }
+                in.close();
+                return new String(b, 0, off, "UTF-8");
+            } catch (Exception e) { return ""; }
+        }
+
+        @JavascriptInterface
+        public void kvDel(String k) {
+            try {
+                java.io.File f = kvFile(k);
+                if (f.exists()) f.delete();
+            } catch (Exception e) { }
         }
 
         /** 一个地址试不通就换着试（少写 v1 / 多写 v1 / 带不带 /v1 前缀） */

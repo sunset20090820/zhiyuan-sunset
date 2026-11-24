@@ -482,6 +482,8 @@
     <div class="me-sec" data-sec="access">
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🔌</span>接入与助手<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
+        <button id="btnRole" class="me-row" type="button"><span class="me-ico">🎭</span>角色扮演<span class="me-arrow" id="roleCount">0</span></button>
+        <button id="btnAiConf" class="me-row" type="button"><span class="me-ico">🔗</span>AI 接口<span class="me-arrow">›</span></button>
         <button id="btnAi" class="me-row" type="button"><span class="me-ico">🤖</span>AI 助手<span class="me-arrow">›</span></button>
         <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
         <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
@@ -567,14 +569,192 @@
     </div>
 
     <div class="me-group">
-      <div class="me-row" style="flex-direction:column;align-items:flex-start;gap:4px">
-        <span style="font-size:14px">登录状态诊断</span>
-        <span id="meDiag" style="font-size:12px;color:var(--tg-sub);line-height:1.6">-</span>
-      </div>
       <button id="btnFlush" class="me-row" type="button"><span class="me-ico">💾</span>立即保存登录状态<span class="me-arrow">›</span></button>
     </div>
 
     <p class="hint" id="verLine">纸鸢</p>
+  </div>
+</div>
+
+
+<!-- ===== 角色扮演：角色列表 ===== -->
+<div id="rolePage" class="me-page hidden">
+  <header class="topbar">
+    <button id="roleBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">角色扮演</div>
+    <button id="roleNew" class="logout-chip" type="button">＋ 新建</button>
+  </header>
+  <div class="me-body">
+    <p class="hint" id="roleTopHint">全在本机跑：不进服务器，断网也能演。</p>
+    <div id="roleList" class="role-list"></div>
+    <div class="me-sec open" data-sec="roleopts">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">⚙️</span>扮演设置<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <div class="bg-dim-row" style="flex-wrap:wrap"><span class="hint">上下文预算</span>
+          <div class="seg rp-budget" id="rpBudget">
+            <button class="seg-item" type="button" data-b="8192">8k</button>
+            <button class="seg-item" type="button" data-b="12288">12k</button>
+            <button class="seg-item" type="button" data-b="32768">32k</button>
+          </div>
+        </div>
+        <p class="hint">预算越大记得越多，也越费 token。默认 8k，长线扮演再往上调。</p>
+        <button id="btnRoleWorlds" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow" id="worldCount">0</span></button>
+        <button id="btnRoleExport" class="me-row" type="button"><span class="me-ico">📦</span>导出 / 导入<span class="me-arrow">›</span></button>
+        <button id="btnRoleClean" class="me-row" type="button"><span class="me-ico">🧹</span>重建所有扮演会话<span class="me-arrow">›</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 角色编辑器 ===== -->
+<div id="roleEditor" class="me-page hidden">
+  <header class="topbar">
+    <button id="reBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand" id="reTitle">新建角色</div>
+    <button id="reSave" class="logout-chip" type="button">保存</button>
+  </header>
+  <div class="me-body">
+    <div class="tabs role-tabs" id="reTabs">
+      <button class="tab on" type="button" data-rp="basic">基本</button>
+      <button class="tab" type="button" data-rp="persona">性格</button>
+      <button class="tab" type="button" data-rp="scene">开场</button>
+      <button class="tab" type="button" data-rp="demo">示例</button>
+      <button class="tab" type="button" data-rp="rules">规则</button>
+    </div>
+
+    <div class="role-pane" id="rePaneBasic">
+      <label class="field"><span>名字</span><input id="reName" maxlength="40" placeholder="例如：林晚" autocomplete="off"></label>
+      <div class="me-row"><span class="me-ico">🖼</span>头像
+        <button id="reAvaBtn" class="agent-ava" type="button" aria-label="换头像"><span id="reAvaPrev">🎭</span></button>
+        <input id="reAvaInput" type="file" accept="image/*" class="hidden">
+      </div>
+      <label class="field"><span>所属世界包</span><select id="reWorld" class="field-select"></select></label>
+      <label class="field"><span>一句话设定</span><textarea id="reDesc" rows="3" maxlength="2000" placeholder="27 岁，旧书店店主，说话慢，爱用反问"></textarea></label>
+      <div class="bg-dim-row"><span class="hint">温度</span><input id="reTemp" type="range" min="0" max="200" value="85"><span class="hint" id="reTempVal">0.85</span></div>
+      <p class="hint">模型用「AI 接口」里配置的主对话模型；要单独指定就在这个角色里填。</p>
+      <label class="field"><span>这个角色专用的模型（可留空）</span><input id="reModel" maxlength="80" placeholder="留空 = 用主对话模型" spellcheck="false" autocomplete="off"></label>
+    </div>
+
+    <div class="role-pane hidden" id="rePanePersona">
+      <label class="field"><span>性格</span><textarea id="rePersonality" rows="3" maxlength="2000" placeholder="克制、记得住细节、被追问时会转移话题"></textarea></label>
+      <label class="field"><span>说话方式</span></label>
+      <div class="bg-dim-row"><span class="hint">长短</span>
+        <div class="seg" id="reStyleLen">
+          <button class="seg-item on" type="button" data-v="short">短</button>
+          <button class="seg-item" type="button" data-v="mid">中</button>
+          <button class="seg-item" type="button" data-v="long">长</button>
+        </div>
+      </div>
+      <div class="bg-dim-row"><span class="hint">人称</span>
+        <div class="seg" id="reStylePerson">
+          <button class="seg-item on" type="button" data-v="first">第一人称</button>
+          <button class="seg-item" type="button" data-v="third">第三人称</button>
+        </div>
+      </div>
+      <label class="field"><span>禁用词/符号（逗号分隔）</span><input id="reBanned" maxlength="200" placeholder="例如：~、呢、作为AI" autocomplete="off"></label>
+    </div>
+
+    <div class="role-pane hidden" id="rePaneScene">
+      <label class="field"><span>场景</span><textarea id="reScenario" rows="3" maxlength="2000" placeholder="雨夜的旧书店，你推门进来躲雨"></textarea></label>
+      <label class="field"><span>开场第一句</span><textarea id="reFirstMes" rows="2" maxlength="2000" placeholder="（抬眼）伞放门口吧，地滑。"></textarea></label>
+      <p class="hint">开场白会作为这个会话的第一条消息显示，也是扮演的起点。</p>
+    </div>
+
+    <div class="role-pane hidden" id="rePaneDemo">
+      <p class="hint">示例对话只在第一轮和每次换卷后的前几轮注入，用来定语气。最多 12 组。</p>
+      <div id="reDemoList" class="demo-list"></div>
+      <button id="reDemoAdd" class="flat" type="button">＋ 加一组</button>
+    </div>
+
+    <div class="role-pane hidden" id="rePaneRules">
+      <label class="field"><span>角色规则（写给模型的约束）</span><textarea id="reRules" rows="5" maxlength="2000" placeholder="不要写旁白心理描写；回复不超过 3 段；不要使用『作为AI』"></textarea></label>
+    </div>
+
+    <div class="ai-test-row">
+      <button id="reTrial" class="ai-fetch" type="button">试演一句</button>
+      <span class="hint" id="reTrialEst">不保存也能看效果</span>
+    </div>
+    <input id="reTrialInput" class="remark-input hidden" maxlength="200" placeholder="用一句用户的话试演…" autocomplete="off">
+    <pre id="reTrialOut" class="ai-test-out hidden"></pre>
+    <button id="reStart" class="primary" type="button">开始扮演</button>
+    <button id="reDel" class="flat danger-text hidden" type="button">删除这个角色</button>
+  </div>
+</div>
+
+<!-- ===== 世界包列表 ===== -->
+<div id="worldPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="worldBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">世界包</div>
+    <button id="worldNew" class="logout-chip" type="button">＋ 新建</button>
+  </header>
+  <div class="me-body">
+    <p class="hint">多张角色卡可以共享同一个世界；删世界不会删卡，只会把关联清空。</p>
+    <div id="worldList" class="role-list"></div>
+  </div>
+</div>
+
+<!-- ===== 世界包编辑器 ===== -->
+<div id="worldEditor" class="me-page hidden">
+  <header class="topbar">
+    <button id="weBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand" id="weTitle">新建世界</div>
+    <button id="weSave" class="logout-chip" type="button">保存</button>
+  </header>
+  <div class="me-body">
+    <label class="field"><span>名字</span><input id="weName" maxlength="40" autocomplete="off"></label>
+    <label class="field"><span>大背景（常驻注入，建议 300 字以内）</span><textarea id="weDesc" rows="4" maxlength="1500"></textarea></label>
+    <label class="field"><span>世界规则（每行一条）</span><textarea id="weRules" rows="4" maxlength="1200" placeholder="没有魔法&#10;货币是银币"></textarea></label>
+    <p class="hint">下面是「设定词条」：命中关键词才注入，省 token。</p>
+    <div id="weLoreList" class="demo-list"></div>
+    <button id="weLoreAdd" class="flat" type="button">＋ 加一条词条</button>
+    <button id="weDel" class="flat danger-text hidden" type="button">删除这个世界</button>
+  </div>
+</div>
+
+<!-- ===== AI 接口（主对话 + 摘要双槽位）===== -->
+<div id="aiConfPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="aiConfBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">AI 接口</div>
+    <button id="aiConfSave" class="logout-chip" type="button">保存</button>
+  </header>
+  <div class="me-body">
+    <p class="hint">角色扮演和 AI 助手共用这份配置。key 只存在手机本机的保险箱里，不上传、不进导出文件。</p>
+    <label class="field"><span>供应商</span>
+      <div class="ai-presets" id="aiConfPresets">
+        <button type="button" class="ai-preset" data-base="https://api.deepseek.com/v1" data-model="deepseek-chat">DeepSeek</button>
+        <button type="button" class="ai-preset" data-base="https://api.moonshot.cn/v1" data-model="moonshot-v1-8k">Kimi</button>
+        <button type="button" class="ai-preset" data-base="https://open.bigmodel.cn/api/paas/v4" data-model="glm-4-flash">智谱</button>
+        <button type="button" class="ai-preset" data-base="https://dashscope.aliyuncs.com/compatible-mode/v1" data-model="qwen-plus">通义</button>
+        <button type="button" class="ai-preset" data-base="https://api.siliconflow.cn/v1" data-model="Qwen/Qwen2.5-7B-Instruct">硅基流动</button>
+        <button type="button" class="ai-preset" data-base="https://api.openai.com/v1" data-model="gpt-4o-mini">OpenAI</button>
+      </div>
+    </label>
+    <label class="field"><span>接口地址</span>
+      <input id="cfBase" maxlength="200" placeholder="https://api.deepseek.com/v1" spellcheck="false" autocomplete="off"></label>
+    <label class="field"><span>API key</span>
+      <input id="cfKey" type="password" maxlength="200" placeholder="sk-…" spellcheck="false" autocomplete="off"></label>
+    <label class="field"><span>主对话模型</span>
+      <input id="cfModel" maxlength="120" placeholder="deepseek-chat" spellcheck="false" autocomplete="off"></label>
+    <div class="ai-test-row">
+      <button id="cfFetch" class="ai-fetch" type="button">刷新模型列表</button>
+      <button id="cfTest" class="ai-fetch" type="button">测试连接</button>
+    </div>
+    <input id="cfFilter" class="ai-input ai-model-filter hidden" type="text" placeholder="筛选模型名" spellcheck="false" autocomplete="off">
+    <div id="cfModelList" class="ai-model-list"></div>
+    <label class="field"><span>摘要模型（可选，留空用主模型）</span>
+      <input id="cfSumModel" maxlength="120" placeholder="便宜的小模型，比如 deepseek-chat" spellcheck="false" autocomplete="off"></label>
+    <p class="hint">摘要用来压缩剧情、抽事实，用便宜模型即可；失败会自动退回主模型。</p>
+    <div class="bg-dim-row"><span class="hint">思考强度</span>
+      <div class="seg" id="cfEffort">
+        <button class="seg-item" type="button" data-eff="none">关</button>
+        <button class="seg-item on" type="button" data-eff="low">低</button>
+        <button class="seg-item" type="button" data-eff="medium">中</button>
+        <button class="seg-item" type="button" data-eff="high">高</button>
+      </div>
+    </div>
+    <pre id="cfOut" class="ai-test-out hidden"></pre>
   </div>
 </div>
 
@@ -612,6 +792,8 @@
 <script src="config.js"></script>
 <script src="version.js"></script>
 <script src="game.js"></script>
+<script src="cards.js"></script>
+<script src="ctx.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

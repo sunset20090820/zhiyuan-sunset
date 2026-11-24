@@ -2081,3 +2081,10 @@ html[data-skin] .me-sec.open .me-sec-body { display: block; animation: m3e-row-i
 /* 分组里的行更紧凑一点，避免展开后过长 */
 html[data-skin] .me-sec .me-row { padding: 12px 16px; font-size: 14.5px; }
 html[data-skin] .me-sec .beauty-panel { margin: 0; }
+
+/* ===== 角色扮演：安卓 16 风格微调（13.32） ===== */
+html[data-skin] .role-card { border-radius: 20px; }
+html[data-skin] .role-btn { border-radius: 999px; }
+html[data-skin] .role-btn.primary-sm { background: var(--m3-primary, #a8c7fa); color: #0b1a2b; }
+html[data-skin] .role-ava { border-radius: 16px; }
+html[data-skin] .demo-ta, html[data-skin] .demo-key { border-radius: 12px; }

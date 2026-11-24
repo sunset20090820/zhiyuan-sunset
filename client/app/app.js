@@ -75,7 +75,7 @@
     cur: null, msgs: {}, deviceId: '', user: '', auth: false, remarks: {}, people: [], dms: {}, stickers: [], groups: {}, pendingAuth: null,
     uid: 0, token: '', friends: [], pendingIn: [], pendingOut: [], searchHit: null, tab: 'chats', mutes: {},
     localAgent: { on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' },
-    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [], effort: 'low' },
+    ai: { on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [], effort: 'low', sumModel: '' },
     unreadAt: {}, mentionAt: {}, jumpTarget: null, avatars: {}, myAvatar: '', pins: {}, agentUser: { on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false, clients: 0, last: '' },
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
@@ -129,6 +129,12 @@
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
   function room(id) {
     for (var i = 0; i < S.rooms.length; i++) if (S.rooms[i].id === id) return S.rooms[i];
+    if (id && id.indexOf('rp:') === 0) {
+      var card = null;
+      try { var cid = RP.cardIdOfRoom(id); card = cid ? RP.card(cid) : null; } catch (e) {}
+      if (card) return { id: id, name: card.name || '角色', emoji: '🎭', avatar: card.avatar || '', color: colorOf(id) };
+      return { id: id, name: '角色', emoji: '🎭', color: '#7c5cff' };
+    }
     if (id && id.indexOf('g:') === 0) {
       var g = S.groups[id.slice(2)];
       if (g) return { id: id, name: g.name || '群聊', emoji: '👥', color: '#7c5cff' };
@@ -245,7 +251,7 @@
         S.pins = o.pins || {};
         S.mutes = o.mutes || {};
         S.localAgent = Object.assign({ on: false, port: 6721, lan: false, clients: 0, error: '', name: '本地用户', avatar: '' }, o.localAgent || {});
-        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [], effort: 'low' }, o.ai || {});
+        S.ai = Object.assign({ on: false, base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'AI 助手', models: [], effort: 'low', sumModel: '' }, o.ai || {});
         if (!Array.isArray(S.ai.models)) S.ai.models = [];
         S.agentUser = Object.assign({ on: false, user: '', pass: '', nick: '', avatar: '', ready: false, error: '', port: 6722, lan: false }, o.agentUser || {});
         S.bg = normalizeBg(o.bg);
@@ -1150,6 +1156,12 @@
       el.textContent = '服务器通路 · lobby';
       return true;
     }
+    if (isRpRoom(S.cur)) {
+      var vol = 1;
+      try { vol = RP.volOf(S.cur) || 1; } catch (e) {}
+      el.textContent = '本机扮演 · 卷 ' + vol + ' · 不进服务器';
+      return true;
+    }
     return false;
   }
   function syncAiModelUi() {
@@ -1348,6 +1360,13 @@
   window.__aiModelsReply = function (payload) {
     var j = null;
     try { j = JSON.parse(payload); } catch (e) {}
+    // AI 接口页也在等这份列表
+    try {
+      if (typeof cfTakeModels === 'function') {
+        var _ids = (j && Array.isArray(j.ids)) ? j.ids : null;
+        cfTakeModels(_ids, (_ids && _ids.length) ? '' : ((j && j.error) || '解析失败'));
+      }
+    } catch (e2) {}
     if (j && j.ok && Array.isArray(j.ids)) return aiModelDone(j.ids);
     var hint = $('#aiModelHint');
     var btn = $('#aiFetchModels');
@@ -1441,12 +1460,12 @@
   // 聊天里给 AI 发消息：把最近几条历史一起发过去，回复直接落到会话里
   // 每次请求带一个号，原生原样回传，避免「一次没回、后面全错位」
   var aiRidSeq = 0, aiWait = {};
-  function aiAskNative(base, model, msgs, onText, onRaw) {
+  function aiAskNative(base, model, msgs, onText, onRaw, extra) {
     var rid = 'q' + (++aiRidSeq) + Date.now();
     aiWait[rid] = { text: onText, raw: onRaw };
     try {
       if (window.PaperNative && window.PaperNative.aiAsk) {
-        var opts = JSON.stringify({ effort: (S.ai && S.ai.effort) || 'low' });
+        var opts = JSON.stringify(Object.assign({ effort: (S.ai && S.ai.effort) || 'low' }, extra || {}));
         window.PaperNative.aiAsk(base, model, msgs, rid, opts);
         return rid;
       }
@@ -1804,6 +1823,10 @@
       list.push({ r: groupRoom(g), isDM: false, peerId: null });
     });
     S.rooms.forEach(function (r) { list.push({ r: r, isDM: false, peerId: null }); });
+    // 角色扮演会话（本地，不进服务器）
+    try {
+      rpRoomEntries().forEach(function (r) { list.push({ r: r, isDM: false, peerId: null }); });
+    } catch (e) {}
 
     // 顶栏头像跟列表同一套逻辑：别人换了头像、或私信记录刚补上头像，聊天页里也要跟着变
     try { if (S.cur && $('#chat') && !$('#chat').classList.contains('hidden')) paintChatAva(S.cur); } catch (e) {}
@@ -2029,8 +2052,12 @@
     markPainted($('#msgs'), 500);
     syncPinBtn();
     syncComposer();
+    if (isRpRoom(rid)) { try { rpEnsureIntro(rid); } catch (e) {} }
     renderMsgs(true);
-    if (isDM(rid)) {
+    if (isRpRoom(rid)) {
+      // 角色扮演：纯本地，不向服务器登记房间、也不拉历史
+      try { rpEnsureIntro(rid); } catch (e) {}
+    } else if (isDM(rid)) {
       var peerId = dmPeerOf(rid);
       // 本地用户是纯本机会话，不能把它的对端告诉服务器
       if (peerId && peerId !== LOCAL_PEER) wsSend({ t: 'pm_open', with: peerId, withName: room(rid).name });
@@ -2148,7 +2175,7 @@
     clearReply(); renderMentionBox();
     renderMsgs(true); renderRooms();
     // 房间号为空/认不出来时绝不能发：服务器会把它当大厅消息（用户遇到过"发到公共大厅"）
-    if (!S.cur || (!isDM(S.cur) && !isGroup(S.cur) && !roomExists(S.cur))) {
+    if (!S.cur || (!isDM(S.cur) && !isGroup(S.cur) && !roomExists(S.cur) && !isRpRoom(S.cur))) {
       try { aiNormalize(); } catch (e) {}
       toast('这个会话的房间号不对，已自动修复，请重新打开会话再发');
       renderMsgs(false);
@@ -2173,6 +2200,19 @@
         toast('你就是开发者，反馈只在本地留档');
       }
       renderMsgs(false); renderRooms();
+      return;
+    }
+    if (isRpRoom(S.cur)) {
+      // 角色扮演：只在本机跑模型，绝不进服务器
+      lastSendPath = 'rp';
+      noteSend('rp', 'room=' + S.cur, text);
+      var listR = loadHist(S.cur), mineR = null;
+      for (var ri = listR.length - 1; ri >= 0; ri--) if (listR[ri] && listR[ri].id === tid) { mineR = listR[ri]; break; }
+      if (mineR) { mineR.pending = false; saveHist(S.cur); }
+      try { RP.touchRoom(S.cur); } catch (e) {}
+      renderMsgs(false);
+      askRole(text, tid);
+      renderRooms();
       return;
     }
     lastSendPath = (S.cur === AI_RID || aiIsRoom(S.cur)) ? 'ai' : (S.cur === LOCAL_RID ? 'local' : 'server');
@@ -2591,6 +2631,788 @@
     toast('已 @' + name);
   }
 
+  /* ================= 角色扮演（RP，全本地） =================
+   * 会话 id = rp:<cardId>，不走 WebSocket；请求走原生（aiAsk + stream）。
+   * 上下文拼装在 ctx.js，卡与世界在 cards.js（GK 全局前缀）。
+   * ========================================================= */
+  var rpStream = {};        // rid → {onDelta,onDone,onError}
+  var rpCur = null;         // 正在流式渲染的 { rid, roomId, msgId, buf, raf, tick, t0, node }
+  var reEdit = null;        // 编辑中的角色（副本）
+  var reDemo = [];          // 示例对话行
+  var weEdit = null, weLore = [];   // 世界包编辑
+  var reTrialShown = false;
+
+  function isRpRoom(rid) { return !!rid && rid.indexOf('rp:') === 0; }
+  function rpCardOf(rid) {
+    try { var id = RP.cardIdOfRoom(rid); return id ? RP.card(id) : null; } catch (e) { return null; }
+  }
+  function aiConfigured() { return !!(S.ai && S.ai.base && S.ai.model && aiKeyStore()); }
+
+  /* ---------- 会话 ---------- */
+  function rpRoomEntries() {
+    var out = [];
+    try {
+      var rooms = RP.rooms();
+      Object.keys(rooms).forEach(function (rid) {
+        var c = RP.card(rooms[rid].cardId);
+        if (!c) return;
+        out.push({ id: rid, name: c.name, emoji: '🎭', avatar: c.avatar || '', color: colorOf(rid) });
+      });
+    } catch (e) {}
+    return out;
+  }
+
+  function startRole(cardId) {
+    try { RP.load(); } catch (e) {}
+    var card = RP.card(cardId);
+    if (!card) { toast('角色不存在'); return; }
+    var rid = RP.ensureRoom(cardId);
+    var hist = loadHist(rid);
+    if (!hist.length && card.firstMes) {
+      addMsg(rid, { id: 'm' + Date.now().toString(36), from: 'rp', name: card.name, text: card.firstMes,
+                    ts: Date.now(), avatar: card.avatar || '' });
+      saveHist(rid);
+    }
+    if (!S.last[rid]) {
+      S.last[rid] = { id: '', text: card.firstMes || '开始扮演吧', name: '', ts: Date.now() };
+      save();
+    }
+    closeRpPages();
+    renderRooms();
+    openRoom(rid);
+    setTimeout(function () {
+      if (!aiConfigured()) toast('先在「我的 → AI 接口」里填接口和 key');
+      else if (!(S.ai && S.ai.on)) toast('提示：AI 助手开关关着不影响扮演');
+    }, 500);
+  }
+
+  /* 打开角色会话：补齐开场白（历史为空时） */
+  function rpEnsureIntro(rid) {
+    var card = rpCardOf(rid);
+    if (!card) return;
+    var hist = loadHist(rid);
+    if (hist.length) return;
+    if (!card.firstMes) return;
+    addMsg(rid, { id: 'm' + Date.now().toString(36), from: 'rp', name: card.name, text: card.firstMes,
+                  ts: Date.now(), avatar: card.avatar || '' });
+    saveHist(rid);
+  }
+
+  /* ---------- 流式请求（原生 SSE） ---------- */
+  function aiStreamRun(base, model, msgsJson, opts, handlers) {
+    var rid = 'q' + (++aiRidSeq) + Date.now().toString(36);
+    rpStream[rid] = handlers || {};
+    try {
+      if (window.PaperNative && window.PaperNative.aiAsk) {
+        var o = JSON.stringify(Object.assign({ effort: (S.ai && S.ai.effort) || 'low' }, opts || {}, { stream: true }));
+        window.PaperNative.aiAsk(base, model, msgsJson, rid, o);
+        return rid;
+      }
+    } catch (e) { delete rpStream[rid]; }
+    delete rpStream[rid];
+    return null;
+  }
+  window.__aiOnDelta = function (rid, piece) {
+    var h = rpStream[rid];
+    if (!h || !h.onDelta) return;
+    try { h.onDelta(String(piece || '')); } catch (e) {}
+  };
+  window.__aiOnDone = function (rid, json) {
+    var h = rpStream[rid];
+    if (!h) return;
+    delete rpStream[rid];
+    var j = null;
+    try { j = JSON.parse(json); } catch (e) {}
+    if (j && j.ok && j.url) { try { aiAdoptUrl(j.url); } catch (e) {} }
+    if (j && j.ok) h.onDone(String(j.text || ''), j);
+    else h.onError(String((j && (j.error || j.err)) || '没有返回内容'));
+  };
+  window.__aiOnError = function (rid, msg) {
+    var h = rpStream[rid];
+    if (!h) return;
+    delete rpStream[rid];
+    try { h.onError(String(msg || '出错了')); } catch (e) {}
+  };
+
+  /* 只改这一个气泡的文本，不整块重绘（流式每来一段都重绘会卡死） */
+  function rpPatchNode(node, text) {
+    if (!node) return;
+    var t = node.querySelector('.msg-text');
+    if (t) { t.textContent = text; }
+    else {
+      var b = node.querySelector('.bubble');
+      if (b) {
+        var meta = b.querySelector('.meta');
+        var span = document.createElement('span');
+        span.className = 'msg-text';
+        span.textContent = text;
+        b.insertBefore(span, meta || null);
+      }
+    }
+    var box = $('#msgs');
+    if (box && box.scrollHeight - box.scrollTop - box.clientHeight < 120) box.scrollTop = box.scrollHeight;
+  }
+
+  function rpStopStream() {
+    if (!rpCur) return;
+    try {
+      if (window.PaperNative && window.PaperNative.aiAbort) window.PaperNative.aiAbort(rpCur.rid);
+    } catch (e) {}
+    if (rpCur.tick) { try { clearInterval(rpCur.tick); } catch (e) {} }
+    if (rpCur.raf) { try { cancelAnimationFrame(rpCur.raf); } catch (e) {} }
+    rpCur = null;
+  }
+
+  function askRole(text, tid) {
+    var rid = S.cur;
+    var card = rpCardOf(rid);
+    if (!card) { toast('这个会话没有对应角色卡'); return; }
+    if (!aiConfigured()) {
+      toast('先在「我的 → AI 接口」里填接口地址、模型和 key');
+      return;
+    }
+    var budget = 8192;
+    try { budget = RP.settings().budget || 8192; } catch (e) {}
+    var pack = { system: '', messages: [], est: 0 };
+    try {
+      pack = CTX.build(rid, { card: card, hist: loadHist(rid), userText: text, excludeId: tid, budget: budget });
+    } catch (e) { toast('拼上下文失败：' + e.message); return; }
+
+    var msgs = [{ role: 'system', content: pack.system }].concat(pack.messages);
+    msgs.push({ role: 'user', content: text });
+
+    var ph = { id: 'ai' + Date.now().toString(36), from: 'rp:' + card.id, name: card.name,
+               text: '思考中…', ts: Date.now(), sys: true, typing: true, avatar: card.avatar || '' };
+    addMsg(rid, ph);
+    saveHist(rid);
+    renderMsgs(true);
+    setTimeout(function () { snapBottom($('#msgs')); }, 20);
+
+    rpStopStream();
+    var t0 = Date.now();
+    var node0 = null;
+    var box0 = $('#msgs');
+    if (box0) node0 = box0.querySelector('.msg[data-id="' + ph.id + '"]');
+    rpCur = { rid: '', roomId: rid, msgId: ph.id, buf: '', raf: 0, node: node0, t0: t0, tick: 0 };
+
+    var tick = setInterval(function () {
+      if (!rpCur || rpCur.msgId !== ph.id || rpCur.buf.length) return;
+      var sec = Math.round((Date.now() - t0) / 1000);
+      var n2 = $('#msgs') ? $('#msgs').querySelector('.msg[data-id="' + ph.id + '"]') : null;
+      if (n2) rpPatchNode(n2, '思考中… ' + sec + ' 秒');
+    }, 1000);
+    rpCur.tick = tick;
+
+    var finalize = function (outText, err) {
+      if (rpCur && rpCur.msgId === ph.id) rpStopStream();
+      var txt = err ? ('（' + err + '）') : (outText || '（模型没有返回内容）');
+      var list = loadHist(rid);
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (list[i] && list[i].id === ph.id) {
+          list[i].text = txt; list[i].sys = false; list[i].typing = false; list[i].failed = !!err;
+          list[i].est = pack.est;
+          break;
+        }
+      }
+      saveHist(rid);
+      S.last[rid] = { id: ph.id, text: txt, name: '', ts: Date.now() };
+      try { RP.touchRoom(rid); } catch (e) {}
+      save();
+      if (S.cur === rid) { renderMsgs(true); setTimeout(function () { snapBottom($('#msgs')); }, 20); }
+      renderRooms();
+      if (err) toast(String(err).slice(0, 40));
+    };
+
+    var base = (S.ai && S.ai.base) || '';
+    var model = card.model || (S.ai && S.ai.model) || '';
+    var opts = { temperature: Number(card.temp) || 0.85, maxTokens: 900 };
+    var reqId = aiStreamRun(base, model, JSON.stringify(msgs), opts, {
+      onDelta: function (piece) {
+        if (!rpCur || rpCur.msgId !== ph.id) return;
+        rpCur.buf += piece;
+        if (rpCur.raf) return;
+        rpCur.raf = requestAnimationFrame(function () {
+          if (!rpCur || rpCur.msgId !== ph.id) return;
+          rpCur.raf = 0;
+          var n = $('#msgs') ? $('#msgs').querySelector('.msg[data-id="' + ph.id + '"]') : null;
+          if (n) rpPatchNode(n, rpCur.buf);
+        });
+      },
+      onDone: function (full) { finalize(String(full || '').trim() || rpCur && rpCur.buf); },
+      onError: function (msg) { finalize('', '连不上模型：' + msg); }
+    });
+    if (reqId && rpCur) rpCur.rid = reqId;
+    if (!reqId) {
+      // 浏览器里没有原生桥：退回 fetch 非流式，至少能测通
+      finalize('', '当前环境没有原生 AI 桥，只能在 App 里用');
+    }
+  }
+
+  /* ---------- 页面：角色列表 ---------- */
+  function hideTabShell() {
+    ['#chats', '#contacts', '#tabbar'].forEach(function (sel) { var el = $(sel); if (el) el.classList.add('hidden'); });
+  }
+  function showTabShell() {
+    var bar = $('#tabbar');
+    if (bar) bar.classList.remove('hidden');
+  }
+  function backToMe() {
+    closeRpPages();
+    $('#mePage').classList.remove('hidden');
+    showTabShell();
+  }
+  function closeRpPages() {
+    ['#rolePage', '#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage'].forEach(function (sel) {
+      var el = $(sel); if (el) el.classList.add('hidden');
+    });
+  }
+  function rpSyncCounts() {
+    try {
+      if ($('#roleCount')) $('#roleCount').textContent = String(RP.cards().length);
+      if ($('#worldCount')) $('#worldCount').textContent = String(RP.worlds().length);
+    } catch (e) {}
+  }
+  function openRolePage() {
+    try { RP.load(); } catch (e) {}
+    hideTabShell();
+    rpSyncCounts();
+    renderRoleList();
+    $('#mePage').classList.add('hidden');
+    $('#rolePage').classList.remove('hidden');
+    var b = $('#roleBack');
+    if (b) b.classList.remove('hidden');
+  }
+  function renderRoleList() {
+    var box = $('#roleList');
+    if (!box) return;
+    var cards = RP.cards();
+    if (!cards.length) {
+      box.innerHTML = '<div class="role-empty">还没有角色。点右上「＋ 新建」写一个：<br>名字、一句话设定、开场白就够了，其余可以慢慢补。</div>';
+      return;
+    }
+    box.innerHTML = cards.map(function (c) {
+      var w = c.worldId ? RP.world(c.worldId) : null;
+      var rooms = RP.rooms();
+      var rid = 'rp:' + c.id;
+      var n = 0;
+      try { n = (loadHist(rid) || []).filter(function (m) { return m && !m.sys; }).length; } catch (e) {}
+      var ava = c.avatar
+        ? '<div class="role-ava has-img"><img src="' + esc(c.avatar) + '" alt=""></div>'
+        : '<div class="role-ava" style="background:' + colorOf(c.id) + '">' + esc(String(c.name || '?').slice(0, 1)) + '</div>';
+      return '<div class="role-card" data-card="' + esc(c.id) + '">' + ava +
+        '<div class="role-meta"><div class="role-name">' + esc(c.name) + (c.builtin ? '<span class="role-tag">示例</span>' : '') + '</div>' +
+        '<div class="role-sub">' + esc(c.desc || '') + '</div>' +
+        '<div class="role-foot">' + (w ? '🌍 ' + esc(w.name) + ' · ' : '') + (rooms[rid] ? (n + ' 条 · 卷 ' + (rooms[rid].vol || 1)) : '还没开始') + '</div></div>' +
+        '<div class="role-actions">' +
+          '<button class="role-btn primary-sm" type="button" data-play="' + esc(c.id) + '">开始</button>' +
+          '<button class="role-btn" type="button" data-edit="' + esc(c.id) + '">编辑</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  /* ---------- 页面：角色编辑器 ---------- */
+  function reAvaPreview(card) {
+    var el = $('#reAvaPrev');
+    if (!el) return;
+    if (card.avatar) el.innerHTML = '<img src="' + esc(card.avatar) + '" alt="">';
+    else el.textContent = '🎭';
+  }
+  function renderDemoRows() {
+    var box = $('#reDemoList');
+    if (!box) return;
+    if (!reDemo.length) {
+      box.innerHTML = '<p class="hint">还没有示例。示例是「用户说一句 / 角色回一句」，用来定语气，可以不加。</p>';
+      return;
+    }
+    box.innerHTML = reDemo.map(function (d, i) {
+      return '<div class="demo-row" data-i="' + i + '">' +
+        '<textarea class="demo-ta" data-f="u" rows="2" placeholder="用户说：">' + esc(d.u || '') + '</textarea>' +
+        '<textarea class="demo-ta" data-f="a" rows="2" placeholder="角色回：">' + esc(d.a || '') + '</textarea>' +
+        '<button class="demo-del" type="button" data-del-demo="' + i + '">×</button></div>';
+    }).join('');
+  }
+  function openRoleEditor(cardId) {
+    hideTabShell();
+    var card;
+    if (cardId) {
+      var src = RP.card(cardId);
+      if (!src) { toast('角色不存在'); return; }
+      card = JSON.parse(JSON.stringify(src));
+    } else {
+      card = { id: '', name: '', avatar: '', worldId: '', desc: '', personality: '', scenario: '',
+               firstMes: '', mesExample: [], rules: '', style: { len: 'short', person: 'first', banned: [] },
+               model: '', temp: 0.85 };
+    }
+    reEdit = card;
+    reDemo = (card.mesExample || []).map(function (x) { return { u: x.u || '', a: x.a || '' }; });
+    $('#reTitle').textContent = cardId ? '编辑角色' : '新建角色';
+    $('#reName').value = card.name || '';
+    $('#reDesc').value = card.desc || '';
+    $('#rePersonality').value = card.personality || '';
+    $('#reScenario').value = card.scenario || '';
+    $('#reFirstMes').value = card.firstMes || '';
+    $('#reRules').value = card.rules || '';
+    $('#reModel').value = card.model || '';
+    $('#reTemp').value = String(Math.round((Number(card.temp) || 0.85) * 100));
+    $('#reTempVal').textContent = (Number(card.temp) || 0.85).toFixed(2);
+    $('#reBanned').value = (card.style && card.style.banned || []).join('、');
+    // 世界包下拉
+    var sel = $('#reWorld');
+    var ws = RP.worlds();
+    sel.innerHTML = '<option value="">（不关联世界）</option>' + ws.map(function (w) {
+      return '<option value="' + esc(w.id) + '">' + esc(w.name) + '</option>';
+    }).join('');
+    sel.value = card.worldId || '';
+    // 分段控件状态
+    Array.prototype.forEach.call(document.querySelectorAll('#reStyleLen .seg-item'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-v') === ((card.style && card.style.len) || 'short'));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#reStylePerson .seg-item'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-v') === ((card.style && card.style.person) || 'first'));
+    });
+    reAvaPreview(card);
+    renderDemoRows();
+    $('#reTrialOut').classList.add('hidden');
+    $('#reTrialInput').classList.add('hidden');
+    $('#reTrialEst').textContent = '不保存也能看效果';
+    $('#reDel').classList.toggle('hidden', !cardId);
+    $('#reStart').textContent = cardId ? '开始扮演' : '保存并开始扮演';
+    reTab('basic');
+    $('#rolePage').classList.add('hidden');
+    ['#worldPage', '#worldEditor', '#aiConfPage', '#mePage'].forEach(function (s) { var e = $(s); if (e) e.classList.add('hidden'); });
+    $('#roleEditor').classList.remove('hidden');
+    window.scrollTo && window.scrollTo(0, 0);
+  }
+  function reTab(name) {
+    Array.prototype.forEach.call(document.querySelectorAll('#reTabs .tab'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-rp') === name);
+    });
+    ['basic', 'persona', 'scene', 'demo', 'rules'].forEach(function (k) {
+      var el = $('#rePane' + k.charAt(0).toUpperCase() + k.slice(1));
+      if (el) el.classList.toggle('hidden', k !== name);
+    });
+  }
+  function reCollect() {
+    var card = reEdit || {};
+    card.name = $('#reName').value.trim();
+    card.desc = $('#reDesc').value.trim();
+    card.personality = $('#rePersonality').value.trim();
+    card.scenario = $('#reScenario').value.trim();
+    card.firstMes = $('#reFirstMes').value.trim();
+    card.rules = $('#reRules').value.trim();
+    card.model = $('#reModel').value.trim();
+    card.worldId = $('#reWorld').value || '';
+    card.temp = (Number($('#reTemp').value) || 85) / 100;
+    card.style = card.style || {};
+    var len = document.querySelector('#reStyleLen .seg-item.on');
+    var per = document.querySelector('#reStylePerson .seg-item.on');
+    card.style.len = (len && len.getAttribute('data-v')) || 'short';
+    card.style.person = (per && per.getAttribute('data-v')) || 'first';
+    card.style.banned = ($('#reBanned').value || '').split(/[,，、\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    card.mesExample = reDemo.filter(function (d) { return d.u || d.a; });
+    return card;
+  }
+  function reSave(silent) {
+    var card = reCollect();
+    if (!card.name) { toast('先给角色起个名字'); return null; }
+    var res = RP.saveCard(card);
+    if (!res.ok) { toast(res.err || '保存失败'); return null; }
+    reEdit = res.card;
+    rpSyncCounts();
+    if (!silent) toast('已保存');
+    return res.card;
+  }
+
+  /* ---------- 页面：世界包 ---------- */
+  function openWorldPage() {
+    hideTabShell();
+    renderWorldList();
+    $('#rolePage').classList.add('hidden');
+    $('#worldPage').classList.remove('hidden');
+  }
+  function renderWorldList() {
+    var box = $('#worldList');
+    var ws = RP.worlds();
+    if (!ws.length) { box.innerHTML = '<div class="role-empty">还没有世界包。世界包用来放「多张卡共享的大背景」，比如同一座城。</div>'; return; }
+    box.innerHTML = ws.map(function (w) {
+      var cards = RP.cards().filter(function (c) { return c.worldId === w.id; });
+      return '<div class="role-card" data-world="' + esc(w.id) + '">' +
+        '<div class="role-ava" style="background:#4c6b8a">🌍</div>' +
+        '<div class="role-meta"><div class="role-name">' + esc(w.name) + (w.builtin ? '<span class="role-tag">示例</span>' : '') + '</div>' +
+        '<div class="role-sub">' + esc(w.desc || '') + '</div>' +
+        '<div class="role-foot">' + (w.lore || []).length + ' 条词条 · ' + (w.rules || []).length + ' 条规则 · ' + cards.length + ' 张卡在用</div></div>' +
+        '<div class="role-actions"><button class="role-btn" type="button" data-wedit="' + esc(w.id) + '">编辑</button></div></div>';
+    }).join('');
+  }
+  function renderLoreRows() {
+    var box = $('#weLoreList');
+    if (!box) return;
+    if (!weLore.length) { box.innerHTML = '<p class="hint">还没有词条。词条 = 关键词 + 设定，提到关键词才注入。</p>'; return; }
+    box.innerHTML = weLore.map(function (l, i) {
+      return '<div class="demo-row" data-li="' + i + '">' +
+        '<input class="demo-key" data-f="keys" value="' + esc((l.keys || []).join('、')) + '" placeholder="关键词，逗号分隔" autocomplete="off">' +
+        '<textarea class="demo-ta" data-f="text" rows="2" placeholder="设定内容">' + esc(l.text || '') + '</textarea>' +
+        '<button class="demo-del" type="button" data-del-lore="' + i + '">×</button></div>';
+    }).join('');
+  }
+  function openWorldEditor(wid) {
+    hideTabShell();
+    var w = wid ? RP.world(wid) : null;
+    weEdit = w ? JSON.parse(JSON.stringify(w)) : { id: '', name: '', desc: '', lore: [], rules: [] };
+    weLore = (weEdit.lore || []).map(function (x) { return { keys: (x.keys || []).slice(), text: x.text || '' }; });
+    $('#weTitle').textContent = wid ? '编辑世界' : '新建世界';
+    $('#weName').value = weEdit.name || '';
+    $('#weDesc').value = weEdit.desc || '';
+    $('#weRules').value = (weEdit.rules || []).join('\n');
+    $('#weDel').classList.toggle('hidden', !wid);
+    renderLoreRows();
+    $('#worldPage').classList.add('hidden');
+    $('#worldEditor').classList.remove('hidden');
+  }
+  function weCollect() {
+    var w = weEdit || {};
+    w.name = $('#weName').value.trim();
+    w.desc = $('#weDesc').value.trim();
+    w.rules = ($('#weRules').value || '').split(/\n+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    w.lore = weLore.filter(function (l) { return l.text; }).map(function (l) {
+      return { keys: (l.keys || []).filter(Boolean), text: l.text };
+    });
+    return w;
+  }
+  function weSave(silent) {
+    var w = weCollect();
+    if (!w.name) { toast('先给世界起个名字'); return null; }
+    var res = RP.saveWorld(w);
+    if (!res.ok) { toast(res.err || '保存失败'); return null; }
+    weEdit = res.world;
+    rpSyncCounts();
+    if (!silent) toast('已保存');
+    return res.world;
+  }
+
+  /* ---------- 页面：AI 接口（双槽位） ---------- */
+  var cfModels = [];
+  function openAiConfPage() {
+    hideTabShell();
+    var a = S.ai || {};
+    $('#cfBase').value = a.base || '';
+    $('#cfModel').value = a.model || '';
+    $('#cfSumModel').value = a.sumModel || '';
+    $('#cfKey').value = '';
+    $('#cfKey').placeholder = aiKeyStore() ? '已保存的 key：••••••••（要换就重填）' : 'sk-…';
+    cfModels = aiModelList();
+    cfRenderModels();
+    Array.prototype.forEach.call(document.querySelectorAll('#cfEffort .seg-item'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-eff') === (a.effort || 'low'));
+    });
+    $('#cfOut').classList.add('hidden');
+    $('#mePage').classList.add('hidden');
+    closeRpPages();
+    $('#aiConfPage').classList.remove('hidden');
+  }
+  function cfRenderModels() {
+    var box = $('#cfModelList');
+    if (!box) return;
+    var filter = ($('#cfFilter').value || '').trim().toLowerCase();
+    var list = cfModels.filter(function (m) { return !filter || m.toLowerCase().indexOf(filter) >= 0; });
+    if (!list.length) { box.innerHTML = '<p class="hint">还没有模型列表，点「刷新模型列表」。</p>'; return; }
+    box.innerHTML = list.slice(0, 200).map(function (m) {
+      var on = m === ($('#cfModel') ? $('#cfModel').value : '');
+      return '<button class="ai-model-item' + (on ? ' on' : '') + '" type="button" data-m="' + esc(m) + '">' + esc(m) + '</button>';
+    }).join('');
+  }
+  function cfSave() {
+    S.ai = S.ai || {};
+    S.ai.base = normAiBase($('#cfBase').value);
+    S.ai.model = ($('#cfModel').value || '').trim();
+    S.ai.sumModel = ($('#cfSumModel').value || '').trim();
+    var eff = document.querySelector('#cfEffort .seg-item.on');
+    S.ai.effort = (eff && eff.getAttribute('data-eff')) || 'low';
+    var key = ($('#cfKey').value || '').trim();
+    if (key) { try { aiKeyStore('ai_key', key); } catch (e) {} $('#cfKey').value = ''; $('#cfKey').placeholder = '已保存的 key：••••••••'; }
+    save();
+    try { refreshAiStat(); } catch (e) {}
+    try { syncAiModelUi(); } catch (e) {}
+    rpSyncCounts();
+    toast('AI 接口已保存');
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  function bindRole() {
+    on('#btnRole', 'click', function (e) { e.preventDefault(); openRolePage(); });
+    on('#btnAiConf', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
+    on('#roleBack', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#rolePage', 'click', function (e) {
+      var head = e.target.closest('.me-sec-head');
+      if (!head) return;
+      var sec = head.parentElement;
+      var on = !sec.classList.contains('open');
+      sec.classList.toggle('open', on);
+      head.setAttribute('aria-expanded', on ? 'true' : 'false');
+    });
+    on('#roleNew', 'click', function (e) { e.preventDefault(); openRoleEditor(''); });
+    on('#roleList', 'click', function (e) {
+      var play = e.target.closest('[data-play]');
+      var edit = e.target.closest('[data-edit]');
+      if (play) { startRole(play.getAttribute('data-play')); return; }
+      if (edit) { openRoleEditor(edit.getAttribute('data-edit')); return; }
+      var card = e.target.closest('[data-card]');
+      if (card) { startRole(card.getAttribute('data-card')); }
+    });
+    on('#reBack', 'click', function (e) { e.preventDefault(); $('#roleEditor').classList.add('hidden'); openRolePage(); });
+    on('#reTabs', 'click', function (e) {
+      var b = e.target.closest('[data-rp]');
+      if (b) reTab(b.getAttribute('data-rp'));
+    });
+    on('#reSave', 'click', function (e) { e.preventDefault(); if (reSave()) { $('#roleEditor').classList.add('hidden'); openRolePage(); } });
+    on('#reStart', 'click', function (e) {
+      e.preventDefault();
+      var card = reSave(true);
+      if (!card) return;
+      $('#roleEditor').classList.add('hidden');
+      startRole(card.id);
+    });
+    on('#reDel', 'click', function (e) {
+      e.preventDefault();
+      if (!reEdit || !reEdit.id) return;
+      if (!confirmTap('delcard', '删除「' + reEdit.name + '」？', function () {
+        RP.delCard(reEdit.id);
+        rpSyncCounts();
+        $('#roleEditor').classList.add('hidden');
+        openRolePage();
+        toast('已删除');
+      })) return;
+      rpSyncCounts();
+      $('#roleEditor').classList.add('hidden');
+      openRolePage();
+      toast('已删除');
+    });
+    on('#reAvaBtn', 'click', function () { var f = $('#reAvaInput'); if (f) { f.value = ''; f.click(); } });
+    on('#reAvaInput', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      pickRoleAvatar(f);
+    });
+    on('#reTemp', 'input', function () {
+      var v = (Number($('#reTemp').value) || 85) / 100;
+      $('#reTempVal').textContent = v.toFixed(2);
+    });
+    on('#reDemoAdd', 'click', function () { reDemo.push({ u: '', a: '' }); renderDemoRows(); });
+    on('#reDemoList', 'input', function (e) {
+      var row = e.target.closest('[data-i]');
+      if (!row) return;
+      var i = Number(row.getAttribute('data-i'));
+      var f = e.target.getAttribute('data-f');
+      if (reDemo[i] && f) reDemo[i][f] = e.target.value;
+    });
+    on('#reDemoList', 'click', function (e) {
+      var d = e.target.closest('[data-del-demo]');
+      if (!d) return;
+      reDemo.splice(Number(d.getAttribute('data-del-demo')), 1);
+      renderDemoRows();
+    });
+    on('#reStyleLen', 'click', function (e) {
+      var b = e.target.closest('[data-v]'); if (!b) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#reStyleLen .seg-item'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+    on('#reStylePerson', 'click', function (e) {
+      var b = e.target.closest('[data-v]'); if (!b) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#reStylePerson .seg-item'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+    // 试演
+    on('#reTrial', 'click', function (e) {
+      e.preventDefault();
+      var inp = $('#reTrialInput');
+      if (inp.classList.contains('hidden')) {
+        inp.classList.remove('hidden');
+        inp.focus();
+        toast('写一句她/他会回应的话');
+        return;
+      }
+      var text = (inp.value || '').trim();
+      if (!text) { toast('先写一句话'); return; }
+      if (!aiConfigured()) { toast('先在「我的 → AI 接口」里配好'); return; }
+      var card = reCollect();
+      var pack = CTX.build('rp:trial', { card: card, world: card.worldId ? RP.world(card.worldId) : null, hist: [], userText: text, budget: 8192 });
+      var msgs = [{ role: 'system', content: pack.system }];
+      if (card.firstMes) msgs.push({ role: 'assistant', content: card.firstMes });
+      msgs.push({ role: 'user', content: text });
+      $('#reTrialEst').textContent = '估算 ' + pack.est + ' token';
+      $('#reTrialOut').classList.remove('hidden');
+      $('#reTrialOut').textContent = '请求中…';
+      try {
+        aiAskNative(S.ai.base || '', card.model || S.ai.model || '', JSON.stringify(msgs), function (t) {
+          $('#reTrialOut').textContent = t;
+        }, null, { maxTokens: 200, temperature: Number(card.temp) || 0.85 });
+      } catch (err) {
+        $('#reTrialOut').textContent = '发不出去：' + err.message;
+      }
+    });
+    // 世界包
+    on('#btnRoleWorlds', 'click', function (e) { e.preventDefault(); openWorldPage(); });
+    on('#btnRoleExport', 'click', function (e) {
+      e.preventDefault();
+      toast('导出/导入正在做（下一版）：先能存到手机，再能整包搬走');
+    });
+    on('#worldBack', 'click', function (e) { e.preventDefault(); $('#worldPage').classList.add('hidden'); openRolePage(); });
+    on('#worldNew', 'click', function (e) { e.preventDefault(); openWorldEditor(''); });
+    on('#worldList', 'click', function (e) {
+      var b = e.target.closest('[data-wedit]');
+      if (b) openWorldEditor(b.getAttribute('data-wedit'));
+    });
+    on('#weBack', 'click', function (e) { e.preventDefault(); $('#worldEditor').classList.add('hidden'); openWorldPage(); });
+    on('#weSave', 'click', function (e) { e.preventDefault(); if (weSave()) { $('#worldEditor').classList.add('hidden'); openWorldPage(); } });
+    on('#weDel', 'click', function (e) {
+      e.preventDefault();
+      if (!weEdit || !weEdit.id) return;
+      if (!confirmTap('delworld', '删除「' + weEdit.name + '」？', function () {
+        var r = RP.delWorld(weEdit.id);
+        rpSyncCounts();
+        $('#worldEditor').classList.add('hidden');
+        openWorldPage();
+        toast(r.detached ? ('已删除，' + r.detached + ' 张卡解除了关联') : '已删除');
+      })) return;
+    });
+    on('#weLoreAdd', 'click', function () { weLore.push({ keys: [], text: '' }); renderLoreRows(); });
+    on('#weLoreList', 'input', function (e) {
+      var row = e.target.closest('[data-li]');
+      if (!row) return;
+      var i = Number(row.getAttribute('data-li'));
+      var f = e.target.getAttribute('data-f');
+      if (!weLore[i] || !f) return;
+      if (f === 'keys') weLore[i].keys = (e.target.value || '').split(/[,，、\s]+/).filter(Boolean);
+      else weLore[i][f] = e.target.value;
+    });
+    on('#weLoreList', 'click', function (e) {
+      var d = e.target.closest('[data-del-lore]');
+      if (!d) return;
+      weLore.splice(Number(d.getAttribute('data-del-lore')), 1);
+      renderLoreRows();
+    });
+    // 预算档位
+    on('#rpBudget', 'click', function (e) {
+      var b = e.target.closest('[data-b]');
+      if (!b) return;
+      var s = RP.settings();
+      RP.saveSettings({ budget: Number(b.getAttribute('data-b')) || 8192 });
+      rpSyncBudgetUi();
+      toast('预算 ' + (Number(b.getAttribute('data-b')) / 1024) + 'k');
+      try { save(); } catch (e2) {}
+    });
+    // 重建扮演会话
+    on('#btnRoleClean', 'click', function (e) {
+      e.preventDefault();
+      if (!confirmTap('roleclean', '重建所有扮演会话？', function () {
+        Object.keys(RP.rooms()).forEach(function (rid) {
+          try { localStorage.removeItem(histKey(rid)); } catch (e2) {}
+          delete S.last[rid];
+        });
+        save();
+        renderRooms();
+        openRolePage();
+        toast('已重建');
+      })) return;
+    });
+    // AI 接口页
+    on('#aiConfBack', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#aiConfSave', 'click', function (e) { e.preventDefault(); cfSave(); });
+    on('#aiConfPresets', 'click', function (e) {
+      var b = e.target.closest('[data-base]');
+      if (!b) return;
+      $('#cfBase').value = b.getAttribute('data-base') || '';
+      $('#cfModel').value = b.getAttribute('data-model') || '';
+      cfRenderModels();
+    });
+    on('#cfEffort', 'click', function (e) {
+      var b = e.target.closest('[data-eff]'); if (!b) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#cfEffort .seg-item'), function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    });
+    on('#cfFetch', 'click', function (e) {
+      e.preventDefault();
+      var base = normAiBase($('#cfBase').value);
+      if (!base) { toast('先填接口地址'); return; }
+      $('#cfOut').classList.remove('hidden');
+      $('#cfOut').textContent = '正在获取模型列表…';
+      cfFetchCb = function (ids, err) {
+        if ((!ids || !ids.length) && err) { $('#cfOut').textContent = '获取失败：' + err; return; }
+        cfModels = ids || [];
+        cfRenderModels();
+        $('#cfOut').textContent = '拿到 ' + cfModels.length + ' 个模型，点一个填进「主对话模型」。';
+      };
+      try {
+        if (window.PaperNative && window.PaperNative.aiModels) window.PaperNative.aiModels(base);
+        else $('#cfOut').textContent = '当前环境没有原生桥';
+      } catch (err2) { $('#cfOut').textContent = '发不出去：' + err2.message; }
+    });
+    on('#cfModelList', 'click', function (e) {
+      var b = e.target.closest('[data-m]');
+      if (!b) return;
+      $('#cfModel').value = b.getAttribute('data-m');
+      cfRenderModels();
+    });
+    on('#cfFilter', 'input', cfRenderModels);
+    on('#cfTest', 'click', function (e) {
+      e.preventDefault();
+      if (!aiConfigured()) { toast('先填接口、模型和 key 再测'); return; }
+      $('#cfOut').classList.remove('hidden');
+      $('#cfOut').textContent = '正在连接…';
+      try {
+        aiAskNative(S.ai.base || $('#cfBase').value, ($('#cfModel').value || S.ai.model || ''),
+          JSON.stringify([{ role: 'user', content: '你好' }]), function (t) { $('#cfOut').textContent = '通了：' + t; },
+          null, { maxTokens: 60, temperature: 0.3 });
+      } catch (err) { $('#cfOut').textContent = '发不出去：' + err.message; }
+    });
+  }
+  /* 角色头像：压成 256px 的 data URL（卡要能导出，不能用 blob 地址） */
+  function pickRoleAvatar(file) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var max = 256, w = img.width, h = img.height;
+        if (w > max || h > max) { var k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        var q = 0.82, data = cv.toDataURL('image/jpeg', q);
+        while (data.length > 90000 && q > 0.4) { q -= 0.1; data = cv.toDataURL('image/jpeg', q); }
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        reEdit = reEdit || {};
+        reEdit.avatar = data;
+        reAvaPreview(reEdit);
+        toast('头像已更换（保存后生效）');
+      } catch (e) { toast('图片处理失败'); }
+    };
+    img.onerror = function () { toast('这张图读不了'); };
+    img.src = url;
+  }
+
+  var cfFetchCb = null;
+  // WebView 不弹原生 confirm（没有 onJsConfirm），用「再点一次」两步确认
+  var rpConfirm = {};
+  function confirmTap(key, msg, cb) {
+    var t = Date.now();
+    if (rpConfirm[key] && t - rpConfirm[key] < 4000) { delete rpConfirm[key]; try { cb(); } catch (e) {} return true; }
+    rpConfirm[key] = t;
+    toast(msg + '（4 秒内再点一次确认）');
+    return false;
+  }
+
+  /* __aiModelsReply 已经在别处；这里只保证 CF 页拿到列表 */
+  function cfTakeModels(ids, err) {
+    if (typeof cfFetchCb === 'function') { var f = cfFetchCb; cfFetchCb = null; f(ids, err); }
+  }
+  function rpSyncBudgetUi() {
+    var s = { budget: 8192 };
+    try { s = RP.settings(); } catch (e) {}
+    Array.prototype.forEach.call(document.querySelectorAll('#rpBudget .seg-item'), function (b) {
+      b.classList.toggle('on', Number(b.getAttribute('data-b')) === Number(s.budget));
+    });
+  }
+
   function bind() {
     // ---------- 登录 / 注册 / 找回 ----------
 
@@ -2899,6 +3721,8 @@
           if (h) h.setAttribute('aria-expanded', on ? 'true' : 'false');
         });
       } catch (e) {}
+      try { closeRpPages(); } catch (e) {}
+      try { showTabShell(); } catch (e) {}
       $('#mePage').classList.remove('hidden');
     }
     function backToTab() {
@@ -3803,6 +4627,12 @@
       var d = S.dms[peerId];
       list.push({ key: histKey(d.roomId), id: d.roomId, name: nameOf(peerId, d.name || '私信'), emoji: '👤' });
     });
+    try {
+      RP.rooms() && Object.keys(RP.rooms()).forEach(function (rid) {
+        var c = RP.card(RP.rooms()[rid].cardId);
+        if (c) list.push({ key: histKey(rid), id: rid, name: c.name, emoji: '🎭' });
+      });
+    } catch (e) {}
     return list;
   }
   function countMsgs(key) {
@@ -5227,6 +6057,10 @@
     try { dropFakeQueue(); } catch (e) {}
     try { if (S.localAgent && S.localAgent.on) ensureLocalConv(true); } catch (e) {}
     bind();
+    try { RP.load(); } catch (e) {}
+    try { bindRole(); } catch (e) {}
+    try { rpSyncCounts(); } catch (e) {}
+    try { rpSyncBudgetUi(); } catch (e) {}
     try { applyAgentProfile(); } catch (e) {}
     try { renderAgentUserPanel(); } catch (e) {}
     try { applyChatBg(); } catch (e) {}
