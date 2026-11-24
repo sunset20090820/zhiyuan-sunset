@@ -3260,6 +3260,228 @@
     return res.card;
   }
 
+  /* ---------- 导入角色包：PNG / JSON / 文本 → AI 拆成人设 + 情感 ---------- */
+  var riDraft = null;
+
+  // PNG 里找 tEXt/iTXt 的 chara / ccv3（SillyTavern 的存法），base64 里就是角色卡 JSON
+  function riPngCard(buf) {
+    var u8 = new Uint8Array(buf);
+    if (!(u8[0] === 0x89 && u8[1] === 0x50)) return null;
+    var pos = 8, out = null;
+    function readStr(from, len) {
+      var str = '';
+      for (var i = 0; i < len; i++) str += String.fromCharCode(u8[from + i]);
+      return str;
+    }
+    function b64utf8(b64) {
+      try {
+        var bin = atob(b64), arr = [];
+        for (var i = 0; i < bin.length; i++) arr.push(bin.charCodeAt(i));
+        return decodeURIComponent(escape(String.fromCharCode.apply(null, arr)));
+      } catch (e) { return ''; }
+    }
+    while (pos + 8 <= u8.length) {
+      var len = (u8[pos] << 24) | (u8[pos + 1] << 16) | (u8[pos + 2] << 8) | u8[pos + 3];
+      len = len >>> 0;
+      var type = readStr(pos + 4, 4);
+      var dataStart = pos + 8;
+      if (len > u8.length) break;
+      if (type === 'tEXt' || type === 'iTXt') {
+        var chunk = readStr(dataStart, Math.min(len, 2000000));
+        if (chunk.indexOf('chara') === 0 || chunk.indexOf('ccv3') === 0 || chunk.indexOf('CCv3') === 0) {
+          var rest = chunk.slice(5);
+          var idx = rest.indexOf('\u0000');
+          var body = idx >= 0 ? rest.slice(idx + 1) : rest;
+          if (type === 'iTXt') {
+            var parts = body.split('\u0000');
+            if (parts.length >= 4) body = parts.slice(3).join('');
+          }
+          var txt = b64utf8(body.trim());
+          if (txt) { try { out = JSON.parse(txt); } catch (e) { out = { __raw: txt }; } }
+        }
+      }
+      pos = dataStart + len + 4;
+      if (out) break;
+    }
+    return out;
+  }
+
+  // SillyTavern card v2 / v1 / 我们的格式 → 统一草稿
+  function riNormalizeST(obj) {
+    if (!obj) return null;
+    if (obj.__raw) return { name: '导入的角色', desc: String(obj.__raw).slice(0, 6000) };
+    var d = obj.data || obj;
+    if (!d || typeof d !== 'object') return null;
+    var ex = [];
+    var rawEx = d.mes_example || d.mesExample || '';
+    if (typeof rawEx === 'string' && rawEx) {
+      rawEx.split(/<START>|\n\n\n/i).forEach(function (block) {
+        var u = '', a = '';
+        String(block).split(/\n/).forEach(function (line) {
+          var m1 = line.match(/^\{\{user\}\}\s*[:：]\s*(.*)$/i);
+          var m2 = line.match(/^\{\{char\}\}\s*[:：]\s*(.*)$/i);
+          if (m1) u = m1[1].trim();
+          else if (m2) a = m2[1].trim();
+        });
+        if (u || a) ex.push({ u: u, a: a });
+      });
+    }
+    return {
+      name: (d.name || obj.name || '').trim() || '导入的角色',
+      desc: d.description || d.personality || '',
+      personality: d.personality || '',
+      scenario: d.scenario || '',
+      firstMes: d.first_mes || d.firstMes || d.greeting || '',
+      mesExample: ex,
+      rules: [d.system_prompt || '', d.post_history_instructions || ''].filter(Boolean).join('\n'),
+      callUser: (d.nickname || d.user_name || '').trim()
+    };
+  }
+
+  function riReadFile(file, cb) {
+    var fr = new FileReader();
+    var isPng = /\.png$/i.test(file.name) || file.type === 'image/png';
+    fr.onload = function () {
+      try {
+        if (isPng) {
+          var card = riPngCard(fr.result);
+          if (card) { cb(riNormalizeST(card), 'png'); return; }
+          cb(null, 'png', '这个 PNG 里没有角色卡数据（可能只是普通图片）');
+          return;
+        }
+        var txt = String(fr.result || '');
+        try {
+          var j = JSON.parse(txt);
+          cb(riNormalizeST(j), 'json');
+        } catch (e) { cb({ name: '导入的角色', desc: txt.slice(0, 6000) }, 'txt'); }
+      } catch (e2) { cb(null, 'err', String(e2 && e2.message || e2)); }
+    };
+    if (isPng) fr.readAsArrayBuffer(file); else fr.readAsText(file);
+  }
+
+  function riShow(html, show) {
+    var el = $('#riOut');
+    if (!el) return;
+    el.classList.toggle('hidden', !show);
+    el.textContent = html;
+  }
+
+  function openRpImportPage() {
+    hideTabShell();
+    riDraft = null;
+    $('#rpImportPage').classList.remove('hidden');
+    ['#riPrev', '#riSave', '#riOut'].forEach(function (k) { var e = $(k); if (e) e.classList.add('hidden'); });
+    $('#riFileInfo').textContent = '还没选文件';
+    $('#riModel').value = '';
+    $('#riText').value = '';
+    $('#riFile').value = '';
+  }
+  function closeRpImportPage() {
+    $('#rpImportPage').classList.add('hidden');
+    openRolePage();
+  }
+
+  function riRenderPrev(d) {
+    var box = $('#riPrev');
+    if (!box) return;
+    var dl = d.dials || {};
+    var chips = [['情绪', dl.emotion], ['亲密', dl.intimacy], ['主动', dl.initiative],
+      ['动作', dl.action], ['戏剧', dl.drama], ['基调', d.mood || 'daily']]
+      .map(function (x) { return '<span class="ri-chip">' + esc(String(x[0])) + ' ' + esc(String(x[1] == null ? '-' : x[1])) + '</span>'; }).join('');
+    box.innerHTML = '<div><b>' + esc(d.name || '未命名') + '</b></div>' +
+      '<div style="margin-top:6px;color:var(--tg-sub)">' + esc(String(d.desc || '').slice(0, 240)) + '</div>' +
+      (d.callUser ? '<div style="margin-top:6px">称呼你：' + esc(d.callUser) + '</div>' : '') +
+      (d.relation ? '<div>关系：' + esc(d.relation) + '</div>' : '') +
+      (d.secret ? '<div style="margin-top:6px;color:var(--tg-sub)">秘密：' + esc(String(d.secret).slice(0, 80)) + '</div>' : '') +
+      '<div class="ri-dials">' + chips + '</div>';
+    box.classList.remove('hidden');
+    $('#riSave').classList.remove('hidden');
+  }
+
+  var RI_SYS = '你是角色卡整理助手。把用户给的角色资料整理成一个 JSON，只输出 JSON，不要解释。\n' +
+    '字段：name, desc(一句话设定/背景,150字内), personality(性格,100字内), scenario(场景,80字内), ' +
+    'firstMes(角色第一句话,80字内), callUser(怎么称呼用户,可空), relation(和用户的关系,可空), ' +
+    'tic(口癖/说话习惯,可空), likes(喜欢), dislikes(讨厌), secret(秘密/心结), look(外貌), ' +
+    'rules(扮演约束,可空), limits(不该写什么,默认不写自伤与未成年性内容), pace(回复节奏建议), ' +
+    'mood(daily|sweet|angst|mystery|comedy 选一个), ' +
+    'dials{emotion,intimacy,initiative,action,drama} 每个 0-100 整数。\n' +
+    '滑杆打分规则：emotion 看情绪外露程度（冷静克制 20-35，正常 45-60，爆发型 75-90）；' +
+    'intimacy 看亲密倾向（疏离 15-30，朋友 35-50，暧昧亲近 60-80）；' +
+    'initiative 看是否自己推剧情（被动 20-35，正常 45-60，爱搞事 75-90）；' +
+    'action 看动作与环境描写占比（纯对话 20-35，均衡 45-60，画面感强 70-85）；' +
+    'drama 看冲突强度（日常 20-35，小波折 45-60，虐/悬疑 70-90）。' +
+    '资料没提到的字段留空字符串，不要编造具体身份细节。';
+
+  function riAnalyzeText(text, cb) {
+    var base = S.ai && S.ai.base;
+    var model = ($('#riModel').value || '').trim() || (S.ai && S.ai.model);
+    if (!aiConfigured()) { cb(null, '先在「扮演 → 模型接口」里填好接口和 key'); return; }
+    if (!text) { cb(null, '还没有内容可拆'); return; }
+    var msgs = JSON.stringify([
+      { role: 'system', content: RI_SYS },
+      { role: 'user', content: String(text).slice(0, 12000) }
+    ]);
+    riShow('正在让模型拆解…', true);
+    aiAskNative(base, model, msgs, function (t) {
+      var json = riExtractJson(t);
+      if (!json) { riShow('模型没有返回可用的 JSON：\n' + String(t).slice(0, 400), true); cb(null, '解析失败'); return; }
+      cb(json);
+    }, null, { maxTokens: 1200, temperature: 0.3 });
+  }
+
+  // 模型爱裹 ```json，这里只挑出第一个完整的对象
+  function riExtractJson(t) {
+    var str = String(t || '');
+    var a = str.indexOf('{'), b = str.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    var sub = str.slice(a, b + 1);
+    try { return JSON.parse(sub); } catch (e) {}
+    try { return JSON.parse(sub.replace(/,\s*([}\]])/g, '$1')); } catch (e2) {}
+    return null;
+  }
+
+  /* ---------- 情感自检：同一句话，当前浓度 vs 全中位，两条并排 ---------- */
+  function toneSelfCheck() {
+    var card = reCollect();
+    var out = $('#reToneDiff');
+    if (!out) return;
+    if (!aiConfigured()) { toast('先在「模型接口」里配好接口和 key'); return; }
+    out.classList.remove('hidden');
+    var probe = '（对方刚推门进来，身上还带着雨）…';
+    function run(dials, label) {
+      return new Promise(function (resolve) {
+        var c = JSON.parse(JSON.stringify(card));
+        if (dials) c.dials = dials;
+        var pack = CTX.systemFor(c, null, { cur: 1, vols: [] }, { budget: rpBudget() });
+        var msgs = JSON.stringify([{ role: 'user', content: probe }]);
+        // 把 system 拼成一条 system 消息
+        var full = JSON.stringify([{ role: 'system', content: pack.system }, { role: 'user', content: probe }]);
+        var base = S.ai && S.ai.base, model = (card.model || (S.ai && S.ai.model));
+        out.textContent = out.textContent + '\n正在问「' + label + '」…';
+        aiAskNative(base, model, full, function (t) {
+          var txt = String(t || '').trim();
+          try { var j = JSON.parse(t); if (j && j.text) txt = j.text; } catch (e) {}
+          resolve(label + '：\n' + txt.slice(0, 220));
+        }, null, { maxTokens: 160, temperature: 0.7 });
+      });
+    }
+    out.textContent = '自检开始（会发两次请求）…';
+    var mid = { emotion: 50, intimacy: 50, initiative: 50, action: 50, drama: 50 };
+    run(null, '按当前设置').then(function (a) {
+      return run(mid, '全部中位（对照组）').then(function (b) {
+        var ta = String(a).replace(/^[^：]*：/, '').trim();
+        var tb = String(b).replace(/^[^：]*：/, '').trim();
+        var verdict;
+        if (/连不上模型|还没填|失败/.test(ta + tb)) verdict = '—— 没测成：先把「模型接口」里的地址和 key 弄通再试。';
+        else if (ta === tb) verdict = '—— 两条一模一样：可能是模型没吃到浓度（先点上面「看」确认提示词里有没有情绪/张力那段），也可能是跨度太小；把情绪和戏剧性拉到 90 再试一次。';
+        else verdict = '—— 两条不一样，说明浓度确实影响了输出。';
+        out.textContent = a + '\n\n' + b + '\n\n' + verdict;
+      });
+    }).catch(function (err) {
+      out.textContent = '自检失败：' + (err && err.message || err);
+    });
+  }
+
   /* ---------- 页面：世界包 ---------- */
   function openWorldPage() {
     hideTabShell();
@@ -3631,6 +3853,76 @@
 
   function bindRole() {
     on('#btnRoleModel', 'click', function (e) { e.preventDefault(); openAiConfPage(); });
+    on('#btnRoleImport', 'click', function (e) { e.preventDefault(); openRpImportPage(); });
+    on('#reFromFile', 'click', function (e) { e.preventDefault(); openRpImportPage(); });
+    on('#riBack', 'click', function (e) { e.preventDefault(); closeRpImportPage(); });
+    on('#riHelp', 'click', function (e) {
+      e.preventDefault();
+      toast('酒馆的 PNG 卡直接选；普通 JSON 也行；纯文字就粘进来，会用你的模型拆');
+    });
+    on('#riFile', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      $('#riFileInfo').textContent = '读到：' + f.name + '（' + Math.round(f.size / 1024) + ' KB）';
+      riReadFile(f, function (draft, kind, err) {
+        if (err) { $('#riFileInfo').textContent = '读不了：' + err; return; }
+        if (!draft) return;
+        riDraft = draft;
+        // 把文件里的描述灌进文本框，AI 拆解时能一起参考
+        var bag = [draft.desc, draft.personality, draft.scenario, draft.firstMes ? '开场：' + draft.firstMes : '']
+          .filter(Boolean).join('\n\n');
+        if (!($('#riText').value || '').trim()) $('#riText').value = bag.slice(0, 8000);
+        riRenderPrev(draft);
+        riShow('已从' + (kind === 'png' ? ' PNG 角色卡' : kind === 'json' ? ' JSON' : '文本') + '读出草稿，可以点「读取并 AI 拆解」补全情感浓度', true);
+      });
+    });
+    on('#riLocalOnly', 'click', function (e) {
+      e.preventDefault();
+      if (!riDraft) { toast('先选一个文件'); return; }
+      riRenderPrev(riDraft);
+      riShow('只用了文件里的内容，没调用模型。点「存成角色卡」就能去编辑器里微调。', true);
+    });
+    on('#riAnalyze', 'click', function (e) {
+      e.preventDefault();
+      var text = ($('#riText').value || '').trim();
+      if (riDraft) {
+        var extra = ['名字：' + (riDraft.name || ''), riDraft.desc, riDraft.personality, riDraft.scenario,
+          riDraft.firstMes ? '开场：' + riDraft.firstMes : '', riDraft.rules ? '规则：' + riDraft.rules : '']
+          .filter(Boolean).join('\n');
+        text = (extra + '\n\n' + text).trim();
+      }
+      riAnalyzeText(text, function (d, err) {
+        if (err) { riShow('拆解失败：' + err, true); return; }
+        var merged = Object.assign({}, riDraft || {}, d);
+        merged.dials = (d && d.dials) || (riDraft && riDraft.dials) || {};
+        riDraft = merged;
+        riRenderPrev(merged);
+        riShow('拆好了：情感浓度也按文本线索给了分，存下去之后还能在编辑器里改。', true);
+      });
+    });
+    on('#riSave', 'click', function (e) {
+      e.preventDefault();
+      if (!riDraft) { toast('还没有可存的草稿'); return; }
+      var d = JSON.parse(JSON.stringify(riDraft));
+      d.id = '';
+      var res = RP.saveCard(d);
+      if (!res || !res.ok) { toast((res && res.err) || '保存失败'); return; }
+      $('#rpImportPage').classList.add('hidden');
+      openRoleEditor(res.card.id);
+      toast('已存成角色卡，接着微调吧');
+    });
+    on('#reTonePeek', 'click', function (e) {
+      e.preventDefault();
+      var card = reCollect();
+      var out = $('#reToneOut');
+      out.classList.remove('hidden');
+      var pack = CTX.systemFor(card, null, { cur: 1, vols: [] }, { budget: rpBudget() });
+      out.textContent = (pack.parts && pack.parts.tone) || '（没生成，检查模型接口是否可用）';
+    });
+    on('#reToneCheck', 'click', function (e) {
+      e.preventDefault();
+      toneSelfCheck();
+    });
     on('#btnTone', 'click', function (e) { e.preventDefault(); openToneSheet(); });
     on('#toneDone', 'click', function (e) { e.preventDefault(); closeToneSheet(); });
     on('#toneSheet', 'click', function (e) {

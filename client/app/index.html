@@ -599,6 +599,7 @@
           </div>
         </div>
         <p class="hint">预算越大记得越多，也越费 token。8k 够日常；128k / 1M 要模型本身支持长上下文（如 Gemini、Qwen-Long、Claude）。默认 8k。</p>
+        <button id="btnRoleImport" class="me-row" type="button"><span class="me-ico">📥</span>导入角色包（文件 / 文字）<span class="me-arrow">›</span></button>
         <button id="btnRoleModel" class="me-row" type="button"><span class="me-ico">🔗</span>模型接口（key / 模型）<span class="me-arrow">›</span></button>
         <button id="btnRoleWorlds" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow" id="worldCount">0</span></button>
         <button id="btnRoleExport" class="me-row" type="button"><span class="me-ico">📦</span>导出 / 导入<span class="me-arrow">›</span></button>
@@ -636,6 +637,7 @@
       <div class="bg-dim-row"><span class="hint">温度</span><input id="reTemp" type="range" min="0" max="200" value="85"><span class="hint" id="reTempVal">0.85</span></div>
       <p class="hint">模型用「模型接口」里配置的主对话模型；要单独指定就在这个角色里填。</p>
       <label class="field"><span>这个角色专用的模型（可留空）</span><input id="reModel" maxlength="80" placeholder="留空 = 用主对话模型" spellcheck="false" autocomplete="off"></label>
+      <button id="reFromFile" class="ai-fetch" type="button">从文件 / 文字导入并自动填</button>
     </div>
 
     <div class="role-pane hidden" id="rePanePersona">
@@ -702,6 +704,15 @@
         </div>
       </div>
       <label class="field"><span>按什么节奏回</span><input id="rePace" maxlength="120" placeholder="例如：一句一句地回，不用急着推进" autocomplete="off"></label>
+      <div class="bg-dim-row"><span class="hint">写到提示词里的样子</span>
+        <button id="reTonePeek" class="ai-fetch" type="button">看</button>
+      </div>
+      <pre id="reToneOut" class="ai-test-out hidden"></pre>
+      <div class="bg-dim-row"><span class="hint">生效自检</span>
+        <button id="reToneCheck" class="ai-fetch" type="button">对比试两句</button>
+      </div>
+      <p class="hint">用同一句话，分别按「当前浓度」和「全中位」各问一次，两条回复并排给你看差别——这才是真在生效。</p>
+      <pre id="reToneDiff" class="ai-test-out hidden"></pre>
     </div>
 
     <div class="role-pane hidden" id="rePaneScene">
@@ -729,6 +740,31 @@
     <pre id="reTrialOut" class="ai-test-out hidden"></pre>
     <button id="reStart" class="primary" type="button">开始扮演</button>
     <button id="reDel" class="flat danger-text hidden" type="button">删除这个角色</button>
+  </div>
+</div>
+
+<!-- ===== 导入角色包（PNG / JSON / 文本 → AI 拆解） ===== -->
+<div id="rpImportPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="riBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">导入角色包</div>
+    <button id="riHelp" class="icon-btn" type="button" aria-label="说明">?</button>
+  </header>
+  <div class="me-body">
+    <p class="hint">支持三种来源：SillyTavern / 酒馆的角色卡 PNG、角色卡 JSON、或者你直接粘的一大段文字。读出来之后用你自己的模型拆成人设和情感浓度，再让你确认保存。</p>
+    <label class="field"><span>选一个文件（.png / .json / .txt）</span>
+      <input id="riFile" type="file" accept=".png,.json,.txt,.md,image/png,application/json,text/plain" class="ri-file">
+    </label>
+    <p class="hint" id="riFileInfo">还没选文件</p>
+    <label class="field"><span>或者把文字粘在这里</span>
+      <textarea id="riText" rows="6" maxlength="20000" placeholder="把角色介绍、设定、对话样例整段粘进来，越具体拆得越准"></textarea>
+    </label>
+    <div class="bg-dim-row"><span class="hint">模型</span><input id="riModel" maxlength="80" placeholder="留空 = 主对话模型" autocomplete="off"></div>
+    <button id="riAnalyze" class="ai-fetch primary" type="button">读取并 AI 拆解</button>
+    <button id="riLocalOnly" class="ai-fetch" type="button">只读文件不调用模型</button>
+    <pre id="riOut" class="ai-test-out hidden"></pre>
+    <div id="riPrev" class="ri-prev hidden"></div>
+    <button id="riSave" class="primary hidden" type="button">存成角色卡并打开编辑器</button>
   </div>
 </div>
 
