@@ -539,6 +539,11 @@
             <button id="btnSkin" class="me-row" type="button"><span class="me-ico">📱</span>安卓 16 风格<span class="me-arrow" id="skinState">开</span></button>
             <button id="btnTopbarText" class="me-row" type="button"><span class="me-ico">🔤</span>顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
             <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>液态玻璃<span class="me-arrow" id="glassState">开</span></button>
+            <div class="glass-preview" id="glassPreview">
+              <div class="gp-back"></div>
+              <div class="gp-card"><span>卡片</span></div>
+              <div class="gp-thin"><span>控件</span></div>
+            </div>
             <div class="bg-dim-row"><span class="hint">玻璃强度</span>
               <input id="glassLevel" type="range" min="0" max="100" value="55"></div>
             <div class="bg-dim-row"><span class="hint">模糊倍率</span>
@@ -888,6 +893,7 @@
   <header class="topbar">
     <button id="expBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand">导出 / 导入</div>
+    <span class="topbar-spacer"></span>
   </header>
   <div class="me-body">
     <div class="me-sec open" data-sec="export">
@@ -900,6 +906,7 @@
           <input id="expAuto" type="checkbox" class="agent-switch" checked>
         </div>
         <p class="hint">不含原文时只存设定与摘要，文件很小；含原文能完整还原每一句话。</p>
+        <div id="expSummary" class="exp-summary"></div>
         <button id="expBackup" class="me-row" type="button"><span class="me-ico">📦</span>全量备份<span class="me-arrow">›</span></button>
         <button id="expStory" class="me-row" type="button"><span class="me-ico">🎬</span>剧情存档（当前会话）<span class="me-arrow">›</span></button>
         <button id="expCard" class="me-row" type="button"><span class="me-ico">🎭</span>角色卡<span class="me-arrow">›</span></button>

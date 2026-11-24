@@ -3569,9 +3569,15 @@
       var rid = 'rp:' + c.id;
       var n = 0;
       try { n = (loadHist(rid) || []).filter(function (m) { return m && !m.sys; }).length; } catch (e) {}
-      var ava = c.avatar
+      var avaInner = c.avatar
         ? '<div class="role-ava has-img"><img src="' + esc(c.avatar) + '" alt=""></div>'
         : '<div class="role-ava" style="background:' + colorOf(c.id) + '">' + esc(String(c.name || '?').slice(0, 1)) + '</div>';
+      var unreadN = Number(S.unread && S.unread[rid]) || 0;
+      var started = !!rooms[rid];
+      var dot = unreadN
+        ? '<i class="role-dot unread">' + (unreadN > 9 ? '9+' : unreadN) + '</i>'
+        : (started ? '<i class="role-dot live"></i>' : '');
+      var ava = '<div class="role-ava-wrap">' + avaInner + dot + '</div>';
       return '<div class="role-card" data-card="' + esc(c.id) + '">' + ava +
         '<div class="role-meta"><div class="role-name">' + esc(c.name) + (c.builtin ? '<span class="role-tag">示例</span>' : '') + '</div>' +
         '<div class="role-sub">' + esc(c.desc || '') + '</div>' +
@@ -4126,6 +4132,33 @@
       };
     } catch (e) {}
   }
+  // 导出页实时摘要：选中粒度/是否含原文时，先把大小和条数算出来
+  function paintExpSummary() {
+    var el = $('#expSummary');
+    if (!el || !window.EX) return;
+    var withRaw = !!($('#expRaw') && $('#expRaw').checked);
+    var cards = 0, worlds = 0, rooms = 0, msgs = 0;
+    try { cards = RP.rawCards().length; worlds = RP.rawWorlds().length; } catch (e) {}
+    try { var rs = RP.rooms(); rooms = Object.keys(rs).length; } catch (e) {}
+    var size = 0;
+    try {
+      var bk = EX.backup({ withRaw: withRaw, takeHist: function (rid) { try { return loadHist(rid) || []; } catch (e) { return []; } } });
+      size = (EX.text(bk) || '').length;
+      if (withRaw) {
+        try {
+          var rs2 = RP.rooms();
+          Object.keys(rs2).forEach(function (rid) { msgs += (loadHist(rid) || []).length; });
+        } catch (e) {}
+      }
+    } catch (e) {}
+    var kb = size / 1024;
+    el.innerHTML = '<div class="exp-sum-row"><span>全量备份预计</span><b>' +
+      (kb >= 1024 ? (kb / 1024).toFixed(2) + ' MB' : kb.toFixed(1) + ' KB') + '</b></div>' +
+      '<div class="exp-sum-row"><span>包含</span><b>' + cards + ' 卡 · ' + worlds + ' 世界 · ' + rooms + ' 段剧情' +
+      (withRaw ? ' · ' + msgs + ' 条原文' : '') + '</b></div>' +
+      (size > 8 * 1024 * 1024 ? '<div class="exp-sum-warn">超过 8MB 导不出去，取消「连原文」再试</div>' : '');
+  }
+
   function openExportPage() {
     hideTabShell();
     exHookUp();
@@ -4134,6 +4167,8 @@
     });
     $('#exportPage').classList.remove('hidden');
     $('#expPick').innerHTML = '';
+    try { if ($('#expRaw')) $('#expRaw').checked = false; } catch (e) {}
+    try { paintExpSummary(); } catch (e) {}
     $('#expDiag').textContent = '上次备份：' + (function () {
       try {
         var k = localStorage.getItem('pl.global.exportLast') || '';
@@ -4265,6 +4300,7 @@
       RP.saveSettings({ autoBackup: on });
       toast(on ? '已开启每天自动备份（存在手机本机）' : '已关闭自动备份');
     });
+    on('#expRaw', 'change', function () { try { paintExpSummary(); } catch (e) {} });
     on('#expBackup', 'click', function (e) { e.preventDefault(); exDoBackup(); });
     on('#expStory', 'click', function (e) { e.preventDefault(); exDoStory(); });
     on('#expCard', 'click', function (e) { e.preventDefault(); exPickCard(); });
@@ -4411,6 +4447,12 @@
       if (!el) return;
       el.addEventListener('input', function () {
         var lb = $('#toneVal' + k); if (lb) lb.textContent = String(el.value);
+        var box = el.closest('.rp-dial');
+        if (box) {
+          box.classList.remove('edge');
+          var v = Number(el.value);
+          if (v <= 2 || v >= 98) { void box.offsetWidth; box.classList.add('edge'); }
+        }
         applyToneSheet();
       });
     });
@@ -4506,6 +4548,12 @@
       if (!el) return;
       el.addEventListener('input', function () {
         var lb = $('#reVal' + k); if (lb) lb.textContent = String(el.value);
+        var box = el.closest('.rp-dial');
+        if (box) {
+          box.classList.remove('edge');
+          var v = Number(el.value);
+          if (v <= 2 || v >= 98) { void box.offsetWidth; box.classList.add('edge'); }
+        }
       });
     });
     on('#reMood', 'click', function (e) {
@@ -5511,24 +5559,44 @@
       if (el) el.textContent = names[S.topbarText];
       toast('顶栏文字：' + names[S.topbarText]);
     });
+    function paintGlassPreview() {
+      var box = $('#glassPreview');
+      if (!box) return;
+      var lv = (typeof S.glassLevel === 'number' ? S.glassLevel : 55) / 100;
+      var mul = (typeof S.glassMul === 'number' ? S.glassMul : 100) / 100;
+      var cardK = (typeof S.glassCard === 'number' ? S.glassCard : 100) / 100;
+      var thinK = (typeof S.glassThin === 'number' ? S.glassThin : 100) / 100;
+      box.style.setProperty('--gp-blur', (10 * mul).toFixed(1) + 'px');
+      box.style.setProperty('--gp-card-a', (0.10 + 0.34 * lv * cardK).toFixed(3));
+      box.style.setProperty('--gp-thin-a', (0.06 + 0.26 * lv * thinK).toFixed(3));
+      box.style.setProperty('--gp-ring', (0.18 + 0.5 * lv).toFixed(2));
+    }
+    ['#glassLevel', '#glassMul', '#glassCard', '#glassThin'].forEach(function (sel) {
+      var el = $(sel);
+      if (el) el.addEventListener('input', paintGlassPreview);
+    });
     on('#glassMul', 'input', function (e) {
       S.glassMul = Math.max(40, Math.min(180, Number(e.target.value) || 100));
       applyChatBg();
+      paintGlassPreview();
     });
     on('#glassMul', 'change', function () { save(); });
     on('#glassCard', 'input', function (e) {
       S.glassCard = Math.max(0, Math.min(140, Number(e.target.value)));
       applyChatBg();
+      paintGlassPreview();
     });
     on('#glassCard', 'change', function () { save(); });
     on('#glassThin', 'input', function (e) {
       S.glassThin = Math.max(0, Math.min(140, Number(e.target.value)));
       applyChatBg();
+      paintGlassPreview();
     });
     on('#glassThin', 'change', function () { save(); });
     on('#glassLevel', 'input', function (e) {
       S.glassLevel = Math.max(0, Math.min(100, Number(e.target.value) || 0));
       applyChatBg();
+      paintGlassPreview();
     });
     on('#glassLevel', 'change', function () { save(); });
     on('#btnGlass', 'click', function () {

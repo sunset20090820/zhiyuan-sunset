@@ -2134,3 +2134,12 @@ html[data-fs] .field textarea,
 html[data-fs] .field-select { font-size: calc(15px * var(--fs, 1)) !important; }
 html[data-fs] .seg-item { font-size: calc(13px * var(--fs, 1)) !important; }
 html[data-fs] .ai-fetch, html[data-fs] .primary, html[data-fs] .flat { font-size: calc(14px * var(--fs, 1)) !important; }
+
+/* 深色模式下这几块新组件别糊 */
+html[data-skin][data-theme="dark"] .empty-state { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
+html[data-skin][data-theme="dark"] .fb-item { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.10); }
+html[data-skin][data-theme="dark"] .fb-chip.ok { color: #6ee7d5; background: rgba(45,182,160,.18); }
+html[data-skin][data-theme="dark"] .exp-summary { background: rgba(94,181,247,.10); border-color: rgba(255,255,255,.10); }
+html[data-skin][data-theme="dark"] .glass-preview { background: linear-gradient(135deg, #2a2540 0%, #3a2740 50%, #1f3a38 100%); }
+html[data-skin][data-theme="dark"] .role-dot { border-color: #17151d; }
+html[data-skin][data-theme="dark"] .empty-btn { background: var(--m3e-primary, #7b8cff); }
