@@ -592,11 +592,12 @@
         <div class="bg-dim-row" style="flex-wrap:wrap"><span class="hint">上下文预算</span>
           <div class="seg rp-budget" id="rpBudget">
             <button class="seg-item" type="button" data-b="8192">8k</button>
-            <button class="seg-item" type="button" data-b="12288">12k</button>
             <button class="seg-item" type="button" data-b="32768">32k</button>
+            <button class="seg-item" type="button" data-b="131072">128k</button>
+            <button class="seg-item" type="button" data-b="1048576">1M</button>
           </div>
         </div>
-        <p class="hint">预算越大记得越多，也越费 token。默认 8k，长线扮演再往上调。</p>
+        <p class="hint">预算越大记得越多，也越费 token。8k 够日常；128k / 1M 要模型本身支持长上下文（如 Gemini、Qwen-Long、Claude）。默认 8k。</p>
         <button id="btnRoleModel" class="me-row" type="button"><span class="me-ico">🔗</span>模型接口（key / 模型）<span class="me-arrow">›</span></button>
         <button id="btnRoleWorlds" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow" id="worldCount">0</span></button>
         <button id="btnRoleExport" class="me-row" type="button"><span class="me-ico">📦</span>导出 / 导入<span class="me-arrow">›</span></button>
@@ -737,7 +738,9 @@
       <input id="cfKey" type="password" maxlength="200" placeholder="sk-…" spellcheck="false" autocomplete="off"></label>
     <label class="field"><span>主对话模型</span>
       <input id="cfModel" maxlength="120" placeholder="deepseek-chat" spellcheck="false" autocomplete="off"></label>
+    <p class="hint" id="cfKeyInfo">还没保存 key</p>
     <div class="ai-test-row">
+      <button id="cfSave" class="ai-fetch primary" type="button">保存</button>
       <button id="cfFetch" class="ai-fetch" type="button">刷新模型列表</button>
       <button id="cfTest" class="ai-fetch" type="button">测试连接</button>
     </div>

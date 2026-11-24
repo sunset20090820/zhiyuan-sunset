@@ -2986,3 +2986,5 @@ html[data-wall="dark"] .chat-name {
   background: var(--card-2); border: 1px solid var(--line); padding: 14px 14px;
   color: var(--text); font-size: 13.5px; margin: 6px 0 4px; }
 html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom)); }
+.ai-fetch.primary { background: var(--tg-blue); color: #fff; font-weight: 600; }
+.seg.rp-budget { flex-wrap: wrap; }

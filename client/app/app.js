@@ -1440,8 +1440,15 @@
     a.model = (($('#aiModel') && $('#aiModel').value) || a.model || 'deepseek-chat').trim().slice(0, 60);
     a.name = (($('#aiName') && $('#aiName').value) || 'AI 助手').trim().slice(0, 16) || 'AI 助手';
     var kEl = $('#aiKey');
-    var kv = kEl ? kEl.value.trim() : '';
-    if (kv && kv.indexOf('••') !== 0) aiKeyStore('', kv);     // 只有真改过才覆盖
+    var kv = kEl ? kEl.value : '';
+    if (kv && kv.trim()) {
+      var kc = aiKeyClean(kv);
+      if (kc.bad === 'mask') { toast('别把打码的 •••• 当 key 存'); return; }
+      aiKeyStore('', kc.key);
+      if (kc.bad === 'short') toast('key 有点短，确认没粘全');
+      a.keyTail = '…' + kc.key.slice(-4);
+      if (kEl) kEl.value = '••••••••';
+    }
     save();
     ensureAiConv(!!a.on);
     refreshAiStat();
@@ -3253,6 +3260,7 @@
     $('#cfSumModel').value = a.sumModel || '';
     $('#cfKey').value = '';
     $('#cfKey').placeholder = aiKeyStore() ? '已保存的 key：••••••••（要换就重填）' : 'sk-…';
+    cfPaintKeyInfo();
     cfModels = aiModelList();
     cfRenderModels();
     Array.prototype.forEach.call(document.querySelectorAll('#cfEffort .seg-item'), function (b) {
@@ -3274,21 +3282,54 @@
       return '<button class="ai-model-item' + (on ? ' on' : '') + '" type="button" data-m="' + esc(m) + '">' + esc(m) + '</button>';
     }).join('');
   }
-  function cfSave() {
+  // 粘贴进来的 key 常常带引号 / 换行 / "Bearer " 前缀，统一洗干净；
+  // 注意：如果拿到的是打过码的••••，绝不能当 key 存（会直接 401）
+  function aiKeyClean(v) {
+    var k = String(v == null ? '' : v);
+    k = k.replace(/[\u200b-\u200d\ufeff]/g, '');
+    k = k.replace(/^\s+|\s+$/g, '');
+    k = k.replace(/^["'“”]|["'“”]$/g, '');          // 复制时常带引号
+    k = k.replace(/^Authorization\s*:\s*/i, '');   // 整段 Authorization 头
+    k = k.replace(/^Bearer\s+/i, '');               // Bearer 前缀（要在压空格之前）
+    k = k.replace(/^["'“”]|["'“”]$/g, '');
+    k = k.replace(/\s+/g, '');                      // 中间残留的换行/空格一并去掉
+    if (/[\u2022\u25cf\u00b7]/.test(k)) return { bad: 'mask' };
+    if (!k) return { bad: 'empty' };
+    if (k.length < 12) return { bad: 'short' };
+    return { key: k };
+  }
+  function aiKeyTail() { return (S.ai && S.ai.keyTail) || ''; }
+  function cfPaintKeyInfo() {
+    var el = $('#cfKeyInfo');
+    if (!el) return;
+    var k = aiKeyStore();
+    el.textContent = k ? ('当前生效的 key：' + aiKeyTail() + '（共 ' + k.length + ' 位）') : '还没保存 key';
+  }
+  function cfSave(silent) {
     S.ai = S.ai || {};
     S.ai.base = normAiBase($('#cfBase').value);
     S.ai.model = ($('#cfModel').value || '').trim();
     S.ai.sumModel = ($('#cfSumModel').value || '').trim();
     var eff = document.querySelector('#cfEffort .seg-item.on');
     S.ai.effort = (eff && eff.getAttribute('data-eff')) || 'low';
-    var key = ($('#cfKey').value || '').trim();
-    if (key) { try { aiKeyStore('ai_key', key); } catch (e) {} $('#cfKey').value = ''; $('#cfKey').placeholder = '已保存的 key：••••••••'; }
+    var raw = ($('#cfKey').value || '');
+    if (raw.trim()) {
+      var cl = aiKeyClean(raw);
+      if (cl.bad === 'mask') { toast('别把打码的 •••• 当 key 存，请重新粘贴完整 key'); return false; }
+      try { aiKeyStore('ai_key', cl.key); } catch (e) {}
+      if (cl.bad === 'short') toast('这个 key 有点短（' + cl.key.length + ' 位），确认没粘全');
+      S.ai.keyTail = '…' + cl.key.slice(-4);
+      $('#cfKey').value = '';
+      $('#cfKey').placeholder = '已保存的 key：••••••••（要换就重填）';
+    }
     save();
     try { refreshAiStat(); } catch (e) {}
     try { syncAiModelUi(); } catch (e) {}
     rpSyncCounts();
     try { rpModelTip(); } catch (e) {}
-    toast('模型接口已保存');
+    try { cfPaintKeyInfo(); } catch (e) {}
+    if (!silent) toast('已保存 · ' + (S.ai.base || '没填地址') + ' · ' + (S.ai.model || '没选模型'));
+    return true;
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -3665,9 +3706,16 @@
       var b = e.target.closest('[data-b]');
       if (!b) return;
       var s = RP.settings();
-      RP.saveSettings({ budget: Number(b.getAttribute('data-b')) || 8192 });
+      var want = Number(b.getAttribute('data-b')) || 8192;
+      RP.saveSettings({ budget: want });
       rpSyncBudgetUi();
-      toast('预算 ' + (Number(b.getAttribute('data-b')) / 1024) + 'k');
+      var warn = '';
+      if (want > 131072) {
+        var bb = String((S.ai && S.ai.base) || '');
+        if (/deepseek/i.test(bb)) warn = '（DeepSeek 只有 128k，这一档得换长上下文模型）';
+        else if (/moonshot|bigmodel/i.test(bb)) warn = '（这家通常也到不了 1M，按模型实际上限来）';
+      }
+      toast('预算 ' + (want >= 1048576 ? '1M' : (want / 1024) + 'k') + warn);
       try { save(); } catch (e2) {}
     });
     // 重建扮演会话
@@ -3685,7 +3733,6 @@
       })) return;
     });
     // AI 接口页
-    on('#aiConfBack', 'click', function (e) { e.preventDefault(); openRolePage(); });
     on('#aiConfSave', 'click', function (e) { e.preventDefault(); cfSave(); });
     on('#aiConfPresets', 'click', function (e) {
       var b = e.target.closest('[data-base]');
@@ -3723,11 +3770,19 @@
       cfRenderModels();
     });
     on('#cfFilter', 'input', cfRenderModels);
+    on('#cfSave', 'click', function (e) { e.preventDefault(); cfSave(); });
+    on('#aiConfBack', 'click', function (e) {
+      e.preventDefault();
+      var ok = cfSave(true);
+      if (ok === false) return;            // key 有问题就停在这页，别悄悄走
+      openRolePage();
+    });
     on('#cfTest', 'click', function (e) {
       e.preventDefault();
+      if (cfSave(true) === false) return;  // 先把刚填的东西存下来再测，免得测的是旧 key
       if (!aiConfigured()) { toast('先填接口、模型和 key 再测'); return; }
       $('#cfOut').classList.remove('hidden');
-      $('#cfOut').textContent = '正在连接…';
+      $('#cfOut').textContent = '正在连接 ' + (S.ai.base || '') + ' · 模型 ' + (S.ai.model || '') + ' · key ' + aiKeyTail() + '…';
       try {
         aiAskNative(S.ai.base || $('#cfBase').value, ($('#cfModel').value || S.ai.model || ''),
           JSON.stringify([{ role: 'user', content: '你好' }]), function (t) { $('#cfOut').textContent = '通了：' + t; },
@@ -3777,9 +3832,22 @@
   function rpSyncBudgetUi() {
     var s = { budget: 8192 };
     try { s = RP.settings(); } catch (e) {}
-    Array.prototype.forEach.call(document.querySelectorAll('#rpBudget .seg-item'), function (b) {
-      b.classList.toggle('on', Number(b.getAttribute('data-b')) === Number(s.budget));
-    });
+    var cur = Number(s.budget) || 8192;
+    var items = Array.prototype.slice.call(document.querySelectorAll('#rpBudget .seg-item'));
+    var exact = false;
+    items.forEach(function (b) { if (Number(b.getAttribute('data-b')) === cur) exact = true; });
+    // 老存档可能是 12k（已下线）：不选中任何档，按最接近的兜底显示
+    if (!exact) {
+      var best = null;
+      items.forEach(function (b) {
+        var v = Number(b.getAttribute('data-b'));
+        if (v <= cur) best = b;
+      });
+      best = best || items[0];
+      if (best) best.classList.add('on');
+      return;
+    }
+    items.forEach(function (b) { b.classList.toggle('on', Number(b.getAttribute('data-b')) === cur); });
   }
 
   function bind() {

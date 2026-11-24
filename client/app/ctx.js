@@ -8,7 +8,7 @@
   'use strict';
 
   var CTX = {};
-  CTX.TIERS = [8192, 12288, 32768];
+  CTX.TIERS = [8192, 32768, 131072, 1048576];
 
   /* ---------- token 估算：中文按 0.65/字，其余按 1/4 ---------- */
   var CJK = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]/;
@@ -25,15 +25,18 @@
   CTX.budgets = function (tier) {
     var b = Number(tier) || 8192;
     var k = b / 8192;
+    // system 部分只按 8k→48k 缩放（k 上限 6）：1M 档不把设定区铺成几十万 token，
+    // 多出来的预算全给近端原文，这才是长上下文真正该干的事
+    var ks = Math.min(k, 6);
     return {
       total: b,
-      card: Math.round(800 * k),        // 角色卡 + 规则
-      world: Math.round(300 * Math.min(k, 1.6)),
-      state: Math.round(300 * k),
-      vols: Math.round(600 * k),
-      lore: Math.round(300 * k),        // 世界书命中
-      facts: Math.round(220 * k),
-      reserve: Math.round(800 * k)      // 回复预留
+      card: Math.round(800 * ks),       // 角色卡 + 规则
+      world: Math.round(300 * Math.min(ks, 1.6)),
+      state: Math.round(300 * ks),
+      vols: Math.round(600 * ks),
+      lore: Math.round(300 * ks),       // 世界书命中
+      facts: Math.round(220 * ks),
+      reserve: Math.round(800 * ks)     // 回复预留
     };
   };
 

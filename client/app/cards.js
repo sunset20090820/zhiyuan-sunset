@@ -262,7 +262,7 @@
     var raw = readList('set.v1');
     var it = (raw.items && raw.items[0]) || {};
     return {
-      budget: num(it.budget, 8192, 4096, 32768),
+      budget: num(it.budget, 8192, 2048, 1048576),
       autoBackup: it.autoBackup !== false,
       backupKeep: num(it.backupKeep, 3, 1, 9),
       withRawDefault: it.withRawDefault === true,
@@ -272,7 +272,7 @@
   RP.saveSettings = function (obj) {
     var cur = RP.settings();
     var next = {
-      budget: num(obj.budget, cur.budget, 4096, 32768),
+      budget: num(obj.budget, cur.budget, 2048, 1048576),
       autoBackup: obj.autoBackup === undefined ? cur.autoBackup : !!obj.autoBackup,
       backupKeep: num(obj.backupKeep, cur.backupKeep, 1, 9),
       withRawDefault: obj.withRawDefault === undefined ? cur.withRawDefault : !!obj.withRawDefault,
