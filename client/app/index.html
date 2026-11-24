@@ -525,7 +525,7 @@
               <input id="bgDim" type="range" min="0" max="90" value="18">
               <label class="mini-check"><input id="bgDimBoth" type="checkbox" checked>两页同步</label></div>
             <div class="bg-dim-row"><span class="hint">模糊</span>
-              <input id="bgBlur" type="range" min="0" max="40" value="0"></div>
+              <input id="bgBlur" type="range" min="0" max="80" value="0"></div>
             <button id="bgPick" class="flat" type="button">从相册选一张…</button>
             <input id="bgInput" type="file" accept="image/*" class="hidden">
             <button id="bgReset" class="flat" type="button">恢复默认</button>
@@ -544,13 +544,13 @@
               <button class="gp-card" type="button" data-gp="card" role="tab" aria-selected="true"><span>卡片</span></button>
               <button class="gp-thin" type="button" data-gp="thin" role="tab" aria-selected="false"><span>控件</span></button>
             </div>
-            <div class="bg-dim-row"><span class="hint">玻璃强度</span>
+            <div class="bg-dim-row"><span class="hint">玻璃强度 <b class="gp-val" id="gvLevel">55</b></span>
               <input id="glassLevel" type="range" min="0" max="100" value="55"></div>
-            <div class="bg-dim-row"><span class="hint">模糊倍率</span>
-              <input id="glassMul" type="range" min="40" max="180" value="100"></div>
-            <div class="bg-dim-row" id="rowGlassCard" data-gp-row="card"><span class="hint">卡片层</span>
+            <div class="bg-dim-row"><span class="hint">模糊倍率 <b class="gp-val" id="gvMul">100</b></span>
+              <input id="glassMul" type="range" min="20" max="300" value="100"></div>
+            <div class="bg-dim-row" id="rowGlassCard" data-gp-row="card"><span class="hint">卡片层 <b class="gp-val" id="gvCard">100</b></span>
               <input id="glassCard" type="range" min="0" max="140" value="100"></div>
-            <div class="bg-dim-row" id="rowGlassThin" data-gp-row="thin"><span class="hint">控件层</span>
+            <div class="bg-dim-row" id="rowGlassThin" data-gp-row="thin"><span class="hint">控件层 <b class="gp-val" id="gvThin">100</b></span>
               <input id="glassThin" type="range" min="0" max="140" value="100"></div>
           </div>
         </div>

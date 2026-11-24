@@ -984,7 +984,10 @@ html[data-skin] #roomList,
 html[data-skin] #friendList,
 html[data-skin] .me-card,
 html[data-skin] .me-group {
-  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent);
+  background-color: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a) * 100%), transparent);
+  background-image:
+    linear-gradient(168deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.16) 22%,
+      rgba(255,255,255,0) 46%, rgba(255,255,255,.10) 100%) !important;
   /* 保守配方：只用模糊 + 适度饱和。brightness() 会跟着背景整体提亮，
      在 Android WebView 上容易出现发灰/发脏的观感。 */
   -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35));
@@ -1017,7 +1020,10 @@ html[data-skin] #roomList,
 html[data-skin] #friendList,
 html[data-skin] .me-card,
 html[data-skin] .me-group {
-  background: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 100%), transparent);
+  background-color: color-mix(in srgb, var(--m3e-surface) calc(var(--m3e-glass-a-container) * 100%), transparent);
+  background-image:
+    linear-gradient(168deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.16) 22%,
+      rgba(255,255,255,0) 46%, rgba(255,255,255,.10) 100%) !important;
 }
 
 /* 顶栏 / 底栏 / 输入条：只留一条玻璃高光边，不要整圈描边 */
@@ -1836,7 +1842,10 @@ html[data-skin] #friendList .room,
 html[data-skin] .friend-list .friend-row,
 html[data-skin] .me-row,
 html[data-skin] .agent-row {
-  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-card-a) * 100%), transparent) !important;
+  background-color: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-card-a) * 100%), transparent) !important;
+  background-image:
+    linear-gradient(168deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.16) 22%,
+      rgba(255,255,255,0) 46%, rgba(255,255,255,.10) 100%) !important;
   -webkit-backdrop-filter: blur(var(--glass-blur-card)) saturate(var(--m3e-glass-sat, 1.35));
   backdrop-filter: blur(var(--glass-blur-card)) saturate(var(--m3e-glass-sat, 1.35));
   box-shadow: inset 0 1px 0 var(--glass-edge), 0 4px 16px color-mix(in srgb, var(--accent) 9%, transparent);
@@ -1875,7 +1884,10 @@ html[data-skin] .ai-model-chip,
 html[data-skin] #aiSheet .ai-fetch,
 html[data-skin] #aiSheet .ai-eff,
 html[data-skin] #aiSheet .ai-model-row {
-  background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-thin-a) * 100%), transparent) !important;
+  background-color: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-thin-a) * 100%), transparent) !important;
+  background-image:
+    linear-gradient(168deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.16) 22%,
+      rgba(255,255,255,0) 46%, rgba(255,255,255,.10) 100%) !important;
   -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(150%);
   backdrop-filter: blur(var(--glass-blur-thin)) saturate(150%);
   box-shadow: inset 0 1px 0 var(--glass-edge);
@@ -2225,3 +2237,66 @@ html[data-skin] .me-page::before {
   position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background: var(--page-wall-dim, rgba(255, 255, 255, .18));
 }
+
+/* =========================================================
+   苹果味玻璃：更厚的模糊 + 高饱和 + 一圈镜面高光边
+   —— 边缘亮线是「玻璃」的关键，之前只有顶部 1px，侧面看不出来
+   ========================================================= */
+html[data-skin] .topbar,
+html[data-skin] .chat-top,
+html[data-skin] .tabbar,
+html[data-skin] .composer,
+html[data-skin] .action-card,
+html[data-skin] .sheet-body,
+html[data-skin] #roomList,
+html[data-skin] #friendList,
+html[data-skin] .me-card,
+html[data-skin] .me-group {
+  border: 1px solid rgba(255, 255, 255, .52);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .92),
+    inset 0 -1px 0 rgba(255, 255, 255, .22),
+    inset 0 0 0 1px rgba(255, 255, 255, .16),
+    0 10px 30px rgba(28, 32, 60, .14),
+    0 1px 3px rgba(28, 32, 60, .10);
+}
+html[data-skin][data-theme="dark"] .topbar,
+html[data-skin][data-theme="dark"] .chat-top,
+html[data-skin][data-theme="dark"] .tabbar,
+html[data-skin][data-theme="dark"] .composer,
+html[data-skin][data-theme="dark"] .me-card,
+html[data-skin][data-theme="dark"] .me-group,
+html[data-skin][data-theme="dark"] #roomList,
+html[data-skin][data-theme="dark"] #friendList {
+  border-color: rgba(255, 255, 255, .16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 10px 30px rgba(0, 0, 0, .38);
+}
+/* 卡面 / 控件 的那一圈镜面边 */
+html[data-skin] #roomList .room,
+html[data-skin] #friendList .room,
+html[data-skin] .me-row,
+html[data-skin] .friend-list .friend-row {
+  border: 1px solid rgba(255, 255, 255, .46);
+}
+html[data-skin] .icon-btn,
+html[data-skin] .send-btn,
+html[data-skin] .ai-model-chip {
+  border: 1px solid rgba(255, 255, 255, .5);
+}
+
+/* 滑杆旁的数值 */
+.gp-val { font-style: normal; font-weight: 600; color: var(--tg-blue); font-variant-numeric: tabular-nums;
+  margin-left: 2px; font-size: 11.5px; }
+
+/* 有底图时，顶栏/底栏/提示文字加一点描边阴影，压在艳色照片上也认得出 */
+html[data-wall] .topbar .brand,
+html[data-wall] .tab-item span,
+html[data-wall] .room .name,
+html[data-wall] .room-last,
+html[data-wall] #hintBar {
+  text-shadow: 0 1px 2px rgba(255, 255, 255, .72), 0 0 8px rgba(255, 255, 255, .5);
+}
+html[data-wall] [data-theme="dark"] .topbar .brand { text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }

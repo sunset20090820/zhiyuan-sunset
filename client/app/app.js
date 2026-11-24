@@ -2822,7 +2822,7 @@
     var cDark = root.getAttribute('data-theme') === 'dark';
     if (cDark && cw.image) cd = Math.min(0.9, cd + 0.16);
     root.style.setProperty('--chat-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + cd.toFixed(2) + ')');
-    var cblur = cw.image ? Math.min(40, Number(chat.blur) || 0) : 0;
+    var cblur = cw.image ? Math.min(80, Number(chat.blur) || 0) : 0;
     root.style.setProperty('--chat-wall-blur', cblur + 'px');
     root.classList.toggle('wall-blur', cblur > 0);
 
@@ -2843,7 +2843,7 @@
     if (pageImage) pageDim = Math.max(pageDim, 0.24);
     root.style.setProperty('--page-wall', pageWall);
     root.style.setProperty('--page-wall-dim', 'rgba(' + (cDark ? '12,14,24' : '255,255,255') + ',' + pageDim.toFixed(2) + ')');
-    root.style.setProperty('--page-wall-blur', (pageImage ? Math.min(40, Number(lwHas ? list.blur : chat.blur) || 0) : 0) + 'px');
+    root.style.setProperty('--page-wall-blur', (pageImage ? Math.min(80, Number(lwHas ? list.blur : chat.blur) || 0) : 0) + 'px');
     // 直接写到元素上：.me-page 的 background 简写规则太多，靠 CSS 变量容易被覆盖掉
     try {
       var pages = document.querySelectorAll('#roles, .me-page');
@@ -2865,24 +2865,40 @@
 
     // 玻璃强度：0–100 → 模糊 6–58px、透明度 .14–.82、色渗 .02–.2
     // 比之前更"厚"：模糊上限抬高、饱和更明显，滑块拉到中段就已经有玻璃感
+    // 玻璃：四个滑杆的区间都拉开，拉到两端要能明显看出区别
+    //   玻璃强度 0–100  → 模糊 2–68px、面板不透明度 .04–.92、饱和 120–360%
+    //   模糊倍率 20–300 → 再乘 0.2–3.0
+    //   卡片层 0–140、控件层 0–140 → 直接是面板不透明度的倍数（0 = 几乎看不见）
     var lv = (typeof S.glassLevel === 'number') ? S.glassLevel : 55;
-    var blur = 6 + lv * 0.52;
-    var alpha = 0.14 + lv * 0.0068;
-    var tint = 0.02 + lv * 0.0018;
-    var sat = 165 + lv * 1.1;              // 165% – 275%
-    var mul = (typeof S.glassMul === 'number' ? S.glassMul : 100) / 100;   // 0.4 – 1.8
-    var cardK = (typeof S.glassCard === 'number' ? S.glassCard : 100) / 100; // 卡片层倍数
-    var thinK = (typeof S.glassThin === 'number' ? S.glassThin : 100) / 100; // 控件层倍数
+    var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+    var blur = 2 + lv * 0.66;
+    var alpha = 0.04 + lv * 0.0088;
+    var tint = 0.01 + lv * 0.0026;
+    var sat = 120 + lv * 2.4;
+    var mul = clamp((typeof S.glassMul === 'number' ? S.glassMul : 100) / 100, 0.2, 3.0);
+    var cardK = clamp((typeof S.glassCard === 'number' ? S.glassCard : 100) / 100, 0, 1.4);
+    var thinK = clamp((typeof S.glassThin === 'number' ? S.glassThin : 100) / 100, 0, 1.4);
     blur = blur * mul;
     root.style.setProperty('--row-blur', blur.toFixed(1) + 'px');
-    root.style.setProperty('--glass-card-k', cardK.toFixed(2));
-    root.style.setProperty('--glass-thin-k', thinK.toFixed(2));
     root.style.setProperty('--row-sat', sat.toFixed(0) + '%');
     root.style.setProperty('--row-alpha', alpha.toFixed(3));
     root.style.setProperty('--row-tint', tint.toFixed(3));
-    // 卡片/列表用的"更薄一层"玻璃：比容器再透一点，才有前后层次
-    root.style.setProperty('--row-alpha-thin', Math.max(0.06, alpha - 0.1).toFixed(3));
-    root.style.setProperty('--row-blur-thin', Math.max(3, blur * 0.55).toFixed(1) + 'px');
+
+    // 三层不透明度直接算出来，CSS 那套 calc + max() 下限会把区间压平
+    var cardA = clamp(alpha * cardK * 1.25, 0.015, 1);
+    var thinA = clamp(alpha * thinK * 0.85, 0.01, 1);
+    var contA = clamp(0.10 + alpha * 0.92, 0.05, 1);
+    root.style.setProperty('--glass-card-k', cardK.toFixed(2));
+    root.style.setProperty('--glass-thin-k', thinK.toFixed(2));
+    root.style.setProperty('--glass-card-a', cardA.toFixed(3));
+    root.style.setProperty('--glass-thin-a', thinA.toFixed(3));
+    root.style.setProperty('--glass-container-a', contA.toFixed(3));
+    root.style.setProperty('--m3e-glass-a-container', contA.toFixed(3));
+    root.style.setProperty('--glass-blur-card', Math.max(1, blur * 0.72 * Math.max(0.25, cardK)).toFixed(1) + 'px');
+    root.style.setProperty('--glass-blur-thin', Math.max(1, blur * 0.5 * Math.max(0.25, thinK)).toFixed(1) + 'px');
+    root.style.setProperty('--m3e-glass-a', alpha.toFixed(3));
+    root.style.setProperty('--m3e-glass-blur', blur.toFixed(1) + 'px');
+    root.style.setProperty('--m3e-glass-sat', sat.toFixed(0) + '%');
     var gl = $('#glassLevel');
     if (gl && Number(gl.value) !== lv) gl.value = String(lv);
 
@@ -5478,7 +5494,7 @@
 
     on('#btnBeauty', 'click', function () {
       toggleBeautyPanel();
-      try { paintGpFocus(); paintGlassPreview(); } catch (e) {}
+      try { paintGpFocus(); paintGlassPreview(); paintGlassVals(); } catch (e) {}
     });
     on('#bgScope', 'click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-scope]') : null;
@@ -5546,7 +5562,7 @@
     on('#bgDim', 'change', function () { save(); });
     on('#bgBlur', 'input', function (e) {
       var cfg = bgOf();
-      cfg.blur = Math.min(40, Number(e.target.value) || 0);
+      cfg.blur = Math.min(80, Number(e.target.value) || 0);
       applyChatBg();
     });
     on('#bgBlur', 'change', function () { save(); });
@@ -5586,6 +5602,18 @@
       if (el) el.textContent = names[S.topbarText];
       toast('顶栏文字：' + names[S.topbarText]);
     });
+    function paintGlassVals() {
+      ['Level', 'Mul', 'Card', 'Thin'].forEach(function (k) {
+        var el = $('#gl_' + k);
+        var lb = $('#gv' + k);
+        if (el && lb) lb.textContent = String(el.value);
+      });
+      var lv = $('#glassLevel'), m = $('#glassMul'), c = $('#glassCard'), t = $('#glassThin');
+      if (lv && $('#gvLevel')) $('#gvLevel').textContent = lv.value;
+      if (m && $('#gvMul')) $('#gvMul').textContent = m.value;
+      if (c && $('#gvCard')) $('#gvCard').textContent = c.value;
+      if (t && $('#gvThin')) $('#gvThin').textContent = t.value;
+    }
     function paintGlassPreview() {
       var box = $('#glassPreview');
       if (!box) return;
@@ -5632,24 +5660,28 @@
     on('#glassMul', 'input', function (e) {
       S.glassMul = Math.max(40, Math.min(180, Number(e.target.value) || 100));
       applyChatBg();
+      paintGlassVals();
       paintGlassPreview();
     });
     on('#glassMul', 'change', function () { save(); });
     on('#glassCard', 'input', function (e) {
       S.glassCard = Math.max(0, Math.min(140, Number(e.target.value)));
       applyChatBg();
+      paintGlassVals();
       paintGlassPreview();
     });
     on('#glassCard', 'change', function () { save(); });
     on('#glassThin', 'input', function (e) {
       S.glassThin = Math.max(0, Math.min(140, Number(e.target.value)));
       applyChatBg();
+      paintGlassVals();
       paintGlassPreview();
     });
     on('#glassThin', 'change', function () { save(); });
     on('#glassLevel', 'input', function (e) {
       S.glassLevel = Math.max(0, Math.min(100, Number(e.target.value) || 0));
       applyChatBg();
+      paintGlassVals();
       paintGlassPreview();
     });
     on('#glassLevel', 'change', function () { save(); });
