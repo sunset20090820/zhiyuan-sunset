@@ -5632,12 +5632,28 @@
     (function bindPullToRefresh() {
       var list = $('#roomList');
       if (!list) return;
-      var startY = 0, pulling = false, dy = 0, pullRefreshAt = 0;
+      // 提示胶囊：renderRooms 会整个重写 #roomList 的 innerHTML，所以不能写在列表里，
+      // 动态挂在 #chats 上，位置按列表的 offsetTop 现算
+      var hint = $('#ptrHint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.id = 'ptrHint';
+        hint.className = 'ptr-hint';
+        hint.setAttribute('aria-hidden', 'true');
+        hint.innerHTML = '<span>下拉刷新</span>';
+        var hostEl = $('#chats');
+        if (hostEl) hostEl.appendChild(hint);
+      }
+      var startY = 0, startT = 0, pulling = false, dy = 0, maxPull = 0, pullRefreshAt = 0;
+      // 触发线：要拉到差不多屏幕四分之一（原始手指位移 180px）才算数，
+      // 并且必须是「按住拉」而不是甩一下（时长 <200ms 的快速滑动一律不刷）
+      var TRIGGER_DY = 180, TRIGGER_PULL = 84, TRIGGER_MS = 200;
       list.addEventListener('touchstart', function (e) {
         // 真机上 scrollTop 常是 0.5 / 1.2 这种小数，卡死 >0 会导致下拉很难触发
         if (list.scrollTop > 4 || !e.touches || !e.touches[0]) return;
-        startY = e.touches[0].clientY; pulling = true; dy = 0;
+        startY = e.touches[0].clientY; startT = Date.now(); pulling = true; dy = 0; maxPull = 0;
         list.style.transition = 'none';
+        if (hint) hint.style.top = Math.max(6, list.offsetTop - 2) + 'px';
       }, { passive: true });
       list.addEventListener('touchmove', function (e) {
         if (!pulling || !e.touches || !e.touches[0]) return;
@@ -5649,10 +5665,16 @@
           list.style.setProperty('--pull', '0');
           return;
         }
-        // 橡皮筋：起手就有反馈，越拉越沉，上限 120px
-        var pull = Math.min(120, Math.pow(dy, 0.78) * 2.6);
+        // 橡皮筋：起手给一点反馈，但要比之前「沉」很多 —— 轻拉几乎不动，
+        // 才不会被顺手一划就触发（原来 2.6 的系数，60px 就能把界面拽开）
+        var pull = Math.min(110, Math.pow(dy, 0.82) * 1.55);
+        maxPull = Math.max(maxPull, pull);
+        var armedNow = (pull >= TRIGGER_PULL);
+        list.classList.toggle('ptr-armed', armedNow);
+        if (hint) hint.querySelector('span').textContent = armedNow ? '松手刷新' : '下拉刷新';
         list.style.setProperty('--pull-ty', pull.toFixed(1) + 'px');
         list.classList.add('pulling');
+        if (hint) hint.classList.add('on');
         list.style.setProperty('--pull', pull.toFixed(1));
         // 卡片随拉动整体轻微下沉，越靠下越明显（被往下拽开的感觉）
         var rows = list.querySelectorAll('.room');
@@ -5672,9 +5694,12 @@
         });
         setTimeout(function () {
           list.classList.remove('pulling');
+          list.classList.remove('ptr-armed');
+          if (hint) hint.classList.remove('on');
           list.style.setProperty('--pull', '0');
         }, 340);
-        if (dy > 130 && Date.now() - pullRefreshAt > 4000) {
+        var held = Date.now() - startT;
+        if (maxPull >= TRIGGER_PULL && dy >= TRIGGER_DY && held >= TRIGGER_MS && Date.now() - pullRefreshAt > 4000) {
           pullRefreshAt = Date.now();
           toast('正在重新连接…');
           try { if (ws) ws.close(); } catch (e) {}

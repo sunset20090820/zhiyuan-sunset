@@ -2435,3 +2435,26 @@ html[data-skin="m3e"] #fsSeg .seg-item {
 @media (max-width: 360px) {
   html[data-skin="m3e"] #fsSeg .seg-item { font-size: 11px !important; }
 }
+
+/* 下拉刷新的提示胶囊：贴在列表顶部，随下拉一起滑出来，过线变「松手刷新」 */
+.ptr-hint {
+  /* 挂在 #chats 上，top 由 JS 按列表位置写；下拉时胶囊从顶栏下面滑出来 */
+  position: absolute; left: 0; right: 0; top: 120px;
+  display: flex; justify-content: center; align-items: flex-start;
+  pointer-events: none; z-index: 6;
+  opacity: 0;
+  transform: translateY(calc(var(--pull-ty, 0px) * 0.55 - 6px));
+  transition: opacity .18s ease;
+}
+.ptr-hint.on { opacity: 1; }
+.ptr-hint > span {
+  padding: 5px 14px; border-radius: 99px; font-size: 12px;
+  color: var(--tg-sub); background: color-mix(in srgb, var(--m3e-surface) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: 0 4px 14px rgba(30, 34, 60, .12);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+#roomList.ptr-armed .ptr-hint > span {
+  color: var(--tg-blue); font-weight: 600;
+  border-color: color-mix(in srgb, var(--tg-blue) 45%, transparent);
+}
