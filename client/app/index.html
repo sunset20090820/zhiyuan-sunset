@@ -603,8 +603,9 @@
     <div class="me-group">
       <label class="field"><span>昵称</span>
         <input id="setNick" maxlength="16" autocomplete="off"></label>
-      <label class="field"><span>服务器</span>
-        <input id="setServer" maxlength="120" autocomplete="off" spellcheck="false"></label>
+      <label class="field"><span>服务器 <button id="setServerEye" class="srv-eye" type="button" aria-label="显示服务器地址">👁</button></span>
+        <input id="setServer" maxlength="120" autocomplete="off" spellcheck="false" placeholder="ws://你的服务器:8080"></label>
+      <p class="hint-sub" id="setServerHint">地址默认不显示，免得截图或分享时把服务器暴露出去；直接在这里输入新地址就能换服。</p>
       <button id="btnSave" class="primary" type="button">保存并重连</button>
     </div>
 

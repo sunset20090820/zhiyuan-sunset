@@ -3380,3 +3380,14 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
   --ring: rgba(143, 164, 245, .3);
   --chat-wall-dim: rgba(255, 255, 255, .1);
 }
+
+/* 我的页：服务器地址的「眼睛」开关 */
+.srv-eye {
+  margin-left: 6px; padding: 0 6px; height: 22px; min-width: 26px;
+  border: 0; border-radius: 8px; background: transparent;
+  font-size: 13px; line-height: 22px; color: var(--tg-sub);
+  vertical-align: middle;
+}
+.srv-eye.on { color: var(--tg-blue); background: color-mix(in srgb, var(--tg-blue) 12%, transparent); }
+.srv-eye:active { transform: scale(.92); }
+#setServer::placeholder { color: var(--tg-sub); opacity: .85; font-size: 13px; }

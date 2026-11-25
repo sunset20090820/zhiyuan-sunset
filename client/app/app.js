@@ -5327,7 +5327,7 @@
       if ($('#meName')) $('#meName').textContent = S.nick || '未登录';
       if ($('#meUser')) $('#meUser').textContent = S.user ? ('账号：' + S.user) : '未登录';
       if ($('#setNick')) $('#setNick').value = S.nick || '';
-      if ($('#setServer')) $('#setServer').value = S.server || '';
+      paintServerField();
       if ($('#verLine')) $('#verLine').textContent = '纸鸢 ' + (window.APP_VERSION || '') + ' · ' + (S.user ? ('账号 ' + S.user) : '未登录');
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       try {
@@ -5354,9 +5354,21 @@
     on('#meBack', 'click', closeMe);
 
 
+    on('#setServerEye', 'click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      srvRevealed = !srvRevealed;
+      paintServerField();
+    });
+    on('#setServer', 'focus', function () {
+      // 一碰输入框就把当前地址显示出来（不然用户不知道在改什么）
+      if (!srvRevealed) { srvRevealed = true; paintServerField(); }
+    });
     on('#btnSave', 'click', function () {
       var nick = ($('#setNick').value || '').trim();
-      var s = normServer($('#setServer').value);
+      var typed = ($('#setServer').value || '').trim();
+      // 没改（留空 = 还处于隐藏态）就沿用当前地址，别把服务器清掉
+      var s = typed ? normServer(typed) : (S.server || '');
       // 明文 ws 连公网 IP = 密码和消息都是明文，提醒一次
       try {
         var plain = /^ws:\/\//i.test(s) && !/^ws:\/\/(10\.|192\.168\.|127\.|localhost)/i.test(s);
@@ -5372,6 +5384,8 @@
       closeMeIfOpen();
       if (ws) { try { ws.close(); } catch (e) {} ws = null; }
       connect();
+      srvRevealed = false;
+      paintServerField();
       toast(switched ? '已切换服务器，请登录' : '已保存');
     });
     on('#btnImage', 'click', function () { pickImage(false); });
@@ -7830,7 +7844,7 @@
     if ($('#meUser')) $('#meUser').textContent = S.user ? ('账号：' + S.user) : '未登录';
     if ($('#meUid')) $('#meUid').textContent = S.uid ? ('我的 ID：' + S.uid) : '我的 ID：未分配';
     if ($('#setNick')) $('#setNick').value = S.nick || '';
-    if ($('#setServer')) $('#setServer').value = S.server || '';
+    paintServerField();
     if ($('#verLine')) $('#verLine').textContent = '纸鸢 ' + (window.APP_VERSION || '') + ' · ' + (S.user ? ('账号 ' + S.user) : '未登录');
   }
 
@@ -7915,6 +7929,39 @@
       $('#loginError').textContent = reason;
       $('#loginError').classList.remove('hidden');
     }
+  }
+
+  /* ---------------- 我的页：服务器地址默认隐藏 ---------------- */
+  var srvRevealed = false;
+  function maskServer(s) {
+    s = String(s || '');
+    if (!s) return '';
+    var proto = (s.match(/^[a-z]+:\/\//i) || [''])[0];
+    var rest = s.slice(proto.length);
+    var host = rest.replace(/^[^/:]+/, '');
+    var portPart = (rest.match(/:(\d+)/) || [])[1] || '';
+    return proto + '********' + (portPart ? ':' + portPart : '') + (/\//.test(host) ? '/' + host.split('/').slice(1).join('/') : '');
+  }
+  function paintServerField() {
+    var el = $('#setServer');
+    if (!el) return;
+    var real = S.server || '';
+    if (srvRevealed) {
+      el.value = real;
+      el.placeholder = 'ws://你的服务器:8080';
+    } else {
+      el.value = '';
+      el.placeholder = real ? ('已设置 ' + maskServer(real) + ' · 点 👁 查看') : 'ws://你的服务器:8080';
+    }
+    var eye = $('#setServerEye');
+    if (eye) {
+      eye.classList.toggle('on', srvRevealed);
+      eye.setAttribute('aria-label', srvRevealed ? '隐藏服务器地址' : '显示服务器地址');
+    }
+    var hint = $('#setServerHint');
+    if (hint) hint.textContent = srvRevealed
+      ? '地址已显示；输入新地址会直接替换当前服务器。'
+      : '地址默认不显示，免得截图或分享时把服务器暴露出去；直接在这里输入新地址就能换服。';
   }
 
   function boot() {

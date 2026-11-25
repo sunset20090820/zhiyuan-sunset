@@ -2458,3 +2458,6 @@ html[data-skin="m3e"] #fsSeg .seg-item {
   color: var(--tg-blue); font-weight: 600;
   border-color: color-mix(in srgb, var(--tg-blue) 45%, transparent);
 }
+
+html[data-skin] .srv-eye { color: var(--m3e-on-variant); }
+html[data-skin] .srv-eye.on { color: var(--m3e-primary); background: color-mix(in srgb, var(--m3e-primary) 14%, transparent); }
