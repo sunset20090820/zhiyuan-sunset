@@ -535,23 +535,45 @@
             <div id="accentGrid" class="accent-grid"></div>
           </div>
           <div class="beauty-block">
-            <div class="beauty-title">其它</div>
+            <div class="beauty-title">液态玻璃</div>
+            <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>玻璃效果<span class="me-arrow" id="glassState">开</span></button>
+            <p class="hint-sub">开着像毛玻璃，能透出后面的壁纸；关掉变实色，最省电。</p>
+
+            <div class="gl-preset-row" id="glassPresets">
+              <button class="gl-preset" type="button" data-gl="thin">清透</button>
+              <button class="gl-preset on" type="button" data-gl="std">标准</button>
+              <button class="gl-preset" type="button" data-gl="thick">厚重</button>
+              <button class="gl-preset" type="button" data-gl="reset">还原</button>
+            </div>
+
+            <div class="glass-preview" id="glassPreview" role="tablist" aria-label="点一下看看大面板和小控件现在的样子">
+              <div class="gp-back"></div>
+              <button class="gp-card" type="button" data-gp="card" role="tab" aria-selected="true"><span>大面板</span></button>
+              <button class="gp-thin" type="button" data-gp="thin" role="tab" aria-selected="false"><span>小控件</span></button>
+            </div>
+
+            <div class="bg-dim-row"><span class="hint">厚度 <b class="gp-val" id="gvLevel">55</b></span>
+              <input id="glassLevel" type="range" min="0" max="100" value="55"></div>
+            <p class="hint-sub">厚度：0 几乎全透，100 像雾面磨砂。先拖这一根就行。</p>
+
+            <div class="bg-dim-row"><span class="hint">模糊范围 <b class="gp-val" id="gvMul">100</b></span>
+              <input id="glassMul" type="range" min="20" max="300" value="100"></div>
+            <p class="hint-sub">模糊范围：只改「糊多远」，不改透明程度。字发虚就往左拉。</p>
+
+            <details class="gl-adv" id="glassAdv">
+              <summary>高级：两层分开调</summary>
+              <div class="bg-dim-row" id="rowGlassCard" data-gp-row="card"><span class="hint">大面板浓度 <b class="gp-val" id="gvCard">100</b></span>
+                <input id="glassCard" type="range" min="0" max="140" value="100"></div>
+              <div class="bg-dim-row" id="rowGlassThin" data-gp-row="thin"><span class="hint">小控件浓度 <b class="gp-val" id="gvThin">100</b></span>
+                <input id="glassThin" type="range" min="0" max="140" value="100"></div>
+              <p class="hint-sub">浓度 = 这一层有多「实」。气泡或输入框看不清就往右拉，想更透就往左拉；100 是默认。</p>
+            </details>
+          </div>
+
+          <div class="beauty-block">
+            <div class="beauty-title">界面风格</div>
             <button id="btnSkin" class="me-row" type="button"><span class="me-ico">📱</span>安卓 16 风格<span class="me-arrow" id="skinState">开</span></button>
             <button id="btnTopbarText" class="me-row" type="button"><span class="me-ico">🔤</span>顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
-            <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>液态玻璃<span class="me-arrow" id="glassState">开</span></button>
-            <div class="glass-preview" id="glassPreview" role="tablist" aria-label="预览卡面或控件">
-              <div class="gp-back"></div>
-              <button class="gp-card" type="button" data-gp="card" role="tab" aria-selected="true"><span>卡片</span></button>
-              <button class="gp-thin" type="button" data-gp="thin" role="tab" aria-selected="false"><span>控件</span></button>
-            </div>
-            <div class="bg-dim-row"><span class="hint">玻璃强度 <b class="gp-val" id="gvLevel">55</b></span>
-              <input id="glassLevel" type="range" min="0" max="100" value="55"></div>
-            <div class="bg-dim-row"><span class="hint">模糊倍率 <b class="gp-val" id="gvMul">100</b></span>
-              <input id="glassMul" type="range" min="20" max="300" value="100"></div>
-            <div class="bg-dim-row" id="rowGlassCard" data-gp-row="card"><span class="hint">卡片层 <b class="gp-val" id="gvCard">100</b></span>
-              <input id="glassCard" type="range" min="0" max="140" value="100"></div>
-            <div class="bg-dim-row" id="rowGlassThin" data-gp-row="thin"><span class="hint">控件层 <b class="gp-val" id="gvThin">100</b></span>
-              <input id="glassThin" type="range" min="0" max="140" value="100"></div>
           </div>
         </div>
       </div>

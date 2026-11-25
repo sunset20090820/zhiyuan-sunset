@@ -347,8 +347,14 @@ html[data-theme="dark"] .day { background: rgba(255, 255, 255, .12); }
 /* ---------- 图片与表情 ---------- */
 .msg-img {
   display: block; max-width: 210px; max-height: 280px;
+  /* 带上 width/height 属性占位后再靠 height:auto 保持比例，图片解码前后不会跳高度 */
+  height: auto; width: auto;
   border-radius: 10px; background: rgba(0,0,0,.06);
   animation: img-pop .24s cubic-bezier(.2,.75,.25,1) both;
+}
+.img-gone {
+  padding: 10px 12px; border-radius: 10px; font-size: 12.5px; color: var(--tg-sub);
+  background: rgba(0,0,0,.05); border: 1px dashed rgba(128,128,128,.35);
 }
 .msg.out .msg-img { margin-left: auto; }
 .bubble.has-img { padding: 4px; background: var(--in); }
@@ -1069,7 +1075,11 @@ html[data-theme="dark"] #mePage .me-group { box-shadow: none; }
 #chats, #contacts { padding-bottom: calc(56px + var(--safe-bottom)); box-sizing: border-box; }
 #chats .list, #contacts .list { padding-bottom: 4px; }
 #chats .fab { bottom: calc(76px + var(--safe-bottom)); }
-#mePage .me-body { padding-bottom: calc(72px + var(--safe-bottom)); }
+#mePage .me-body {
+  padding-bottom: calc(24px + var(--safe-bottom));   /* 页面已经让出了底栏高度，这里只要呼吸位 */
+  scroll-padding-bottom: calc(24px + var(--safe-bottom));
+  overscroll-behavior: contain;
+}
 
 /* 联系人页 */
 .contact-search {
@@ -1118,19 +1128,38 @@ html[data-theme="dark"] #mePage .me-group { box-shadow: none; }
   background: var(--bg-soft);
   color: var(--text);
 }
-.mini-btn.ok { background: var(--tg-blue); color: #fff; font-weight: 600; }
+.mini-btn.ok {
+  background: linear-gradient(135deg, var(--out-a), var(--out-b)); color: #fff; font-weight: 600;
+  box-shadow: 0 3px 10px rgba(124, 139, 250, .28);
+}
 .mini-btn.done { background: transparent; color: var(--tg-sub); }
 .search-empty { padding: 12px 4px; font-size: 14px; color: var(--tg-sub); }
 
-.pending-box { padding: 6px 12px 10px; background: var(--bg); }
-.pending-title { font-size: 13px; color: var(--tg-sub); margin: 4px 0 8px; font-weight: 500; }
+/* 好友申请：跟着壁纸和玻璃走，别再是一块不透明的旧底色 */
+.pending-box { padding: 6px 12px 10px; background: transparent; }
+.pending-title {
+  font-size: 12.5px; color: var(--sub); margin: 6px 2px 8px; font-weight: 700;
+  letter-spacing: .2px;
+}
 .pending-row {
   display: flex; align-items: center; gap: 10px;
-  background: var(--bg-soft);
-  border-radius: 10px;
-  padding: 9px 10px;
+  background: rgba(255, 255, 255, .58);
+  border: 1px solid rgba(255, 255, 255, .6);
+  border-radius: 18px;
+  padding: 10px 12px;
   margin-bottom: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 4px 14px rgba(124, 139, 250, .10);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  transition: transform .16s ease, background-color .16s ease;
 }
+.pending-row:active { transform: scale(.985); }
+.pending-row.out { opacity: .82; }
+html[data-theme="dark"] .pending-row {
+  background: rgba(255, 255, 255, .07); border-color: rgba(255, 255, 255, .10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+html.no-glass .pending-row { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--card); }
 .pending-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .pending-main b { font-size: 14.5px; color: var(--text); }
 .pending-main span { font-size: 12px; color: var(--tg-sub); }
@@ -1145,8 +1174,12 @@ html[data-theme="dark"] #mePage .me-group { box-shadow: none; }
 .me-uid { font-size: 12.5px; color: var(--tg-blue); }
 
 /* 导航条上方的三主页面：fixed 定位时要避开导航高度 */
+/* 底栏是 fixed 的：页面给自己让出「底栏高度」，内层列表只留 24px 呼吸位。
+   以前页面写死 56px，M3 皮肤的底栏是 80px，于是最后一行被压在栏下面。 */
 #mePage.me-page { padding-bottom: calc(56px + var(--safe-bottom)); }
 #contacts.screen { padding-bottom: calc(56px + var(--safe-bottom)); }
+html[data-skin="m3e"] #mePage.me-page,
+html[data-skin="m3e"] #contacts.screen { padding-bottom: calc(80px + var(--safe-bottom)); }
 
 /* ---- 跳到未读 / @ 的浮动按钮 ---- */
 .jump-btn {
@@ -1803,7 +1836,7 @@ html[data-theme="dark"] .setup {
   isolation: isolate;
 }
 html[data-theme="dark"] .topbar, html[data-theme="dark"] .chat-top { background: rgba(36, 39, 56, .82); }
-.tabbar { background: rgba(255, 255, 255, .88); isolation: isolate; }
+.tabbar { background: rgba(255, 255, 255, .95); isolation: isolate; }
 html[data-theme="dark"] .tabbar { background: rgba(36, 39, 56, .9); }
 .composer { background: rgba(255, 255, 255, .86); }
 html[data-theme="dark"] .composer { background: rgba(36, 39, 56, .88); }
@@ -2170,6 +2203,24 @@ html.wall-blur .chat > * { position: relative; z-index: 1; }
   --out-a: #d9a544; --out-b: #e8bd6d; --accent-3: #ffb08a;
 }
 
+/* ---------- 2.1) 新增四个经典主题色 ---------- */
+:root[data-accent="sky"] {
+  --accent: #6fb2e8; --accent-ink: #2f7cba; --accent-2: #a8d4f3;
+  --out-a: #4d97d8; --out-b: #6fb6e8; --accent-3: #ffd08a;
+}
+:root[data-accent="amber"] {
+  --accent: #e0a45a; --accent-ink: #a5711f; --accent-2: #f2c98f;
+  --out-a: #d1873a; --out-b: #e0a45a; --accent-3: #8fd0c4;
+}
+:root[data-accent="plum"] {
+  --accent: #b175a2; --accent-ink: #7d3f6e; --accent-2: #d5a9c9;
+  --out-a: #9b5a8c; --out-b: #b175a2; --accent-3: #ffc9a3;
+}
+:root[data-accent="slate"] {
+  --accent: #788497; --accent-ink: #4a5566; --accent-2: #a9b3c1;
+  --out-a: #5c6577; --out-b: #788497; --accent-3: #ffd0a8;
+}
+
 /* ---------- 3) 下拉回弹 ---------- */
 #roomList { will-change: transform; }
 #roomList.pulling { transition: none; }
@@ -2361,6 +2412,37 @@ html[data-theme="dark"] .icon-btn {
   transform: translateY(0);
 }
 .beauty-inner { padding: 4px 2px 12px; }
+/* 设置项的"一句话说明"：比 .hint 更轻，跟在滑杆下面 */
+.hint-sub {
+  margin: -4px 2px 10px; font-size: 12px; line-height: 1.55;
+  color: var(--sub); opacity: .92;
+}
+/* 玻璃预设：一排小胶囊 */
+.gl-preset-row { display: flex; gap: 8px; margin: 8px 0 10px; }
+.gl-preset {
+  flex: 1 1 0; min-width: 0; padding: 8px 4px; border-radius: 14px;
+  border: 1px solid rgba(124, 139, 250, .18); background: rgba(255, 255, 255, .6);
+  color: var(--text); font-size: 12.5px; font-weight: 600;
+  transition: background .16s ease, border-color .16s ease, transform .12s ease;
+}
+.gl-preset:active { transform: scale(.97); }
+.gl-preset.on {
+  background: linear-gradient(135deg, var(--out-a), var(--out-b));
+  border-color: transparent; color: #fff;
+  box-shadow: 0 4px 12px rgba(124, 139, 250, .28);
+}
+html[data-theme="dark"] .gl-preset { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .12); }
+html[data-theme="dark"] .gl-preset.on { background: linear-gradient(135deg, var(--out-a), var(--out-b)); }
+/* 高级折叠：默认折起来，只留一行标题 */
+.gl-adv { margin: 2px 0 4px; }
+.gl-adv > summary {
+  cursor: pointer; list-style: none; padding: 8px 4px; font-size: 12.5px; font-weight: 600;
+  color: var(--sub);
+}
+.gl-adv > summary::-webkit-details-marker { display: none; }
+.gl-adv > summary::after { content: ' ›'; }
+.gl-adv[open] > summary::after { content: ' ⌄'; }
+.gl-adv[open] > summary { color: var(--accent-ink); }
 .beauty-block {
   margin: 10px 0;
   padding: 12px;
@@ -2394,7 +2476,47 @@ html[data-theme="dark"] .beauty-block {
   display: flex; gap: 6px; padding: 4px;
   border-radius: 14px;
   background: rgba(124, 139, 250, .10);
+  position: relative;
 }
+/* 分段控件的果冻药丸：和底栏导航同款位移 + 过冲。JS 会塞一个空的 <i> 进来，
+   并把原来"选中项自己变底色"关掉，改由这颗药丸统一承担。 */
+.seg-pill {
+  position: absolute; left: 0; top: 4px; bottom: 4px; width: 0;
+  border-radius: 11px; pointer-events: none; z-index: 0;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 4px 14px rgba(124, 139, 250, .18), inset 0 1px 0 rgba(255, 255, 255, .95);
+  -webkit-backdrop-filter: blur(12px) saturate(170%);
+  backdrop-filter: blur(12px) saturate(170%);
+  opacity: 0; transition: opacity .16s ease;
+  will-change: transform, width;
+  overflow: hidden;
+}
+.seg-pill.on { opacity: 1; }
+.seg-pill::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 60%; left: -70%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .85), transparent);
+  opacity: 0;
+}
+.seg-pill.sheen::after { animation: segSheen .62s ease-out; }
+@keyframes segSheen {
+  0% { left: -70%; opacity: 0; }
+  25% { opacity: .85; }
+  100% { left: 120%; opacity: 0; }
+}
+html[data-theme="dark"] .seg-pill {
+  background: rgba(255, 255, 255, .16);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+html.no-glass .seg-pill { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.seg.has-pill > .seg-item, .tabs.has-pill > .tab { position: relative; z-index: 1; }
+/* 药丸在场时，选中项只保留文字变化 */
+.seg.has-pill > .seg-item.on {
+  background: transparent; box-shadow: none; transform: none;
+  color: var(--accent-ink);
+}
+.tabs { position: relative; }
+.tabs.has-pill > .tab.on { background: transparent; box-shadow: none; color: var(--accent-ink); }
+html[data-theme="dark"] .seg.has-pill > .seg-item.on { background: transparent; color: #fff; }
 html[data-theme="dark"] .seg { background: rgba(255, 255, 255, .07); }
 .seg-item {
   flex: 1; padding: 8px 10px; border-radius: 11px;
@@ -2547,8 +2669,6 @@ html.no-glass .tabbar::before, html.no-glass .composer::before { display: none; 
     inset 0 1.5px 0 rgba(255, 255, 255, .95),
     inset 0 -1px 0 rgba(255, 255, 255, .35),
     0 10px 24px rgba(124, 139, 250, .12);
-  -webkit-backdrop-filter: blur(16px) saturate(170%);
-  backdrop-filter: blur(16px) saturate(170%);
   transition: transform .2s cubic-bezier(.2,.9,.2,1), box-shadow .2s ease, background-color .2s ease;
 }
 #roomList .room:active,
@@ -2802,8 +2922,8 @@ html[data-theme="dark"] #friendList .room::before {
       rgba(255, 255, 255, calc(var(--row-alpha, .58) * .72)) 46%,
       rgba(255, 255, 255, calc(var(--row-alpha, .58) * .52)) 100%),
     linear-gradient(135deg, rgba(124, 139, 250, var(--row-tint, .10)) 0%, rgba(255, 158, 196, calc(var(--row-tint, .10) * .8)) 100%);
-  -webkit-backdrop-filter: blur(var(--row-blur, 26px)) saturate(var(--row-sat, 200%)) contrast(1.04) brightness(1.03);
-  backdrop-filter: blur(var(--row-blur, 26px)) saturate(var(--row-sat, 200%)) contrast(1.04) brightness(1.03);
+  /* 每行一次背景模糊 = 一屏 20~50 个离屏层，滚动必掉帧；改用更实一点的半透明底来托住文字 */
+  background-color: rgba(255, 255, 255, var(--row-solid, .52));
 }
 html[data-theme="dark"] #roomList .room,
 html[data-theme="dark"] #friendList .room {

@@ -364,10 +364,35 @@ html[data-skin="m3e"] .mention-box {
   padding: 8px;
 }
 html[data-skin="m3e"] .mention-option { border-radius: var(--m3e-md); }
+html[data-skin="m3e"] .pending-row {
+  border-radius: var(--m3e-md);
+  border-color: color-mix(in srgb, var(--m3e-outline) 18%, transparent);
+  background-color: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-container-a) * 100%), transparent);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+html[data-skin="m3e"] .pending-title {
+  color: var(--m3e-on-surface-variant, var(--sub));
+  text-transform: none;
+}
+html[data-skin="m3e"] .mini-btn {
+  border-radius: var(--m3e-sm);
+  min-height: 32px;
+}
+html[data-skin="m3e"] .mini-btn.ok { background: var(--m3e-primary); color: var(--m3e-on-primary, #fff); }
+html[data-skin="m3e"] .gl-preset {
+  border-radius: var(--m3e-sm);
+  border-color: color-mix(in srgb, var(--m3e-outline) 22%, transparent);
+  background: color-mix(in srgb, var(--m3e-surface) 88%, transparent);
+}
+html[data-skin="m3e"] .gl-preset.on {
+  background: color-mix(in srgb, var(--m3e-primary) 88%, transparent);
+  color: var(--m3e-on-primary, #fff);
+}
 
 /* ---------------------------------------------------------
    4) 底部导航：M3 navigation bar（选中项有药丸底）
    --------------------------------------------------------- */
+html[data-skin="m3e"] #mePage .me-body { scroll-padding-bottom: calc(24px + var(--safe-bottom)); overscroll-behavior: contain; }
 html[data-skin="m3e"] .tabbar {
   height: calc(80px + var(--safe-bottom));
   padding: 12px 8px calc(var(--safe-bottom) + 12px);
@@ -474,7 +499,8 @@ html[data-skin="m3e"] .peer-meta strong { font-size: 17px; font-weight: 500; }
 /* ---------------------------------------------------------
    6) 「我的」页 / 设置：分组卡片 + 填充式输入框
    --------------------------------------------------------- */
-html[data-skin="m3e"] .me-body { padding: 8px 16px 40px; }
+html[data-skin="m3e"] .me-body,
+html[data-skin="m3e"] #mePage .me-body { padding: 8px 16px calc(24px + var(--safe-bottom)); }
 html[data-skin="m3e"] .me-card,
 html[data-skin="m3e"] #mePage .me-card {
   border-radius: var(--m3e-xl);
@@ -637,6 +663,20 @@ html[data-skin="m3e"] .seg-item {
   color: var(--m3e-on-variant);
   padding: 9px 12px;
   transform: none;
+}
+/* M3 的选中态交给药丸：容器色 + 1 级阴影，方角跟着 --m3e-full */
+html[data-skin="m3e"] .seg-pill {
+  background: var(--m3e-surface);
+  border-radius: var(--m3e-full);
+  box-shadow: var(--m3e-elev1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-skin="m3e"] .seg.has-pill > .seg-item.on,
+html[data-skin="m3e"] .tabs.has-pill > .tab.on {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--m3e-on-surface);
 }
 html[data-skin="m3e"] .seg-item.on {
   background: var(--m3e-surface);
@@ -1034,6 +1074,11 @@ html[data-skin] .chat-top {
   box-shadow:
     inset 0 1px 0 var(--m3e-glass-hi),
     0 8px 24px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* 底栏单独抬一档不透明度：它是固定层，玻璃太透时下面的设置项会清清楚楚透上来，
+   看起来就像"内容入侵了菜单栏"。这里给 88% 的下限，仍然带模糊。 */
+html[data-skin] .tabbar {
+  background-color: color-mix(in srgb, var(--m3e-surface) 88%, transparent);
 }
 html[data-skin] .tabbar {
   border: 0;
@@ -1862,17 +1907,15 @@ html[data-skin][data-theme="dark"] .agent-row {
 }
 
 /* ---- 消息气泡也走玻璃（浅色玻璃 + 同色描边，不明显但质感统一） ---- */
+/* 气泡不做背景模糊：列表滚动时每条气泡都是一次离屏模糊，中端机直接掉帧。
+   改成"看起来像玻璃"的实色（已经带 color-mix 半透明底 + 内高光描边），观感差异很小。 */
 html[data-skin] .msgs .msg .bubble {
-  -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(140%);
-  backdrop-filter: blur(var(--glass-blur-thin)) saturate(140%);
   box-shadow: inset 0 1px 0 var(--glass-edge);
 }
 html[data-skin] .msgs .msg:not(.out) .bubble {
   background: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-thin-a) * 100%), transparent);
 }
 html[data-skin] .msgs .msg.out .bubble {
-  -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(160%);
-  backdrop-filter: blur(var(--glass-blur-thin)) saturate(160%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 2px 10px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
@@ -2306,6 +2349,8 @@ html[data-wall] [data-theme="dark"] .topbar .brand { text-shadow: 0 1px 2px rgba
    —— 安卓 WebView 上全屏 backdrop-filter 每帧重算是最贵的一步，
       拖动和滚动时先降到「够看」的档位，停下来恢复完整效果
    ========================================================= */
+/* 拖动玻璃滑杆期间：只关掉过渡（过渡会让每一档都慢半拍），
+   模糊/透明度全部走实时数值 —— 以前这里把 blur 锁成 10px，手感就成了"松手才变"。 */
 html.glass-dragging .topbar,
 html.glass-dragging .chat-top,
 html.glass-dragging .tabbar,
@@ -2318,14 +2363,8 @@ html.glass-dragging #roomList .room,
 html.glass-dragging #friendList .room,
 html.glass-dragging .me-row,
 html.glass-dragging .msgs .msg .bubble {
-  -webkit-backdrop-filter: blur(10px) saturate(150%) !important;
-  backdrop-filter: blur(10px) saturate(150%) !important;
-  background-image: none !important;
   transition: none !important;
 }
-html.glass-dragging .topbar,
-html.glass-dragging .tabbar,
-html.glass-dragging .composer { box-shadow: inset 0 1px 0 rgba(255,255,255,.55) !important; }
 
 /* 聊天滚动中：气泡不再单独做背景模糊（一条条的 backdrop 最耗），
    只保留底色，滚动停下 140ms 后恢复 */
@@ -2373,4 +2412,26 @@ html[data-skin] .me-group,
 html[data-skin] .me-card {
   -webkit-backdrop-filter: blur(min(var(--m3e-glass-blur, 26px), 24px)) saturate(var(--m3e-glass-sat, 1.8));
   backdrop-filter: blur(min(var(--m3e-glass-blur, 26px), 24px)) saturate(var(--m3e-glass-sat, 1.8));
+}
+
+/* 分段控件的文字别换行：4 项挤在一行时「标准 / 特大」会被拆成两行，药丸高度跟着乱 */
+html[data-skin="m3e"] .seg-item {
+  white-space: nowrap;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 8px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-skin="m3e"] .seg { flex-wrap: nowrap; }
+/* 字号那组只有 4 个字：让段控件自己占满剩余宽度，字号固定不再跟着 --fs 放大，
+   否则「标准 / 特大」在 393 宽的机器上会被省略号吃掉 */
+html[data-skin="m3e"] .bg-dim-row > .seg,
+html[data-skin="m3e"] #fsSeg { flex: 1 1 auto; min-width: 0; }
+html[data-skin="m3e"] #fsSeg .seg-item {
+  padding: 8px 2px; font-size: 12px !important; letter-spacing: -.2px;
+}
+@media (max-width: 360px) {
+  html[data-skin="m3e"] #fsSeg .seg-item { font-size: 11px !important; }
 }

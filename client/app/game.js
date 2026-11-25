@@ -717,8 +717,12 @@
     clearInterval(cdTimer);
     var el = $('#wwCountdown');
     if (!el || !G.room || !G.room.deadline) return;
+    // 用单调时间走秒：系统时间被自动校时改动时，倒计时不会突然跳一下
+    var left0 = Math.max(0, G.room.deadline - Date.now());
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
     var tick = function () {
-      var left = Math.max(0, Math.round((G.room.deadline - Date.now()) / 1000));
+      var el2 = (window.performance && performance.now) ? performance.now() : Date.now();
+      var left = Math.max(0, Math.round((left0 - (el2 - t0)) / 1000));
       el.textContent = left > 0 ? (left + '″') : '';
       if (left <= 0) { clearInterval(cdTimer); voteHint(); }
     };

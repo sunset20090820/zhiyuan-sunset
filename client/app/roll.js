@@ -87,7 +87,9 @@
 
   /* ---------- prompt ---------- */
   function isOut(m, me) {
-    return m && (m.out === true || m.self === true);
+    if (!m) return false;
+    if (global.__zyIsMine) return !!global.__zyIsMine(m);
+    return m.out === true || m.self === true;
   }
   ROLL.dialogText = function (msgs, nameOf) {
     return (msgs || []).map(function (m) {

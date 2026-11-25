@@ -40,6 +40,15 @@
     };
   };
 
+  /* 按字符数截断：以前调用处传 cap/0.65 给「按 token 截断」的 trim，而 trim 内部
+     又除了一次 0.65，实际长度变成约 2.4×cap，卷摘要永远超预算。 */
+  function trimChars(str, chars) {
+    var s2 = String(str || '');
+    var limit = Math.max(40, Math.floor(Number(chars) || 0));
+    if (s2.length <= limit) return s2;
+    return s2.slice(0, limit - 1) + '…';
+  }
+  CTX.trimChars = trimChars;
   function trim(str, tokens) {
     var s = String(str || '');
     if (!s) return '';
@@ -107,7 +116,7 @@
       var idx = vols.indexOf(v);
       var age = vols.length - 1 - idx;
       var cap = age === 0 ? 260 : Math.max(60, 200 - age * 60);
-      lines.push('【第 ' + (v.n || (idx + 1)) + ' 卷】' + trim(v.lore, cap / 0.65));
+      lines.push('【第 ' + (v.n || (idx + 1)) + ' 卷】' + trimChars(v.lore, cap));
     });
     return lines.join('\n');
   }
@@ -226,7 +235,7 @@
     });
     arr = arr.slice(-maxMsgs);
     arr.forEach(function (m) {
-      var out2 = m.out === true || m.self === true;
+      var out2 = (global.__zyIsMine ? !!global.__zyIsMine(m) : false) || m.out === true || m.self === true;
       out.push({ role: out2 ? 'user' : 'assistant', content: String(m.text || '').slice(0, 4000) });
     });
     return out;

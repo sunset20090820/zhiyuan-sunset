@@ -215,7 +215,7 @@
 
   // 原生在 onPause 时要求立刻同步状态
   window.__flushState = function () {
-    try { save(); } catch (e) {}   // save() 内部就会把完整镜像写给原生，别再用残缺字段覆盖一次
+    try { saveNow(); } catch (e) {}   // 立刻写：onPause 只有这一次机会
     try { flushWebStorage(); } catch (e) {}
   };
   // 让原生把 WebView 的 localStorage 立刻落盘（进程被杀时不容易丢）
@@ -226,16 +226,31 @@
   function statePayload() {
     return { gpFocus: S.gpFocus, nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, fs: S.fs, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, aiUse: S.aiUse, devUids: S.devUids, fbUnread: S.fbUnread, ts: Date.now(), log: bootLog.slice(-12) };
   }
+  /* 落盘策略：先标脏，400ms 内合并成一次写。
+     以前每条消息都完整序列化两遍（localStorage + 原生镜像），再加上 5 秒定时器，
+     等于闲着也在写盘；图片多的时候这是明显发热点。 */
+  var saveDirty = false, saveTimer = 0;
   function save() {
     if (!stateLoaded) { blockedSaves++; return; }   // 存档还没读进来，写下去会洗掉登录
-    var payload = statePayload();
-    try { localStorage.setItem(LK('v1'), JSON.stringify(payload)); } catch (e) {}
+    saveDirty = true;
+    if (saveTimer) return;
+    saveTimer = setTimeout(function () { saveTimer = 0; if (saveDirty) saveNow(); }, 400);
+  }
+  /* 立刻写：切后台、页面卸载、原生要镜像时用这个，不要等 debounce */
+  function saveNow() {
+    if (!stateLoaded) { blockedSaves++; return; }
+    saveDirty = false;
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; }
+    var json;
+    try { json = JSON.stringify(statePayload()); } catch (e) { return; }
+    var ok = true;
+    try { localStorage.setItem(LK('v1'), json); } catch (e) { ok = false; }
     // 原生侧再存一份：进程被杀时 localStorage 可能来不及落盘
     try {
-      if (window.PaperNative && window.PaperNative.saveState) {
-        window.PaperNative.saveState(JSON.stringify(payload));
-      }
+      if (window.PaperNative && window.PaperNative.saveState) window.PaperNative.saveState(json);
     } catch (e) {}
+    if (!ok) toast('本机存储满了，设置没存下来');
+    return ok;
   }
   function load() {
     // 两份状态：localStorage 可能只落盘了登录前的旧值（auth:false），所以要按时间戳取新的
@@ -299,8 +314,24 @@
     S.msgs[id] = arr;
     return arr;
   }
+  /* 历史落盘：配额不足时先把最旧的图片降级成占位再重试。
+     以前这里 catch(e){} 一把吞掉，图片一多就静默丢历史，用户只发现"记录少了"。 */
   function saveHist(id) {
-    try { localStorage.setItem(histKey(id), JSON.stringify(loadHist(id).slice(-HIST_MAX))); } catch (e) {}
+    var arr = loadHist(id).slice(-HIST_MAX);
+    for (var i = 0; i < 4; i++) {
+      try { localStorage.setItem(histKey(id), JSON.stringify(arr)); return true; }
+      catch (e) { if (!dropOldestImage(arr)) break; }
+    }
+    try { localStorage.setItem(histKey(id), JSON.stringify(arr)); return true; }
+    catch (e2) { toast('本机存储满了，这条记录没存下来'); return false; }
+  }
+  /* 把最旧的一张内联图片换成占位腾配额；文字一条都不动 */
+  function dropOldestImage(arr) {
+    for (var i = 0; i < arr.length; i++) {
+      var m = arr[i];
+      if (m && m.image && /^data:/.test(String(m.image))) { m.image = ''; m.imageGone = 1; return true; }
+    }
+    return false;
   }
 
   /* ---------------- 消息存储 ---------------- */
@@ -310,6 +341,15 @@
     if (m.deviceId && m.deviceId === S.deviceId) m.from = S.deviceId;
     return m;
   }
+  /* 「这条是不是我发的」唯一判定。ctx.js / roll.js 也在用（通过 window.__zyIsMine），
+     以前它们读 m.out / m.self，而全仓从没写过这两个字段，导致玩家台词被当成角色说的。 */
+  function isMineMsg(m) {
+    if (!m) return false;
+    if (m.out === true || m.self === true) return true;
+    return m.from === S.deviceId || m.from === S.me || m.from === 'me' ||
+           (!!m.deviceId && m.deviceId === S.deviceId);
+  }
+  window.__zyIsMine = isMineMsg;
   function addMsg(rid, m) {
     ownMsg(m);
     try {
@@ -488,13 +528,30 @@
     } catch (e) {}
   }
 
+  /* 离线队列：统一结构 + 按 kind 还原报文。
+     以前群消息只存了 payload（没有房间号），重连后被当 t:'msg' 裸发，
+     服务端按默认房间收 —— 群聊内容会掉进公共大厅。 */
+  function queuePacket(q) {
+    if (!q) return null;
+    if (q.kind === 'pm') return { t: 'pm', to: q.to, text: q.text, tempId: q.tempId, replyTo: q.replyTo };
+    if (q.kind === 'group') return { t: 'group_msg', id: q.gid, text: q.text, tempId: q.tempId, replyTo: q.replyTo, mentions: q.mentions || [] };
+    if (q.kind === 'room') return { t: 'msg', room: q.room, text: q.text, tempId: q.tempId, replyTo: q.replyTo, mentions: q.mentions || [] };
+    if (q.pm) return { t: 'pm', to: q.to, text: q.text, tempId: q.tempId, replyTo: q.replyTo };   // 兼容旧结构
+    return null;
+  }
+  function saveQueue() {
+    try { localStorage.setItem(LK('queue'), JSON.stringify(queue.slice(-50))); } catch (e) {}
+  }
+  function loadQueue() {
+    try { var a = JSON.parse(localStorage.getItem(LK('queue')) || '[]'); if (Array.isArray(a)) queue = a; } catch (e) {}
+  }
   function flushQueue() {
     while (queue.length) {
       var q = queue.shift();
-      if (q.pm) {
-        if (!wsSend({ t: 'pm', to: q.to, text: q.text, tempId: q.tempId, replyTo: q.replyTo })) { queue.unshift(q); break; }
-      } else if (!wsSend(Object.assign({ t: 'msg' }, q))) { queue.unshift(q); break; }
+      var pkt = queuePacket(q);
+      if (!pkt || !wsSend(pkt)) { queue.unshift(q); break; }
     }
+    saveQueue();
   }
 
   function onServer(d) {
@@ -549,12 +606,12 @@
       return;
     }
     if (d.t === 'auth') {
+      // 先记下这次是登录还是注册，再清 pendingAuth：以前先清空再判，注册失败的错误
+      // 永远写进登录框那个隐藏元素，用户在注册页什么都看不到。
+      var wasKind = S.pendingAuth ? S.pendingAuth.kind : '';
       S.pendingAuth = null;
       clearTimeout(authTimer);
-      var errBox = (S.pendingAuth && S.pendingAuth.kind === 'register') ? $('#regError') : $('#loginError');
       if (!d.ok) {
-        var wasKind = S.pendingAuth ? S.pendingAuth.kind : '';
-        S.pendingAuth = null;
         $('#setup').classList.remove('hidden');
         var box = wasKind === 'register' ? $('#regError') : $('#loginError');
         if (box) { box.textContent = d.err || '验证失败'; box.classList.remove('hidden'); }
@@ -2222,6 +2279,7 @@
   /* ---------------- 渲染：聊天页 ---------------- */
   // 只渲染最近 N 条：上滑或点顶部按钮再往前加 50 条（一次 innerHTML 重建整段历史会明显掉帧）
   var MSG_PAGE_STEP = 50;
+  var msgTotalSeen = {};   // 每个会话上次渲染的总条数，用来判断「是不是新来了一条」
   var msgShown = {};      // rid -> 当前渲染条数（仅在内存里，重开会话回到 50）
   function msgShownOf(rid, total) {
     var n = Number(msgShown[rid]) || MSG_PAGE_STEP;
@@ -2247,6 +2305,13 @@
     var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     var prevH = box.scrollHeight, prevTop = box.scrollTop;
     var total = arr.length;
+    /* 翻历史时别让窗口跟着新消息往前滑：以前 total 一涨，窗口前移一条，
+       正在读的那几行会整体上跳一行。这里把窗口起点钉住，只让底部多一条。 */
+    var prevTotal = Number(msgTotalSeen[rid]) || total;
+    msgTotalSeen[rid] = total;
+    if (total > prevTotal && !force && !nearBottom) {
+      msgShown[rid] = Math.min(total, (Number(msgShown[rid]) || MSG_PAGE_STEP) + (total - prevTotal));
+    }
     var shown = msgShownOf(rid, total);
     var start = Math.max(0, total - shown);
     var vis = start > 0 ? arr.slice(start) : arr;
@@ -2315,6 +2380,13 @@
     void box.scrollHeight;
     box.style.scrollBehavior = prev;
   }
+  /* 给图片算宽高属性：没有它，图片解码前后高度从 0 变实高，整个列表会跳一下 */
+  function sizeAttrs(m) {
+    var w = Number(m.w) || 0, h = Number(m.h) || 0;
+    if (!w || !h) return '';
+    var k = Math.min(1, 210 / w, 280 / h);
+    return ' width="' + Math.round(w * k) + '" height="' + Math.round(h * k) + '"';
+  }
   function messageBody(m) {
     if (m.voice) {
       var dur = Math.max(1, Math.round(Number(m.duration) || 0));
@@ -2332,10 +2404,14 @@
         '<a class="file-dl" href="' + esc(downloadUrl(m)) + '" target="_blank" rel="noopener">下载</a>' +
         '</div>';
     }
+    if (m.imageGone && !m.image) {
+      return '<div class="img-gone">图片已清理（本机存储不足）</div>' +
+        (m.text ? '<div class="caption">' + renderMessageText(m.text, m.mentions) + '</div>' : '');
+    }
     if (m.image) {
       var src = imgSrc(m);
       if (m.sticker) return '<img class="sticker-img" src="' + esc(src) + '" alt="表情">';
-      return '<img class="msg-img" src="' + esc(src) + '" alt="图片">' +
+      return '<img class="msg-img" src="' + esc(src) + '" alt="图片"' + sizeAttrs(m) + '>' +
         (m.text ? '<div class="caption">' + renderMessageText(m.text, m.mentions) + '</div>' : '');
     }
     if (m.big) return '<span class="big-emoji">' + esc(m.text) + '</span>';
@@ -2630,7 +2706,10 @@
       : grp ? { t: 'group_msg', id: grp.id, text: text, tempId: tid, replyTo: quote, mentions: mentions }
       : Object.assign({ t: 'msg', room: S.cur }, payload);
     if (!wsSend(outPayload)) {
-      queue.push(dmPeer ? { pm: true, to: dmPeer, text: text, tempId: tid, replyTo: quote } : payload);
+      queue.push(dmPeer ? { kind: 'pm', to: dmPeer, text: text, tempId: tid, replyTo: quote }
+                : grp ? { kind: 'group', gid: grp.id, text: text, tempId: tid, replyTo: quote, mentions: mentions }
+                :        { kind: 'room', room: S.cur, text: text, tempId: tid, replyTo: quote, mentions: mentions });
+      saveQueue();
       toast('没连上服务器，恢复后会自动发出');
     }
   }
@@ -2687,6 +2766,7 @@
     try { setTimeout(function () { moveNavPill(false); }, 60); } catch (e) {}
   }
   function toggleSkin() {
+    setTimeout(function () { try { syncAllSegs(false); } catch (e) {} }, 60);
     applySkin((S.skin || 'm3e') === 'm3e' ? 'classic' : 'm3e');
     save();
     toast((S.skin === 'm3e') ? '已切到安卓 16 风格' : '已切回小清新');
@@ -2699,7 +2779,11 @@
     { key: 'mint',   name: '薄荷', css: 'linear-gradient(165deg,#ddf7ee 0%,#dfedff 55%,#f0e6ff 100%)' },
     { key: 'sakura', name: '樱花', css: 'radial-gradient(120% 90% at 18% 0%,#ffd7e8 0%,transparent 62%), linear-gradient(165deg,#fff0f6 0%,#eee7ff 100%)' },
     { key: 'cream',  name: '奶油', css: 'linear-gradient(165deg,#fff3dd 0%,#ffe6cc 55%,#f2e8ff 100%)' },
-    { key: 'dusk',   name: '暮色', dark: true, css: 'linear-gradient(165deg,#1e2130 0%,#241f33 55%,#1b2430 100%)' }
+    { key: 'dusk',   name: '暮色', dark: true, css: 'linear-gradient(165deg,#1e2130 0%,#241f33 55%,#1b2430 100%)' },
+    { key: 'aurora', name: '极光', css: 'linear-gradient(160deg,#e6f0ff 0%,#e8e3ff 38%,#ffe9f3 68%,#e4fbef 100%)' },
+    { key: 'forest', name: '森林', css: 'linear-gradient(165deg,#e6f3e5 0%,#dcf0e8 52%,#e4edfb 100%)' },
+    { key: 'sunset', name: '晚霞', css: 'radial-gradient(110% 80% at 82% 0%,#ffd8ad 0%,transparent 58%), linear-gradient(165deg,#ffedef 0%,#f2e9ff 100%)' },
+    { key: 'deep',   name: '深海', dark: true, css: 'linear-gradient(165deg,#101f2b 0%,#15323c 55%,#0d2130 100%)' }
   ];
   function bgPreset(key) {
     for (var i = 0; i < BG_PRESETS.length; i++) if (BG_PRESETS[i].key === key) return BG_PRESETS[i];
@@ -3007,11 +3091,48 @@
       b.classList.toggle('on', b.getAttribute('data-scope') === scope);
     });
 
+    var presetRow = $('#glassPresets');
+    if (presetRow) {
+      var pk = glassPresetKey();
+      Array.prototype.forEach.call(presetRow.querySelectorAll('[data-gl]'), function (b) {
+        b.classList.toggle('on', b.getAttribute('data-gl') === pk);
+      });
+    }
+    var gsNow = $('#glassState');
+    if (gsNow) gsNow.textContent = S.glass ? '开' : '关';
     renderAccentGrid();
     var ts = $('#topbarTextState');
     if (ts) ts.textContent = ({ auto: '自动', light: '白字', dark: '黑字' })[S.topbarText || 'auto'];
     var gs = $('#glassState');
     if (gs) gs.textContent = S.glass ? '开' : '关';
+  }
+  /* 玻璃预设：只改四个内部参数，别的都不动；「还原」= 回到标准 */
+  var GL_PRESETS = {
+    thin:  { level: 25, mul: 80,  card: 80,  thin: 80 },
+    std:   { level: 55, mul: 100, card: 100, thin: 100 },
+    thick: { level: 85, mul: 160, card: 120, thin: 130 }
+  };
+  function glassPresetKey() {
+    var k;
+    for (k in GL_PRESETS) {
+      if (!GL_PRESETS.hasOwnProperty(k)) continue;
+      var p = GL_PRESETS[k];
+      if (p.level === S.glassLevel && p.mul === S.glassMul &&
+          p.card === S.glassCard && p.thin === S.glassThin) return k;
+    }
+    return '';
+  }
+  function applyGlassPreset(name) {
+    var p = GL_PRESETS[name] || GL_PRESETS.std;
+    S.glassLevel = p.level;
+    S.glassMul = p.mul;
+    S.glassCard = p.card;
+    S.glassThin = p.thin;
+    S.glass = true;
+    applyChatBg();
+    save();
+    renderBeautyPanel();
+    var gs = $('#glassState'); if (gs) gs.textContent = '开';
   }
   function renderAccentGrid() {
     var box = $('#accentGrid');
@@ -3035,7 +3156,7 @@
       panel.classList.add('open');
       panel.style.maxHeight = panel.scrollHeight + 40 + 'px';
       renderBeautyPanel();
-      setTimeout(function () { try { panel.style.maxHeight = 'none'; } catch (e) {} }, 420);
+      setTimeout(function () { try { panel.style.maxHeight = 'none'; } catch (e) {} try { syncAllSegs(false); } catch (e) {} }, 420);
     } else {
       panel.style.maxHeight = panel.scrollHeight + 'px';
       // 强制一次回流，保证从固定高度过渡到 0
@@ -3059,6 +3180,10 @@
     { key: 'peach',      name: '蜜桃',   css: 'linear-gradient(135deg,#f08a5d,#f5a06f)' },
     { key: 'mint',       name: '薄荷',   css: 'linear-gradient(135deg,#3fb39a,#57c9b3)' },
     { key: 'cream',      name: '奶油',   css: 'linear-gradient(135deg,#d9a544,#e8bd6d)' },
+    { key: 'sky',        name: '天青',   css: 'linear-gradient(135deg,#4d97d8,#6fb6e8)' },
+    { key: 'amber',      name: '琥珀',   css: 'linear-gradient(135deg,#d1873a,#e0a45a)' },
+    { key: 'plum',       name: '梅子',   css: 'linear-gradient(135deg,#9b5a8c,#b175a2)' },
+    { key: 'slate',      name: '石墨',   css: 'linear-gradient(135deg,#5c6577,#788497)' },
     { key: 'frost',      name: '柔光玻璃', css: 'radial-gradient(circle at 30% 25%,rgba(255,255,255,.95),rgba(196,206,255,.75) 45%,rgba(226,214,255,.6) 75%,rgba(255,255,255,.9))' },
     { key: 'm3-periwinkle', name: 'M3 长春花', m3: true, css: 'linear-gradient(135deg,#515b92,#dee0ff)' },
     { key: 'm3-lavender',   name: 'M3 薰衣草', m3: true, css: 'linear-gradient(135deg,#625690,#e7deff)' },
@@ -3071,6 +3196,15 @@
     S.accent = key || 'periwinkle';
     applyChatBg();
     save();
+    var presetRow = $('#glassPresets');
+    if (presetRow) {
+      var pk = glassPresetKey();
+      Array.prototype.forEach.call(presetRow.querySelectorAll('[data-gl]'), function (b) {
+        b.classList.toggle('on', b.getAttribute('data-gl') === pk);
+      });
+    }
+    var gsNow = $('#glassState');
+    if (gsNow) gsNow.textContent = S.glass ? '开' : '关';
     renderAccentGrid();
   }
 
@@ -3534,8 +3668,11 @@
   function rpRollVolume(rid, card, roll, hist) {
     if (rpRolling[rid] || rpBusy[rid]) return;
     rpRolling[rid] = 1;
-    var go = function () {
+    var go = function (good) {
       delete rpRolling[rid];
+      // 压缩失败时不能换卷：新卷 lore 是空的，模型此后彻底看不到前文，
+      // 而用户会看到"已接续到第 N 卷"，以为只是排版变化。
+      if (!good) { toast('压缩失败，前文先留在这一卷，过一会儿再试'); return; }
       var tail = (hist || []).filter(function (m) { return m && !m.sys && String(m.text || '').length; }).slice(-3);
       var handoff = ROLL.handoffPrompt(roll, tail, rpStyleAnchor(card));
       ROLL.startVolume(roll, handoff);
@@ -5780,6 +5917,14 @@
       if (el) el.textContent = S.glass ? '开' : '关';
       toast(S.glass ? '液态玻璃已开启' : '液态玻璃已关闭（更省电）');
     });
+    on('#glassPresets', 'click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-gl]') : null;
+      if (!b) return;
+      var name = b.getAttribute('data-gl');
+      if (name === 'reset') name = 'std';
+      applyGlassPreset(name);
+      toast(name === 'thin' ? '玻璃：清透' : name === 'thick' ? '玻璃：厚重' : '玻璃：标准');
+    });
     on('#btnSkin', 'click', function () { toggleSkin(); });
     on('#accentGrid', 'click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-accent]') : null;
@@ -6650,12 +6795,24 @@
     });
   }
 
-  /* ---------------- 语音：自己采 PCM 生成 WAV，不依赖编码器 ---------------- */
-  var recCtx = null, recStream = null, recProc = null, recGain = null;
-  var recChunks = [], recStart = 0, recTimer = null, recRate = 16000;
+  /* ---------------- 语音 ----------------
+     13.49 这里整套函数被定义了两遍：PCM 版在前、MediaRecorder 版在后。函数声明提升
+     后永远是后一份跑，前一份 145 行是死代码 —— 如果当初写 PCM 版是为了兜住
+     "设备不支持录音编码"，那它其实没生效。现在合并成一份入口，内部分流：
+       · 有 MediaRecorder → 录压缩格式（体积小）
+       · 没有（或构造失败）→ 自采 PCM 生成 16k 单声道 WAV
+  */
+  var voiceMode = '';                 // '' | 'mr' | 'pcm'
+  var recStart = 0, recTimer = 0;
+  var mrRecorder = null, mrChunks = [];
+  var pcmCtx = null, pcmStream = null, pcmProc = null, pcmGain = null;
+  var pcmChunks = [], pcmRate = 16000;
 
   function voiceSupported() {
-    return !!(window.AudioContext || window.webkitAudioContext) && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+    var mic = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    var mr = !!window.MediaRecorder;
+    var ac = !!(window.AudioContext || window.webkitAudioContext);
+    return mic && (mr || ac);
   }
 
   // 浮点采样 -> 16k 单声道 16bit PCM 的 WAV
@@ -6696,176 +6853,122 @@
     return new Blob([buf], { type: 'audio/wav' });
   }
 
-  function startVoice() {
-    if (!voiceSupported()) { toast('这个系统不支持录音'); return; }
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      recStream = stream;
-      var AC = window.AudioContext || window.webkitAudioContext;
-      recCtx = new AC();
-      recRate = recCtx.sampleRate;
-      recChunks = [];
-      var source = recCtx.createMediaStreamSource(stream);
-      recProc = recCtx.createScriptProcessor(4096, 1, 1);
-      recGain = recCtx.createGain();
-      recGain.gain.value = 0;              // 静音，避免回授
-      recProc.onaudioprocess = function (e) {
-        recChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-      };
-      source.connect(recProc);
-      recProc.connect(recGain);
-      recGain.connect(recCtx.destination);
 
-      recStart = Date.now();
-      $('#recordingBar').classList.remove('hidden');
-      $('#btnVoice').classList.add('on');
-      var tick = function () {
-        var s = Math.round((Date.now() - recStart) / 1000);
-        $('#recTime').textContent = '录音中 ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-        if (s >= 60) { stopVoice(); return; }
-        recTimer = setTimeout(tick, 500);
-      };
-      tick();
-    }).catch(function (err) {
-      var nm = err && err.name ? err.name : '';
-      if (nm === 'NotAllowedError') toast('麦克风被拒绝：去系统设置给纸鸢开麦克风权限');
-      else if (nm === 'NotFoundError') toast('没找到麦克风设备');
-      else toast('录音启动失败：' + (nm || '未知错误'));
-    });
-  }
-
-  function stopVoice() {
+  function showRecBar() {
+    var bar = $('#recordingBar'); if (bar) bar.classList.remove('hidden');
+    var btn = $('#btnVoice'); if (btn) btn.classList.add('on');
     clearTimeout(recTimer);
-    $('#recordingBar').classList.add('hidden');
-    $('#btnVoice').classList.remove('on');
-    if (!recCtx) return;
-    var ctx = recCtx, rate = recRate, chunks = recChunks;
-    recCtx = null; recChunks = [];
-    try { if (recProc) recProc.disconnect(); } catch (e) {}
-    try { if (recGain) recGain.disconnect(); } catch (e) {}
-    try { if (recStream) recStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
-    try { ctx.close(); } catch (e) {}
-    var secs = Math.max(1, Math.round((Date.now() - recStart) / 1000));
-    if (!chunks.length) { toast('没录到声音'); return; }
-    var blob = encodeWav(chunks, rate, 16000);
-    sendVoice(blob, secs);
+    recTick();
+  }
+  function recTick() {
+    var s2 = Math.round((Date.now() - recStart) / 1000);
+    var t = $('#recTime');
+    if (t) t.textContent = '录音中 ' + pad(Math.floor(s2 / 60)) + ':' + pad(s2 % 60);
+    if (s2 >= 60) { stopVoice(); return; }
+    recTimer = setTimeout(recTick, 500);
+  }
+  function recMicError(err) {
+    var nm = err && err.name ? err.name : '';
+    if (nm === 'NotAllowedError') toast('麦克风被拒绝：去系统设置给纸鸢开麦克风权限');
+    else if (nm === 'NotFoundError') toast('没找到麦克风设备');
+    else toast('录音启动失败：' + (nm || '未知错误'));
   }
 
-  function sendVoice(blob, secs) {
-    if (!S.cur) return;
-    var tid = 'v' + Date.now() + Math.random().toString(36).slice(2, 6);
-    var preview = URL.createObjectURL ? URL.createObjectURL(blob) : '';
-    deliverFile(blob, {
-      tid: tid, name: '语音-' + secs + 's.wav', mime: 'audio/wav',
-      preview: preview, voice: true, duration: secs
-    });
-  }
-
-  // 统一发送：小文件一次发，大文件走分片
-  function deliverFile(file, meta) {
-    var tid = meta.tid;
-    var dmPeer = isDM(S.cur) ? dmPeerOf(S.cur) : null;
-    var extra = { name: meta.name, size: file.size, mime: meta.mime, tempId: tid };
-    if (meta.voice) { extra.voice = true; extra.duration = meta.duration; }
-    if (dmPeer) extra.to = dmPeer;
-    var grpFile = isGroup(S.cur) ? groupOf(S.cur) : null;
-    if (grpFile) extra.gid = grpFile.id;
-
-    var m = {
-      id: tid, tempId: tid, from: S.deviceId, name: S.nick || '我', text: '', ts: Date.now(),
-      pending: true, file: meta.preview, fileName: meta.name, fileSize: file.size,
-      mime: meta.mime, voice: !!meta.voice, duration: meta.duration || 0
-    };
-    addMsg(S.cur, m);
-    S.last[S.cur] = { id: tid, text: meta.voice ? '[语音]' : '[文件] ' + meta.name, name: '', ts: m.ts };
-    save(); renderMsgs(true); renderRooms();
-
-    uploadInParts(file, extra).then(function (dataUrl) {
-      if (dataUrl) {
-        // 小文件：直接一次发出去
-        var payload = Object.assign({ t: 'file', data: dataUrl }, extra);
-        if (!wsSend(payload)) toast('没连上服务器，发送失败');
-      }
-    }).catch(function () { toast('发送中断，检查网络'); });
-  }
-  function sendFile(file) {
-    if (!S.cur) return;
-    if (file.size > UPLOAD_LIMIT) { toast('文件超过 50 MB'); return; }
-    toast('正在发送 ' + file.name);
-    var tid = 'f' + Date.now() + Math.random().toString(36).slice(2, 6);
-    var mime = file.type || '';
-    deliverFile(file, {
-      tid: tid, name: file.name || '文件', mime: mime,
-      preview: '', voice: false
-    });
-  }
-
-  /* ---------------- 语音 ---------------- */
-  var recorder = null, recChunks = [], recStart = 0, recTimer = null;
-  function voiceSupported() {
-    return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  }
   function startVoice() {
     if (!voiceSupported()) { toast('这个系统不支持录音'); return; }
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
-      recChunks = [];
-      var mime = '';
-      try {
-        if (typeof MediaRecorder.isTypeSupported === 'function') {
-          if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
-          else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm';
-          else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
-          else if (MediaRecorder.isTypeSupported('audio/aac')) mime = 'audio/aac';
-        }
-      } catch (e) { mime = ''; }
-      try { recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
-      catch (e) {
-        try { recorder = new MediaRecorder(stream); }
-        catch (e2) { toast('这台设备不支持录音编码'); stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      var ok = false;
+      if (window.MediaRecorder) {
+        try {
+          var mime = '';
+          try {
+            if (typeof MediaRecorder.isTypeSupported === 'function') {
+              if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
+              else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm';
+              else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
+              else if (MediaRecorder.isTypeSupported('audio/aac')) mime = 'audio/aac';
+            }
+          } catch (e0) { mime = ''; }
+          mrRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+          ok = !!mrRecorder;
+        } catch (e) { mrRecorder = null; }
       }
-      recorder.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
-      recorder.onstop = function () {
-        stream.getTracks().forEach(function (t) { t.stop(); });
-        // stopVoice() 会把全局 recorder 置空，这里必须用局部引用，否则读 mimeType 会抛错
-        var rec = recorder;
-        recorder = null;
+      if (!ok) { startVoicePCM(stream); return; }        // 没有编码器：退回 PCM
+      voiceMode = 'mr';
+      mrChunks = [];
+      mrRecorder.ondataavailable = function (e) { if (e.data && e.data.size) mrChunks.push(e.data); };
+      mrRecorder.onstop = function () {
+        var rec = mrRecorder;
+        mrRecorder = null;
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
         var secs = Math.max(1, Math.round((Date.now() - recStart) / 1000));
-        var chunks = (recChunks && recChunks.length) ? recChunks : [];
+        var chunks = mrChunks || [];
         if (!chunks.length) { toast('没录到声音，请重试'); return; }
         var type = (rec && rec.mimeType) || (chunks[0] && chunks[0].type) || 'audio/webm';
-        var blob = new Blob(chunks, { type: type });
-        sendVoice(blob, secs);
+        sendVoice(new Blob(chunks, { type: type }), secs);
       };
       recStart = Date.now();
-      recorder.start();
-      $('#recordingBar').classList.remove('hidden');
-      $('#btnVoice').classList.add('on');
-      var tick = function () {
-        var s = Math.round((Date.now() - recStart) / 1000);
-        $('#recTime').textContent = '录音中 ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-        if (s >= 60) { stopVoice(); return; }
-        recTimer = setTimeout(tick, 500);
-      };
-      tick();
-    }).catch(function (err) {
-      var nm = err && err.name ? err.name : '';
-      if (nm === 'NotAllowedError') toast('麦克风被拒绝：去系统设置给纸鸢开麦克风权限');
-      else if (nm === 'NotFoundError') toast('没找到麦克风设备');
-      else toast('录音启动失败：' + (nm || '未知错误'));
-    });
+      try { mrRecorder.start(); } catch (e2) { mrRecorder = null; startVoicePCM(stream); return; }
+      showRecBar();
+    }).catch(recMicError);
   }
+
+  function startVoicePCM(stream) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) {
+      toast('这个系统不支持录音');
+      try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      return;
+    }
+    try {
+      voiceMode = 'pcm';
+      pcmStream = stream;
+      pcmCtx = new AC();
+      pcmRate = pcmCtx.sampleRate || 16000;
+      pcmChunks = [];
+      var source = pcmCtx.createMediaStreamSource(stream);
+      pcmProc = pcmCtx.createScriptProcessor(4096, 1, 1);
+      pcmGain = pcmCtx.createGain();
+      pcmGain.gain.value = 0;                // 静音，避免回授
+      pcmProc.onaudioprocess = function (e) { pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+      source.connect(pcmProc);
+      pcmProc.connect(pcmGain);
+      pcmGain.connect(pcmCtx.destination);
+      recStart = Date.now();
+      showRecBar();
+    } catch (e) { toast('录音启动失败：' + ((e && e.message) || '')); }
+  }
+
   function stopVoice() {
     clearTimeout(recTimer);
-    $('#recordingBar').classList.add('hidden');
-    $('#btnVoice').classList.remove('on');
-    if (recorder && recorder.state !== 'inactive') {
-      try { recorder.stop(); } catch (e) { recorder = null; }
+    var bar = $('#recordingBar'); if (bar) bar.classList.add('hidden');
+    var btn = $('#btnVoice'); if (btn) btn.classList.remove('on');
+    if (voiceMode === 'mr') {
+      if (mrRecorder && mrRecorder.state !== 'inactive') { try { mrRecorder.stop(); } catch (e) { mrRecorder = null; } }
+      return;
     }
+    stopVoicePCM();
   }
+
+  function stopVoicePCM() {
+    var ctx = pcmCtx, rate = pcmRate, chunks = pcmChunks;
+    pcmCtx = null; pcmChunks = [];
+    try { if (pcmProc) pcmProc.disconnect(); } catch (e) {}
+    try { if (pcmGain) pcmGain.disconnect(); } catch (e) {}
+    try { if (pcmStream) pcmStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    try { if (ctx) ctx.close(); } catch (e) {}
+    if (!chunks.length) { toast('没录到声音'); return; }
+    var secs = Math.max(1, Math.round((Date.now() - recStart) / 1000));
+    sendVoice(encodeWav(chunks, rate, 16000), secs);
+  }
+
   function sendVoice(blob, secs) {
     if (!S.cur) return;
     var tid = 'v' + Date.now() + Math.random().toString(36).slice(2, 6);
-    var bt = blob.type || '';
-    var ext = bt.indexOf('mp4') >= 0 ? 'm4a' : (bt.indexOf('aac') >= 0 ? 'aac' : 'webm');
+    var bt = String(blob.type || '');
+    var ext = bt.indexOf('wav') >= 0 ? 'wav'
+            : bt.indexOf('mp4') >= 0 ? 'm4a'
+            : bt.indexOf('aac') >= 0 ? 'aac' : 'webm';
     var preview = URL.createObjectURL ? URL.createObjectURL(blob) : '';
     deliverFile(blob, {
       tid: tid, name: '语音-' + secs + 's.' + ext, mime: blob.type || 'audio/webm',
@@ -7074,7 +7177,7 @@
   }
 
   /* ---------------- 版本检查 / 线上更新 ---------------- */
-  var MY_CODE = 36;
+  var MY_CODE = Number(window.APP_CODE) || 180;   // 由 version.js 注入，别和 manifest 打两个版本号
   function nativeCode() {
     try { if (window.PaperNative && window.PaperNative.versionCode) return Number(window.PaperNative.versionCode()) || MY_CODE; } catch (e) {}
     return MY_CODE;
@@ -7417,6 +7520,125 @@
   }
 
   /* 果冻：按滑行距离算拉伸量，带过冲与二次回弹，方向朝哪边就往哪边抻 */
+  /* ---------------- 分段控件：果冻药丸 ----------------
+     同一行里的切换按钮（.seg / .tabs）以前是"各自换底色"，没有位移感。
+     这里给每个分组塞一个空药丸，选中项变化时让它滑过去并做一次果冻过冲，
+     手感和底栏导航一致（底栏用的是 #navPill + runJelly）。 */
+  function segPillFor(box) {
+    if (!box) return null;
+    for (var i = 0; i < box.children.length; i++) {
+      if (box.children[i].classList && box.children[i].classList.contains('seg-pill')) return box.children[i];
+    }
+    var pill = document.createElement('i');
+    pill.className = 'seg-pill';
+    pill.setAttribute('aria-hidden', 'true');
+    box.insertBefore(pill, box.firstChild);
+    box.classList.add('has-pill');
+    return pill;
+  }
+  function segItemsOf(box) {
+    var out = [];
+    for (var i = 0; i < box.children.length; i++) {
+      var el = box.children[i];
+      if (!el.classList) continue;
+      if (el.classList.contains('seg-item') || el.classList.contains('tab')) out.push(el);
+    }
+    return out;
+  }
+  function jellySeg(pill, fromX, fromW, toX, toW) {
+    var dir = toX > fromX ? 1 : (toX < fromX ? -1 : (toW > fromW ? 1 : -1));
+    var dist = Math.abs(toX - fromX);
+    var stretch = Math.min(1.16, 1 + dist / 1000);
+    var over = Math.min(9, dist * 0.11);
+    pill.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
+    function f(x, w, sx, sy) {
+      return { transform: 'translateX(' + Math.round(x) + 'px) scaleX(' + sx.toFixed(3) + ') scaleY(' + sy.toFixed(3) + ')', width: Math.round(w) + 'px' };
+    }
+    var frames = [
+      f(fromX, fromW, 1, 1),
+      f(fromX + (toX - fromX) * 0.3, fromW + (toW - fromW) * 0.3, stretch, 1 / stretch),
+      f(toX + dir * over, toW, 1 + (stretch - 1) * 0.45, 1 - (stretch - 1) * 0.3),
+      f(toX - dir * over * 0.42, toW, 1 + (stretch - 1) * 0.18, 1),
+      f(toX + dir * over * 0.12, toW, 1 - (stretch - 1) * 0.06, 1),
+      f(toX, toW, 1, 1)
+    ];
+    try { if (pill.__anim) pill.__anim.cancel(); } catch (e) {}
+    try {
+      pill.__anim = pill.animate(frames, { duration: 440, easing: 'linear', fill: 'none' });
+    } catch (e) {
+      pill.style.transform = 'translateX(' + toX + 'px)';
+      pill.style.width = toW + 'px';
+    }
+    pill.classList.remove('sheen');
+    void pill.offsetWidth;
+    pill.classList.add('sheen');
+    clearTimeout(pill.__st);
+    pill.__st = setTimeout(function () { pill.classList.remove('sheen'); }, 660);
+  }
+  function syncSeg(box, animate) {
+    if (!box) return;
+    if (box.__segSyncing) return;      // 防止观察器回调把自己再叫一遍
+    box.__segSyncing = true;
+    try { syncSegInner(box, animate); } finally { box.__segSyncing = false; }
+  }
+  function syncSegInner(box, animate) {
+    var pill = segPillFor(box);
+    if (!pill) return;
+    if (!box.offsetWidth && !box.offsetHeight) { pill.classList.remove('on'); return; }   // 面板收着时先不画
+    var items = segItemsOf(box), on = null;
+    for (var i = 0; i < items.length; i++) if (items[i].classList.contains('on')) { on = items[i]; break; }
+    if (!on || !on.offsetWidth) { pill.classList.remove('on'); return; }
+    var toX = on.offsetLeft, toW = on.offsetWidth;
+    var fromX = Number(pill.__x) || 0, fromW = Number(pill.__w) || 0;
+    if (!pill.classList.contains('on') || !fromW || !animate) {
+      pill.style.width = toW + 'px';
+      pill.style.transform = 'translateX(' + toX + 'px)';
+    } else {
+      jellySeg(pill, fromX, fromW, toX, toW);
+    }
+    pill.__x = toX; pill.__w = toW;
+    pill.classList.add('on');
+  }
+  function syncAllSegs(animate) {
+    var boxes = document.querySelectorAll('.seg, .tabs');
+    for (var i = 0; i < boxes.length; i++) syncSeg(boxes[i], animate);
+  }
+  function bindSegPills() {
+    // 点任何分段项之后补一帧再同步（此时 .on 已经换过了）
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      var box = t && t.closest ? t.closest('.seg, .tabs') : null;
+      if (!box) return;
+      requestAnimationFrame(function () { syncSeg(box, true); });
+    }, true);
+    // 代码里改 .on（渲染面板 / 字号 / 开关）时也能跟上。
+    // 注意：只盯"容器自己"，不盯 document.body —— 全body监听会被页面里任何 class 变化
+    // 反复唤醒，加上药丸自己也在改 class，很容易自己喂自己。
+    var boxes = document.querySelectorAll('.seg, .tabs');
+    for (var i = 0; i < boxes.length; i++) {
+      (function (box) {
+        var queued = false;
+        function queue() {
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(function () { queued = false; syncSeg(box, true); });
+        }
+        try {
+          new MutationObserver(function (list) {
+            for (var k = 0; k < list.length; k++) {
+              var t = list[k].target;
+              if (t && t.classList && t.classList.contains('seg-pill')) continue;   // 药丸自己的动画类不算
+              queue();
+              return;
+            }
+          }).observe(box, { attributes: true, attributeFilter: ['class'], subtree: true });
+        } catch (e) {}
+      })(boxes[i]);
+    }
+    window.addEventListener('resize', function () { syncAllSegs(false); });
+    window.addEventListener('orientationchange', function () { setTimeout(function () { syncAllSegs(false); }, 260); });
+  }
+
   function runJelly(pill, fromX, toX) {
     var dist = toX - fromX;
     var dir = dist > 0 ? 1 : -1;
@@ -7699,6 +7921,7 @@
     } catch (e) {}
     try { S.dms = JSON.parse(localStorage.getItem(LK('dms')) || '{}') || {}; } catch (e) { S.dms = {}; }
     try { aiNormalize(); } catch (e) {}      // 必须在 load() 之后：它会写存档
+    try { loadQueue(); } catch (e) {}
     try { dropFakeQueue(); } catch (e) {}
     try { if (S.localAgent && S.localAgent.on) ensureLocalConv(true); } catch (e) {}
     bind();
@@ -7728,6 +7951,7 @@
       }
     } catch (e) {}
     bindViewer();
+    try { bindSegPills(); syncAllSegs(false); } catch (e) {}
 
     on('#btnPinRoom', 'click', function () {
       var rid = S.cur;
@@ -7974,8 +8198,39 @@
   window.addEventListener('orientationchange', function () { setTimeout(syncViewport, 260); });
   try { if (window.visualViewport) window.visualViewport.addEventListener('resize', syncViewport); } catch (e) {}
 
+  /* 全局兜底：未捕获异常不再只是白屏，写进诊断日志并给一个自救入口 */
+  var errShown = 0;
+  function showFatal(msg) {
+    try { blog('未捕获: ' + msg); } catch (e) {}
+    if (errShown >= 3) return;                 // 同一轮刷屏只提示三次
+    errShown++;
+    var bar = document.getElementById('zyFatal');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'zyFatal';
+      bar.setAttribute('style', 'position:fixed;left:8px;right:8px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:9999;'
+        + 'padding:10px 12px;border-radius:14px;background:rgba(40,40,52,.92);color:#fff;font-size:12px;line-height:1.5;'
+        + 'box-shadow:0 8px 24px rgba(0,0,0,.3);display:flex;gap:8px;align-items:center');
+      bar.innerHTML = '<span id="zyFatalMsg" style="flex:1"></span>'
+        + '<button type="button" id="zyFatalReload" style="border:0;border-radius:10px;padding:6px 10px;background:#fff;color:#222;font-size:12px">重开</button>'
+        + '<button type="button" id="zyFatalClose" style="border:0;background:transparent;color:#bbb;font-size:14px">×</button>';
+      document.body.appendChild(bar);
+      bar.querySelector('#zyFatalReload').addEventListener('click', function () { location.reload(); });
+      bar.querySelector('#zyFatalClose').addEventListener('click', function () { bar.style.display = 'none'; });
+    }
+    var t = bar.querySelector('#zyFatalMsg');
+    if (t) t.textContent = '出了点问题：' + String(msg || '').slice(0, 120);
+    bar.style.display = 'flex';
+  }
+  window.addEventListener('error', function (e) {
+    showFatal((e && e.message) || '脚本错误');
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    showFatal((e && e.reason && (e.reason.message || e.reason)) || '异步错误');
+  });
+
   document.addEventListener('DOMContentLoaded', function () { syncViewport(); boot(); });
   // 页面被隐藏/卸载时兜底存一次（stateLoaded 之前不会写，安全）
-  document.addEventListener('visibilitychange', function () { if (document.hidden) { try { save(); } catch (e) {} try { flushWebStorage(); } catch (e) {} } });
-  window.addEventListener('pagehide', function () { try { save(); } catch (e) {} });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { try { saveNow(); } catch (e) {} try { flushWebStorage(); } catch (e) {} } });
+  window.addEventListener('pagehide', function () { try { saveNow(); } catch (e) {} });
 })();
