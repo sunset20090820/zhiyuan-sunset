@@ -1078,8 +1078,9 @@ html[data-skin] .chat-top {
 /* 底栏单独抬一档不透明度：它是固定层，玻璃太透时下面的设置项会清清楚楚透上来，
    看起来就像"内容入侵了菜单栏"。这里给 88% 的下限，仍然带模糊。 */
 html[data-skin] .tabbar {
-  /* 88% 时广场长列表会清清楚楚从底栏底下透上来，抬到 94% 更像一块独立的栏 */
-  background-color: color-mix(in srgb, var(--m3e-surface) 94%, transparent);
+  /* 底栏必须几乎不透：--m3e-surface 本身带透明度，按百分比 mix 永远是半透，
+     长列表会清清楚楚从底下穿过去。这里用一个不透明的白/黑底再去混主题色。 */
+  background-color: color-mix(in srgb, #ffffff 90%, var(--accent));
 }
 html[data-skin] .tabbar {
   border: 0;
@@ -1962,8 +1963,9 @@ html[data-skin] .action-scrim {
 /* ---- 页面顶部：滚动时底栏/顶栏更强，静态页面弱一点，层次更清楚 ---- */
 html[data-skin] .tabbar {
   /* 底栏要保持通透：太实就没玻璃边界、果冻弹动也看不出来。
-     只比通用玻璃厚一点点（+4%），并保留一圈亮边 + 顶部内高光 */
-  background: color-mix(in srgb, var(--m3e-surface) calc((var(--m3e-glass-a) + .04) * 100%), transparent);
+     只比通用玻璃厚一点点（+4%），并保留一圈亮边 + 顶部内高光。
+     注意用 background-color：写成 background 简写会把后面的不透明底覆盖掉。 */
+  background-color: color-mix(in srgb, var(--m3e-surface) calc((var(--m3e-glass-a) + .16) * 100%), transparent);
   border: 0 !important;
   -webkit-backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35)) !important;
   backdrop-filter: blur(var(--m3e-glass-blur)) saturate(var(--m3e-glass-sat, 1.35)) !important;
@@ -2492,4 +2494,21 @@ html[data-skin="m3e"] .tabbar .tab-item[data-tab="feed"] .tab-ico {
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
   -webkit-mask-position: center; mask-position: center;
   -webkit-mask-size: 22px 22px; mask-size: 22px 22px;
+}
+
+/* 广场：发布键抬到五格底栏之上（底栏 80px + 安全区 + 18px） */
+html[data-skin="m3e"] #feed .fab { bottom: calc(80px + var(--safe-bottom) + 18px); right: 20px; }
+html[data-skin="m3e"] #feed .feed-list { padding-bottom: calc(150px + var(--safe-bottom)); }
+html[data-skin][data-theme="dark"] .tabbar {
+  background-color: color-mix(in srgb, #17151d 88%, var(--accent));
+}
+
+/* 底栏最终态：不透明（--m3e-surface 自带透明度，任何百分比 mix 都还是半透，
+   长列表会从底下穿过去，用户会当成 bug）。用实白/实黑去混主题色。 */
+html[data-skin] .tabbar {
+  background-color: color-mix(in srgb, #ffffff 88%, var(--accent)) !important;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html[data-skin][data-theme="dark"] .tabbar {
+  background-color: color-mix(in srgb, #17151d 86%, var(--accent)) !important;
 }

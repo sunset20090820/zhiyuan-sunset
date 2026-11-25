@@ -3395,10 +3395,13 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
 /* =========================================================
    广场（公共动态）
    ========================================================= */
+#feed { position: relative; }
 #feed .topbar { border-bottom: 0; }
+/* 发布键要落在底栏上方，不然会压在「我的」那一格上 */
+#feed .fab { bottom: calc(56px + var(--safe-bottom) + 18px); }
 .feed-list {
   flex: 1; overflow-y: auto; overscroll-behavior-y: contain;
-  padding: 6px 12px calc(96px + var(--safe-bottom));
+  padding: 6px 12px calc(120px + var(--safe-bottom));
   -webkit-overflow-scrolling: touch;
 }
 .mo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
