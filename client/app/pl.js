@@ -284,10 +284,12 @@
     if (!p) return;
     PL._open = true;
     p.classList.remove('hidden');
-    try { if (api.hideTab) api.hideTab(true); } catch (e) {}
-    if (!booted) { booted = true; }
-    render();
-    if (tab === 'market' && !market.length) PL.loadMarket();
+    if (!booted) booted = true;
+    // 先让页面出来，再画画：这样即使列表渲染慢，也不会出现「点了没反应」
+    setTimeout(function () {
+      try { render(); } catch (e) {}
+      if (tab === 'market' && !market.length) PL.loadMarket();
+    }, 0);
   }
   function closePage() {
     var p = $('#modPage');
@@ -295,8 +297,6 @@
     PL._open = false;
     try { closeRun(); } catch (e) {}
     p.classList.add('hidden');
-    try { if (api.hideTab) api.hideTab(false); } catch (e) {}
-    try { render(); } catch (e) {}
   }
   function actuallyRun(id) {
     var rec = installed[id];

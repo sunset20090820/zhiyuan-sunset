@@ -1065,7 +1065,7 @@
 <div id="toast" class="toast"></div>
 
 <!-- ===== 模块（插件） ===== -->
-<div id="modPage" class="me-page hidden">
+<div id="modPage" class="plain-page hidden">
   <header class="topbar">
     <button id="modBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand">模块</div>
@@ -1077,16 +1077,16 @@
     <button class="mod-tab" type="button" id="modUploadBtn">上传</button>
   </div>
   <div id="modList" class="mod-list-wrap"></div>
+  <div id="modRun" class="mod-run-inner hidden">
+    <div class="mod-run-bar">
+      <button id="modRunBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+      <div class="brand" id="modRunTitle">模块</div>
+    </div>
+    <div id="modRunBody" class="mod-run-body"></div>
+  </div>
 </div>
 
-<div id="modRun" class="mod-run hidden">
-  <header class="topbar">
-    <button id="modRunBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand" id="modRunTitle">模块</div>
-    <span class="logout-chip" style="visibility:hidden">·</span>
-  </header>
-  <div id="modRunBody" class="mod-run-body"></div>
-</div>
+
 
 <div id="modUpload" class="action-layer hidden">
   <div class="action-scrim"></div>

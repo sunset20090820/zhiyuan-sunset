@@ -3514,9 +3514,17 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
 .mod-btn.ghost { background: transparent; color: var(--sub); }
 .mod-empty { padding: 40px 24px; text-align: center; color: var(--sub); font-size: 13px; line-height: 1.6; }
 
-.mod-run { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 90;
+/* 模块页：独立于 .me-page / 玻璃 / 壁纸那套，纯色普通页，底栏保持可点 */
+.plain-page { position: fixed; left: 0; right: 0; top: 0; bottom: calc(56px + var(--safe-bottom));
+  z-index: 51; display: flex; flex-direction: column; background: var(--bg); }
+.plain-page.hidden { display: none !important; }
+html[data-skin] .plain-page { bottom: calc(80px + var(--safe-bottom)); background: var(--m3e-surface); }
+html[data-skin] .plain-page, html[data-skin] .plain-page * { animation: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.mod-run-inner { position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: 3;
   display: flex; flex-direction: column; background: var(--bg); }
-.mod-run.hidden { display: none; }
+.mod-run-inner.hidden { display: none !important; }
+.mod-run-bar { display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 10px;
+  border-bottom: 1px solid var(--line); background: var(--bg); }
 .mod-run-body { flex: 1; overflow-y: auto; padding: 12px 14px calc(20px + var(--safe-bottom)); -webkit-overflow-scrolling: touch; }
 .mod-host { min-height: 40px; }
 .mod-loading, .mod-error { padding: 30px 10px; text-align: center; color: var(--sub); font-size: 13px; }
