@@ -272,7 +272,8 @@
       return;
     }
     if (!market.length) {
-      box.innerHTML = '<div class="mod-empty">' + (PL._loading ? '正在获取模块列表…' : '市场里还没有模块') + '</div>';
+      box.innerHTML = '<div class="mod-empty">' + (PL._loading ? '正在获取模块列表…' : '市场里还没有模块') +
+        '</div><div class="mod-empty-ops"><button class="mod-btn" type="button" data-mod-retry>重新获取</button></div>';
       return;
     }
     box.innerHTML = '<ul class="mod-list">' + market.map(marketCard).join('') + '</ul>';
@@ -281,8 +282,9 @@
   function openPage() {
     var p = $('#modPage');
     if (!p) return;
+    PL._open = true;
     p.classList.remove('hidden');
-    if (api.hideTab) api.hideTab(true);
+    try { if (api.hideTab) api.hideTab(true); } catch (e) {}
     if (!booted) { booted = true; }
     render();
     if (tab === 'market' && !market.length) PL.loadMarket();
@@ -290,10 +292,11 @@
   function closePage() {
     var p = $('#modPage');
     if (!p) return;
-    closeRun();
+    PL._open = false;
+    try { closeRun(); } catch (e) {}
     p.classList.add('hidden');
-    if (api.hideTab) api.hideTab(false);
-    render();
+    try { if (api.hideTab) api.hideTab(false); } catch (e) {}
+    try { render(); } catch (e) {}
   }
   function actuallyRun(id) {
     var rec = installed[id];
@@ -424,10 +427,38 @@
     }
   };
 
+  /* ---------------- 兜底退出 ---------------- */
+  // 不依赖 init 是否成功：模块页/运行页的返回键永远有效，退出时把底栏还原
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (!t.closest('#modBack') && !t.closest('#modRunBack')) return;
+    try { closeRun(); } catch (x) {}
+    try { closePage(); } catch (x) {}
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var run = $('#modRun'), page = $('#modPage');
+    var open = (run && !run.classList.contains('hidden')) || (page && !page.classList.contains('hidden'));
+    if (!open) return;
+    try { closeRun(); } catch (x) {}
+    try { closePage(); } catch (x) {}
+  }, true);
+
   /* ---------------- 初始化 ---------------- */
   PL.init = function (hooks) {
     api = hooks || {};
     api.confirmBox = api.confirmBox || confirmBox;
+    try {
+      initUi();
+    } catch (e) {
+      PL.initError = String((e && e.message) || e);
+      var box = $('#modList');
+      if (box) box.innerHTML = '<div class="mod-error">模块页初始化失败：' + esc(PL.initError) + '</div>';
+    }
+  };
+
+  function initUi() {
     loadInstalled();
     var page = $('#modPage');
     if (page && !page.__modBound) {
@@ -436,7 +467,7 @@
         var t = e.target;
         if (t.closest('[data-mod-tab]')) { PL.setTab(t.closest('[data-mod-tab]').getAttribute('data-mod-tab')); return; }
         if (t.closest('#modBack')) { closePage(); return; }
-        if (t.closest('#modRefresh')) { PL.loadMarket(); return; }
+        if (t.closest('#modRefresh') || t.closest('[data-mod-retry]')) { PL.loadMarket(); return; }
         if (t.closest('#modUploadBtn')) { openUpload(); return; }
         var op = t.closest('[data-mod-open]');
         if (op) { openRun(op.getAttribute('data-mod-open')); return; }

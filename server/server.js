@@ -85,8 +85,19 @@ const MOD_MAX_KV = 200;            // 每个模块每个用户最多多少键
 const MOD_MAX_KV_BYTES = 64 * 1024;
 const MOD_PERMS = ['store', 'ui', 'notify', 'image'];
 let modIndex = [];
-try { modIndex = JSON.parse(require('fs').readFileSync(MOD_INDEX, 'utf8')) || []; } catch (e) { modIndex = []; }
-if (!Array.isArray(modIndex)) modIndex = [];
+let modIndexLoaded = false;
+function modLoadIndex() {
+  // 启动时读一次；文件后来才出现（或服务是被更新的）也要能读出来，所以空的时候重试一次
+  if (modIndexLoaded) return;
+  modIndexLoaded = true;
+  try {
+    const raw = require('fs').readFileSync(MOD_INDEX, 'utf8');
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) modIndex = arr;
+  } catch (e) { modIndex = []; }
+  if (!Array.isArray(modIndex)) modIndex = [];
+}
+modLoadIndex();
 function modSaveSoon() {
   clearTimeout(modSaveSoon.t);
   modSaveSoon.t = setTimeout(function () {
@@ -841,6 +852,7 @@ function handleMessage(c, buf, opcode) {
   // ---------- 广场（公共动态） ----------
   /* ---------------- 模块系统 ---------------- */
   if (d.t === 'mod_index') {
+    if (!modIndex.length) { modIndexLoaded = false; modLoadIndex(); }
     const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
     const myUid = acc ? Number(acc.uid) || 0 : 0;
     const dev = isDevAccount(acc);
