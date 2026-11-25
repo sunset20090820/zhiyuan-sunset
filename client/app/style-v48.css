@@ -3458,9 +3458,11 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
 .mo-img-box img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; display: block; }
 .mo-img-del { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border: 0;
   border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; font-size: 13px; }
-.mo-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-.mo-actions .flat { flex: none; }
-.mo-actions .primary { flex: 1; }
+.mo-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; min-width: 0; }
+/* .flat / .primary 基础样式是 width:100%，直接摊到 flex 行里会把发布键挤出屏幕：
+   这里把宽度交还给 flex，否则两键各要整行宽 */
+.mo-actions .flat { flex: 0 0 auto; width: auto; }
+.mo-actions .primary { flex: 1 1 0; width: auto; min-width: 0; }
 
 /* 底栏红点（广场未读） */
 .tab-item { position: relative; }
