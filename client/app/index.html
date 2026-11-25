@@ -618,6 +618,32 @@
 </div>
 
 
+<!-- ===== 广场（公共动态） ===== -->
+<main id="feed" class="screen hidden">
+  <header class="topbar">
+    <div class="brand">广场</div>
+    <button id="feedRefresh" class="icon-btn" type="button" aria-label="刷新">↻</button>
+  </header>
+  <div id="feedList" class="feed-list"></div>
+  <p class="hint" id="feedEmpty" style="display:none">广场还空着。发第一条吧。</p>
+  <button id="feedFab" class="fab" type="button" aria-label="发动态">✏</button>
+</main>
+
+<div id="momentSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card mo-card" role="dialog" aria-modal="true" aria-label="发到广场">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">发到广场</h3>
+    <textarea id="moText" class="mo-text" maxlength="600" placeholder="说点什么…（所有人可见）"></textarea>
+    <div id="moImgBox" class="mo-img-box hidden"><img id="moImg" alt=""><button id="moImgDel" class="mo-img-del" type="button" aria-label="移除图片">✕</button></div>
+    <input id="moImgInput" type="file" accept="image/*" class="hidden">
+    <div class="mo-actions">
+      <button id="moPickImg" class="flat" type="button">📷 图片</button>
+      <button id="moSend" class="primary" type="button">发布</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 扮演（主分页） ===== -->
 <main id="roles" class="screen roles-screen hidden">
   <header class="topbar">
@@ -1008,6 +1034,7 @@
 <nav id="tabbar" class="tabbar">
   <span id="navPill" class="nav-pill" aria-hidden="true"><i></i></span>
   <button class="tab-item on" data-tab="chats" type="button"><span class="tab-ico">💬</span>对话</button>
+  <button class="tab-item" data-tab="feed" type="button"><span class="tab-ico">🌐</span>广场<i class="tab-dot hidden" id="feedDot"></i></button>
   <button class="tab-item" data-tab="contacts" type="button"><span class="tab-ico">👥</span>联系人</button>
   <button class="tab-item" data-tab="roles" type="button"><span class="tab-ico">🎭</span>扮演</button>
   <button class="tab-item" data-tab="me" type="button"><span class="tab-ico">☰</span>我的</button>
@@ -1035,6 +1062,7 @@
 <script src="roll.js"></script>
 <script src="export.js"></script>
 <script src="ctx.js"></script>
+<script src="moments.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -464,6 +464,7 @@
       staleTries = 0;
       setConn(true);
       startHeartbeat();
+      try { if (window.MOM) MOM.onWsOpen(); } catch (e) {}
       if (S.pendingAuth) { sendAuth(S.pendingAuth); return; }   // 等验证通过再 join
       checkVersion();                                           // 版本检查与登录状态无关
       // 已登录：先用令牌恢复服务端身份，拿回 uid/好友/私信，否则服务端只当游客
@@ -622,7 +623,7 @@
       if ($('#regError')) $('#regError').classList.add('hidden');
       S.user = d.user; S.nick = d.nick || d.user; S.auth = true;
       if (d.token) S.token = d.token;
-      if (d.uid) { S.uid = Number(d.uid); S.myId = 'uid:' + S.uid; }
+      if (d.uid) { S.uid = Number(d.uid); S.myId = 'uid:' + S.uid; try { if (window.MOM) MOM.setUid(S.uid); } catch (e) {} }
       blog('登录成功 ' + S.user + '，令牌 ' + (S.token ? '已保存' : '缺失'));
       if (d.uid) S.uid = Number(d.uid);
       save();
@@ -719,7 +720,8 @@
       return;
     }
     if (d.t === 'people') { S.people = d.list || []; learnAvatars(S.people); return; }
-    if (d.t === 'uid') { S.uid = d.uid || 0; if (S.tab === 'me') fillMe(); return; }
+    if (/^moment_/.test(String(d.t || ''))) { try { if (window.MOM) MOM.onMessage(d); } catch (e) {} return; }
+    if (d.t === 'uid') { S.uid = d.uid || 0; try { if (window.MOM) MOM.setUid(S.uid); } catch (e) {} if (S.tab === 'me') fillMe(); return; }
     if (d.t === 'contacts') {
       S.friends = d.friends || [];
       learnAvatars(S.friends);
@@ -3744,7 +3746,7 @@
 
   /* ---------- 页面：角色列表 ---------- */
   function hideTabShell() {
-    ['#chats', '#contacts', '#roles', '#tabbar'].forEach(function (sel) { var el = $(sel); if (el) el.classList.add('hidden'); });
+    ['#chats', '#feed', '#contacts', '#roles', '#tabbar'].forEach(function (sel) { var el = $(sel); if (el) el.classList.add('hidden'); });
   }
   function showTabShell() {
     var bar = $('#tabbar');
@@ -7711,6 +7713,7 @@
     var prevTab = S.tab;
     S.tab = name;
     $('#chats').classList.toggle('hidden', name !== 'chats');
+    $('#feed').classList.toggle('hidden', name !== 'feed');
     $('#contacts').classList.toggle('hidden', name !== 'contacts');
     $('#roles').classList.toggle('hidden', name !== 'roles');
     $('#mePage').classList.toggle('hidden', name !== 'me');
@@ -7765,6 +7768,8 @@
 
     if (name === 'me') fillMe();
     if (name === 'contacts') renderContacts();
+    if (name === 'feed') { try { if (window.MOM) MOM.open(); } catch (e) {} }
+    else { try { if (window.MOM) MOM.close(); } catch (e) {} }
   }
   // 头像：缩到 256px 再上传，省流量也省服务器
   function sendAvatar(file) {
@@ -7965,6 +7970,21 @@
   }
 
   function boot() {
+    try {
+      if (window.MOM) MOM.init({
+        send: function (o) { return wsSend(o); },
+        toast: function (m) { toast(m); },
+        myUid: function () { return S.uid || 0; },
+        isDev: function () {
+          try { return isDevUid(Number(S.uid)); } catch (e) { return false; }
+        },
+        colorOf: function (k) { return colorOf(k); },
+        imgSrc: function (p) { return /^\//.test(p) ? httpBase() + p : p; },
+        viewImage: function (src) { openViewer(src); },
+        confirmTap: function (key) { return confirmTap(key, '再点一次删除这条动态'); }
+      });
+    } catch (e) {}
+
     try { applyTheme(localStorage.getItem('paperlite.theme') || ''); } catch (e) {}
     setCurrentServer(currentServer() || DEFAULT_SERVER);
     migrateLegacy();

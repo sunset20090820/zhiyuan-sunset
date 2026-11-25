@@ -69,9 +69,43 @@ const DEV_UIDS = (function () {
 const DEV_UID = DEV_UIDS[0];   // 旧代码兼容：回复时用第一个
 
 // ---- 反馈箱：所有用户的反馈都落到这一份，开发者登录就能看到 ----
+// ---- 广场（朋友圈式公共动态） ----
+const MOMENT_FILE = path.join(DATA_DIR, 'moments.json');
+const MOMENT_MAX = 600;          // 最多保留多少条动态
+const MOMENT_TEXT = 600;         // 单条正文上限
+const MOMENT_COMMENT = 200;      // 单条评论上限
+const MOMENT_CMT_MAX = 40;       // 每条动态最多多少条评论
+const MOMENT_LIKES_MAX = 2000;   // 点赞上限（防刷）
+let moments = [];
+function loadMoments() {
+  try { moments = JSON.parse(fs.readFileSync(MOMENT_FILE, 'utf8')) || []; } catch (e) { moments = []; }
+  if (!Array.isArray(moments)) moments = [];
+}
+let momentSaveTimer = 0;
+function saveMomentsSoon() {
+  if (momentSaveTimer) return;
+  momentSaveTimer = setTimeout(function () {
+    momentSaveTimer = 0;
+    try {
+      const cut = moments.length > MOMENT_MAX ? moments.slice(moments.length - MOMENT_MAX) : moments;
+      moments = cut;
+      fs.writeFileSync(MOMENT_FILE, JSON.stringify(cut, null, 1));
+    } catch (e) { console.log('[moments] 保存失败', e.message); }
+  }, 400);
+}
+function momentPublic(m) {
+  return {
+    id: m.id, uid: m.uid, name: m.name, avatar: m.avatar || '',
+    text: m.text, img: m.img || '', w: m.w || 0, h: m.h || 0,
+    ts: m.ts, likes: m.likes || [], comments: m.comments || []
+  };
+}
+function broadcastAll(obj) { for (const c of clients) send(c, obj); }
+
 const FB_FILE = path.join(DATA_DIR, 'feedback.json');
 let feedback = [];
 try { feedback = JSON.parse(fs.readFileSync(FB_FILE, 'utf8')) || []; } catch (e) { feedback = []; }
+loadMoments();
 const FB_MAX = 800;
 function saveFeedback() {
   try {
@@ -594,11 +628,15 @@ function handleMessage(c, buf, opcode) {
   if (!d || typeof d !== 'object') return;
 
   // 简单限流：1 秒最多 8 条（分片上传是正常的大流量，单独放行）
+  // 只读查询不算刷屏：客户端刚连上会一次发好几个（版本、恢复、join、群组、好友、私信、动态列表…），
+  // 以前 8 条/秒会把「广场首屏」这类紧跟着的连接期消息挡掉，表现就是列表一直转、不显示。
+  const isReadQuery = d.t === 'moment_list' || d.t === 'fb_mine' || d.t === 'groups' ||
+                      d.t === 'contacts' || d.t === 'pm_history' || d.t === 'version_check';
   const isUploadChunk = d.t === 'file_part' || d.t === 'file_start' || d.t === 'file_end';
   if (!isUploadChunk) {
     const t = now();
     c.hits = c.hits.filter(x => t - x < 1000);
-    if (c.hits.length > 8) { send(c, { t: 'error', message: '慢一点，消息太密了' }); return; }
+    if (!isReadQuery && c.hits.length > 10) { send(c, { t: 'error', message: '慢一点，消息太密了' }); return; }
     c.hits.push(t);
   }
 
@@ -745,6 +783,91 @@ function handleMessage(c, buf, opcode) {
       ? feedback.filter(f => Number(f.fromUid) === uidNum).slice(-60).map(fbPublic)
       : [];
     send(c, { t: 'fb_mine', items: items });
+    return;
+  }
+  // ---------- 广场（公共动态） ----------
+  if (d.t === 'moment_list') {
+    const before = Number(d.before) || 0;
+    const limit = Math.max(1, Math.min(30, Number(d.limit) || 12));
+    let arr = moments;
+    if (before > 0) arr = arr.filter(m => m.ts < before);
+    const items = arr.slice(Math.max(0, arr.length - limit)).reverse().map(momentPublic);
+    send(c, { t: 'moment_list', items: items, more: arr.length > limit });
+    return;
+  }
+  if (d.t === 'moment_post') {
+    if (!rateOk(c, 'moment', 1, 15000)) { tooFast(c, '发得太勤了，歇一会儿再发'); return; }
+    const text = clean(d.text, MOMENT_TEXT);
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录再发' }); return; }
+    let img = '', w = 0, h = 0;
+    if (d.data) {
+      const parsed = parseImage(d);
+      if (!parsed) { send(c, { t: 'error', message: '图片格式不支持' }); return; }
+      if (parsed.tooBig) { send(c, { t: 'error', message: '图片太大，请压缩后再发' }); return; }
+      img = saveImage(parsed.data, parsed.ext);
+      w = Math.max(0, Math.min(4096, Number(d.w) || 0));
+      h = Math.max(0, Math.min(4096, Number(d.h) || 0));
+    }
+    if (!text && !img) { send(c, { t: 'error', message: '写一句或配张图再发' }); return; }
+    const m = {
+      id: uid(), uid: Number(acc.uid) || 0, name: c.name || acc.nick || '某人',
+      avatar: avatarOfConn(c) || '', text: text, img: img, w: w, h: h,
+      ts: now(), likes: [], comments: []
+    };
+    moments.push(m);
+    saveMomentsSoon();
+    const pub = momentPublic(m);
+    broadcastAll({ t: 'moment_new', item: pub });
+    send(c, { t: 'moment_posted', id: m.id, ts: m.ts });
+    return;
+  }
+  if (d.t === 'moment_like') {
+    if (!rateOk(c, 'mlike', 20, 10000)) { tooFast(c, '点得太快了'); return; }
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const myUid = acc ? Number(acc.uid) : 0;
+    if (!myUid) { send(c, { t: 'error', message: '先登录' }); return; }
+    const m = moments.filter(x => x.id === String(d.id || ''))[0];
+    if (!m) { send(c, { t: 'error', message: '这条动态已经不在了' }); return; }
+    if (!Array.isArray(m.likes)) m.likes = [];
+    const at = m.likes.indexOf(myUid);
+    if (at >= 0) m.likes.splice(at, 1);
+    else if (m.likes.length < MOMENT_LIKES_MAX) m.likes.push(myUid);
+    saveMomentsSoon();
+    broadcastAll({ t: 'moment_like', id: m.id, likes: m.likes });
+    return;
+  }
+  if (d.t === 'moment_comment') {
+    if (!rateOk(c, 'mcmt', 8, 20000)) { tooFast(c, '评论太快了'); return; }
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const text = clean(d.text, MOMENT_COMMENT);
+    if (!text) return;
+    const m = moments.filter(x => x.id === String(d.id || ''))[0];
+    if (!m) { send(c, { t: 'error', message: '这条动态已经不在了' }); return; }
+    if (!Array.isArray(m.comments)) m.comments = [];
+    if (m.comments.length >= MOMENT_CMT_MAX) { send(c, { t: 'error', message: '这条评论太多了' }); return; }
+    const cm = {
+      id: uid(), uid: Number(acc.uid) || 0, name: c.name || acc.nick || '某人',
+      text: text, ts: now()
+    };
+    m.comments.push(cm);
+    saveMomentsSoon();
+    broadcastAll({ t: 'moment_comment', id: m.id, comment: cm });
+    return;
+  }
+  if (d.t === 'moment_del') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const myUid = acc ? Number(acc.uid) : 0;
+    const id = String(d.id || '');
+    const idx = moments.findIndex(x => x.id === id);
+    if (idx < 0) { send(c, { t: 'moment_del_ok', id: id }); return; }
+    const m = moments[idx];
+    if (!isDevAccount(acc) && Number(m.uid) !== myUid) { send(c, { t: 'error', message: '只能删自己的' }); return; }
+    moments.splice(idx, 1);
+    saveMomentsSoon();
+    broadcastAll({ t: 'moment_del', id: id });
+    send(c, { t: 'moment_del_ok', id: id });
     return;
   }
   if (d.t === 'fb_list') {

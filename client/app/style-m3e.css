@@ -1078,7 +1078,8 @@ html[data-skin] .chat-top {
 /* 底栏单独抬一档不透明度：它是固定层，玻璃太透时下面的设置项会清清楚楚透上来，
    看起来就像"内容入侵了菜单栏"。这里给 88% 的下限，仍然带模糊。 */
 html[data-skin] .tabbar {
-  background-color: color-mix(in srgb, var(--m3e-surface) 88%, transparent);
+  /* 88% 时广场长列表会清清楚楚从底栏底下透上来，抬到 94% 更像一块独立的栏 */
+  background-color: color-mix(in srgb, var(--m3e-surface) 94%, transparent);
 }
 html[data-skin] .tabbar {
   border: 0;
@@ -2461,3 +2462,34 @@ html[data-skin="m3e"] #fsSeg .seg-item {
 
 html[data-skin] .srv-eye { color: var(--m3e-on-variant); }
 html[data-skin] .srv-eye.on { color: var(--m3e-primary); background: color-mix(in srgb, var(--m3e-primary) 14%, transparent); }
+
+/* =========================================================
+   广场：玻璃版卡片 + 底部导航第五格
+   ========================================================= */
+html[data-skin] #feed .topbar { border-radius: 0 0 var(--m3e-lg) var(--m3e-lg); }
+html[data-skin] .mo-item {
+  background-color: color-mix(in srgb, var(--m3e-surface) calc(var(--glass-card-a) * 100%), transparent);
+  background-image: linear-gradient(168deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,0) 60%);
+  border: 1px solid var(--m3e-glass-line);
+  border-radius: var(--m3e-lg);
+  box-shadow: inset 0 1px 0 var(--m3e-glass-hi), 0 6px 20px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+html[data-skin] .mo-ava { width: 38px; height: 38px; }
+html[data-skin] .mo-name { color: var(--m3e-on-surface); }
+html[data-skin] .mo-time, html[data-skin] .mo-btn { color: var(--m3e-on-variant); }
+html[data-skin] .mo-cmts { background: color-mix(in srgb, var(--m3e-surface-2) 70%, transparent); }
+html[data-skin] .mo-cmt-input { background: color-mix(in srgb, var(--m3e-surface-2) 80%, transparent); border-color: var(--m3e-outline); }
+html[data-skin] .mo-more { border-color: var(--m3e-outline); color: var(--m3e-on-variant); }
+html[data-skin] .mo-text { background: color-mix(in srgb, var(--m3e-surface-2) 78%, transparent); border-color: var(--m3e-outline); }
+/* 五格底栏：图标胶囊略窄一点，别挤 */
+html[data-skin="m3e"] .tabbar { padding-left: 4px; padding-right: 4px; }
+html[data-skin="m3e"] .tab-item { padding: 4px 4px; font-size: 11.5px; }
+html[data-skin="m3e"] .tab-item .tab-ico { width: 52px; }
+/* 广场 tab 图标（地球） */
+html[data-skin="m3e"] .tabbar .tab-item[data-tab="feed"] .tab-ico {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82A15.9 15.9 0 0 1 12 4.04zM4.26 14a8.08 8.08 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26zm.81 2h2.95c.32 1.25.78 2.45 1.38 3.56A8.03 8.03 0 0 1 5.07 16zm2.95-8H5.07a8.03 8.03 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.02 8zM12 19.96a13.9 13.9 0 0 1-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66a14.9 14.9 0 0 1 0-4h4.68a14.9 14.9 0 0 1 0 4zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.08 8.08 0 0 1 0 4h-3.38z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.93 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.93 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82A15.9 15.9 0 0 1 12 4.04zM4.26 14a8.08 8.08 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26zm.81 2h2.95c.32 1.25.78 2.45 1.38 3.56A8.03 8.03 0 0 1 5.07 16zm2.95-8H5.07a8.03 8.03 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.02 8zM12 19.96a13.9 13.9 0 0 1-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66a14.9 14.9 0 0 1 0-4h4.68a14.9 14.9 0 0 1 0 4zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.08 8.08 0 0 1 0 4h-3.38z'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: 22px 22px; mask-size: 22px 22px;
+}

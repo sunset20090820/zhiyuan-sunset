@@ -3391,3 +3391,79 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
 .srv-eye.on { color: var(--tg-blue); background: color-mix(in srgb, var(--tg-blue) 12%, transparent); }
 .srv-eye:active { transform: scale(.92); }
 #setServer::placeholder { color: var(--tg-sub); opacity: .85; font-size: 13px; }
+
+/* =========================================================
+   广场（公共动态）
+   ========================================================= */
+#feed .topbar { border-bottom: 0; }
+.feed-list {
+  flex: 1; overflow-y: auto; overscroll-behavior-y: contain;
+  padding: 6px 12px calc(96px + var(--safe-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+.mo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mo-item {
+  display: flex; gap: 10px; padding: 12px; border-radius: 16px;
+  background: var(--card); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: 0 4px 14px rgba(30, 34, 60, .06);
+}
+.mo-ava {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 15px; font-weight: 600;
+}
+.mo-ava img { width: 100%; height: 100%; object-fit: cover; }
+.mo-body { flex: 1; min-width: 0; }
+.mo-head { display: flex; align-items: center; gap: 6px; }
+.mo-name { font-size: 13.5px; color: var(--text); font-weight: 600; }
+.mo-tag { font-size: 10.5px; padding: 1px 6px; border-radius: 6px; color: var(--tg-blue);
+  background: color-mix(in srgb, var(--tg-blue) 12%, transparent); }
+.mo-time { font-size: 11px; color: var(--tg-sub); margin-left: auto; }
+.mo-del { border: 0; background: transparent; color: var(--tg-sub); font-size: 15px; padding: 0 2px; }
+.mo-text-body { margin-top: 5px; font-size: 14px; line-height: 1.55; color: var(--text);
+  white-space: pre-wrap; word-break: break-word; }
+.mo-img { margin-top: 8px; border-radius: 12px; overflow: hidden; background: var(--bg-soft); max-width: 78%; }
+.mo-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mo-cmts { margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-soft) 80%, transparent); display: flex; flex-direction: column; gap: 3px; }
+.mo-cmt { font-size: 12.5px; line-height: 1.5; color: var(--text); word-break: break-word; }
+.mo-cmt b { color: var(--tg-blue); font-weight: 600; }
+.mo-foot { display: flex; gap: 14px; margin-top: 8px; }
+.mo-btn { border: 0; background: transparent; padding: 4px 0; font-size: 12.5px; color: var(--tg-sub); }
+.mo-btn.on { color: #e0567e; font-weight: 600; }
+.mo-cmt-row { display: flex; gap: 8px; margin-top: 8px; }
+.mo-cmt-input {
+  flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg-soft); color: var(--text); font-size: 13px;
+}
+.mo-cmt-send { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 10px;
+  background: var(--tg-blue); color: #fff; font-size: 12.5px; }
+.mo-more { display: block; margin: 14px auto 4px; padding: 8px 16px; border: 1px dashed var(--line);
+  border-radius: 99px; background: transparent; color: var(--tg-sub); font-size: 12.5px; }
+.mo-end { text-align: center; }
+
+/* 发布面板 */
+.mo-card { max-height: 68vh; }
+.mo-card .remark-title { margin-bottom: 10px; }
+.mo-text {
+  width: 100%; box-sizing: border-box; min-height: 96px; max-height: 34vh;
+  padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--text); font-size: 14px; line-height: 1.55;
+  resize: none;
+}
+.mo-img-box { position: relative; margin-top: 10px; }
+.mo-img-box img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; display: block; }
+.mo-img-del { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border: 0;
+  border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; font-size: 13px; }
+.mo-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.mo-actions .flat { flex: none; }
+.mo-actions .primary { flex: 1; }
+
+/* 底栏红点（广场未读） */
+.tab-item { position: relative; }
+.tab-dot {
+  position: absolute; top: 2px; left: 50%; margin-left: 8px;
+  min-width: 14px; height: 14px; padding: 0 3px; border-radius: 99px;
+  background: #e0567e; color: #fff; font-size: 9.5px; line-height: 14px; text-align: center;
+  font-style: normal;
+}
