@@ -501,6 +501,7 @@
         <button id="btnModules" class="me-row" type="button"><span class="me-ico">📦</span>我的模块<span class="me-arrow">›</span></button>
         <button id="btnModMarket" class="me-row" type="button"><span class="me-ico">🛒</span>模块市场<span class="me-arrow">›</span></button>
         <button id="btnModUpload" class="me-row" type="button"><span class="me-ico">⬆️</span>上传模块<span class="me-arrow">›</span></button>
+        <p class="hint-sub" id="modLastStep"></p>
       </div>
     </div>
 
@@ -568,6 +569,10 @@
             <div class="bg-dim-row"><span class="hint">模糊范围 <b class="gp-val" id="gvMul">100</b></span>
               <input id="glassMul" type="range" min="20" max="300" value="100"></div>
             <p class="hint-sub">模糊范围：只改「糊多远」，不改透明程度。字发虚就往左拉。</p>
+
+            <div class="bg-dim-row"><span class="hint">弹窗与浮层不透明度 <b class="gp-val" id="gvPop">92</b></span>
+              <input id="popLevel" type="range" min="40" max="100" value="92"></div>
+            <p class="hint-sub">单独控制更新弹窗、发布/上传面板、模块页这些「浮在页面上的东西」有多实。觉得字压不住背景就往右拉，100 = 完全不透；喜欢玻璃感就往左拉。</p>
 
             <details class="gl-adv" id="glassAdv">
               <summary>高级：两层分开调</summary>

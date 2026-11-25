@@ -18,6 +18,15 @@
   var booted = false;
 
   var KEY_INDEX = 'pl.modules.v1';
+  var KEY_STEP = 'pl.lastStep';
+  // 记下正在做的动作：万一整机卡死，重启后还能看到「最后一步」是哪个
+  function step(n) {
+    try { localStorage.setItem(KEY_STEP, String(n).slice(0, 40)); } catch (e) {}
+    var box = $('#modLastStep');
+    if (box) box.textContent = '上次操作：' + String(n).slice(0, 40);
+  }
+  PL.step = step;
+  PL.lastStep = function () { try { return localStorage.getItem(KEY_STEP) || ''; } catch (e) { return ''; } };
   var KEY_CODE = 'pl.mod.';     // + id + '.code'
 
   function esc(s) {
@@ -148,6 +157,7 @@
       return false;
     }
     running[id] = { mod: mod, ctx: ctx };
+    step('模块已启动 ' + id);
     ctx.__onMsg = mod.onMessage || null;
     try { mod.mount(ctx); } catch (e) {
       body.innerHTML = '<div class="mod-error">模块出错：' + esc(e && e.message) + '</div>';
@@ -282,11 +292,13 @@
   function openPage() {
     var p = $('#modPage');
     if (!p) return;
+    step('打开模块页');
     PL._open = true;
     p.classList.remove('hidden');
     if (!booted) booted = true;
     // 先让页面出来，再画画：这样即使列表渲染慢，也不会出现「点了没反应」
     setTimeout(function () {
+      step('渲染模块列表');
       try { render(); } catch (e) {}
       if (tab === 'market' && !market.length) PL.loadMarket();
     }, 0);
@@ -299,6 +311,7 @@
     p.classList.add('hidden');
   }
   function actuallyRun(id) {
+    step('运行模块 ' + id);
     var rec = installed[id];
     if (!rec) { api.toast('这个模块还没装'); return; }
     $('#modRun').classList.remove('hidden');
@@ -329,6 +342,7 @@
   }
 
   PL.loadMarket = function () {
+    step('请求模块市场');
     PL._loading = true;
     render();
     if (!api.send({ t: 'mod_index' })) { PL._loading = false; api.toast('没连上服务器'); render(); }
@@ -369,6 +383,7 @@
   PL.onMessage = function (d) {
     if (!d) return;
     if (d.t === 'mod_index') {
+      step('收到模块列表');
       PL._loading = false;
       market = d.items || [];
       render();

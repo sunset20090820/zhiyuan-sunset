@@ -2517,3 +2517,18 @@ html[data-skin][data-theme="dark"] .tabbar {
 html[data-skin] .mod-item { background: var(--m3e-surface-2, var(--card)); box-shadow: none; }
 html[data-skin] .mod-btn { border-radius: var(--m3e-full, 99px); }
 html[data-skin] .mod-tab { border-radius: var(--m3e-full, 99px); }
+
+/* 浮层不透明度：M3 皮肤下也认 --pop-a（覆盖原来的玻璃底） */
+html[data-skin] .action-card,
+html[data-skin] .sheet-card,
+html[data-skin] .plain-page,
+html[data-skin] .mod-item {
+  background-color: rgba(252, 251, 255, var(--pop-a, .92)) !important;
+  background-image: none !important;
+}
+html[data-skin][data-theme="dark"] .action-card,
+html[data-skin][data-theme="dark"] .sheet-card,
+html[data-skin][data-theme="dark"] .plain-page,
+html[data-skin][data-theme="dark"] .mod-item {
+  background-color: rgba(24, 27, 38, var(--pop-a, .92)) !important;
+}

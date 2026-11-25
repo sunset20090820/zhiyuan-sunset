@@ -84,7 +84,7 @@
     bg: { scope: 'chat',
           chat: { key: 'mist', image: '', dim: 0.18, blur: 0, imageDark: false },
           list: { key: 'none', image: '', dim: 0.12, blur: 0, imageDark: false } },
-    glass: true, glassLevel: 55, glassMul: 100, glassCard: 100, glassThin: 100, gpFocus: 'card', accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
+    glass: true, glassLevel: 55, glassMul: 100, glassCard: 100, glassThin: 100, popLevel: 92, gpFocus: 'card', accent: 'periwinkle', topbarText: 'auto', skin: 'm3e'
   };
   // 存档是否已经从磁盘读进来。启动阶段的模块级代码（aiNormalize 等）会调 save()，
   // 那时 S 还是空的，写下去就把 auth/token 洗成了未登录 —— 大退后要重新登录就是这么来的。
@@ -224,7 +224,7 @@
   }
 
   function statePayload() {
-    return { gpFocus: S.gpFocus, nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, accent: S.accent, topbarText: S.topbarText, skin: S.skin, fs: S.fs, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, aiUse: S.aiUse, devUids: S.devUids, fbUnread: S.fbUnread, ts: Date.now(), log: bootLog.slice(-12) };
+    return { gpFocus: S.gpFocus, nick: S.nick, server: S.server, last: S.last, unread: S.unread, user: S.user, auth: S.auth, token: S.token, uid: S.uid, avatars: S.avatars, myAvatar: S.myAvatar, pins: S.pins, mutes: S.mutes, localAgent: S.localAgent, ai: S.ai, agentUser: S.agentUser, bg: S.bg, glass: S.glass, glassLevel: S.glassLevel, glassMul: S.glassMul, glassCard: S.glassCard, glassThin: S.glassThin, popLevel: S.popLevel, accent: S.accent, topbarText: S.topbarText, skin: S.skin, fs: S.fs, cur: S.cur, meSec: S.meSec, bgDimBoth: S.bgDimBoth, aiUse: S.aiUse, devUids: S.devUids, fbUnread: S.fbUnread, ts: Date.now(), log: bootLog.slice(-12) };
   }
   /* 落盘策略：先标脏，400ms 内合并成一次写。
      以前每条消息都完整序列化两遍（localStorage + 原生镜像），再加上 5 秒定时器，
@@ -285,6 +285,7 @@
         S.bg = normalizeBg(o.bg);
         if (typeof o.glass === 'boolean') S.glass = o.glass;
         if (typeof o.glassLevel === 'number') S.glassLevel = o.glassLevel;
+        if (typeof o.popLevel === 'number') S.popLevel = o.popLevel;
         if (typeof o.glassMul === 'number') S.glassMul = o.glassMul;
         if (typeof o.glassCard === 'number') S.glassCard = o.glassCard;
         if (typeof o.glassThin === 'number') S.glassThin = o.glassThin;
@@ -2946,6 +2947,22 @@
     return true;
   }
 
+  // 浮层（弹窗 / 面板 / 模块页）单独的不透明度：跟页面玻璃分开调。
+  // 页面玻璃调到很透时，弹窗里的字会压不住背景，所以这里给一条独立的滑杆。
+  function applyPop() {
+    var v = (typeof S.popLevel === 'number') ? S.popLevel : 92;
+    v = Math.max(40, Math.min(100, v));
+    var a = (v / 100).toFixed(3);
+    var root = document.documentElement;
+    root.style.setProperty('--pop-a', a);
+    // ≥90 时干脆关掉浮层的背景模糊：反正已经基本不透，还能省一层合成
+    if (v >= 90) root.setAttribute('data-pop-solid', '1');
+    else root.removeAttribute('data-pop-solid');
+    var lab = $('#gvPop'), rng = $('#popLevel');
+    if (lab) lab.textContent = String(v);
+    if (rng && Number(rng.value) !== v) rng.value = String(v);
+  }
+
   function applyChatBg() {
     try { applyM3Scheme(); } catch (e) {}
     S.bg = normalizeBg(S.bg);
@@ -3088,6 +3105,7 @@
     if (gMul) gMul.value = String(typeof S.glassMul === 'number' ? S.glassMul : 100);
     if (gCard) gCard.value = String(typeof S.glassCard === 'number' ? S.glassCard : 100);
     if (gThin) gThin.value = String(typeof S.glassThin === 'number' ? S.glassThin : 100);
+    applyPop();
 
     var segs = document.querySelectorAll('#bgScope .seg-item');
     Array.prototype.forEach.call(segs, function (b) {
@@ -5946,6 +5964,11 @@
       applyGlassSoon(true);
     });
     on('#glassThin', 'change', endGlassDrag);
+    on('#popLevel', 'input', function (e) {
+      S.popLevel = Math.max(40, Math.min(100, Number(e.target.value) || 92));
+      applyPop();
+      save();
+    });
     on('#glassLevel', 'input', function (e) {
       S.glassLevel = Math.max(0, Math.min(100, Number(e.target.value) || 0));
       applyGlassSoon(true);
@@ -8013,6 +8036,7 @@
     loadRemarks();
     loadStickers();
     try { applySkin(); } catch (e) {}
+    try { applyPop(); } catch (e) {}
     try { applyFs(S.fs || localStorage.getItem('paperlite.fs') || 'm'); } catch (e) {}
     try { setTimeout(watchLists, 120); } catch (e) {}
     try {
