@@ -721,6 +721,7 @@
     }
     if (d.t === 'people') { S.people = d.list || []; learnAvatars(S.people); return; }
     if (/^moment_/.test(String(d.t || ''))) { try { if (window.MOM) MOM.onMessage(d); } catch (e) {} return; }
+    if (/^mod_/.test(String(d.t || ''))) { try { if (window.PL) PL.onMessage(d); } catch (e) {} return; }
     if (d.t === 'uid') { S.uid = d.uid || 0; try { if (window.MOM) MOM.setUid(S.uid); } catch (e) {} if (S.tab === 'me') fillMe(); return; }
     if (d.t === 'contacts') {
       S.friends = d.friends || [];
@@ -7720,7 +7721,8 @@
     // 其他全屏页也要收起来，否则会盖在导航上面挡住点击
     ['#storagePage', '#groupPanel', '#imgViewer', '#dmSheet', '#msgActions', '#peerActions',
      '#groupSheet', '#remarkSheet', '#roleEditor', '#worldPage', '#worldEditor',
-     '#aiConfPage', '#exportPage', '#volSheet', '#fbPage', '#rpImportPage'].forEach(function (sel) {
+     '#aiConfPage', '#exportPage', '#volSheet', '#fbPage', '#rpImportPage',
+     '#modPage', '#modRun', '#modUpload'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
     if (name === 'roles') { try { rpSyncCounts(); renderRoleList(); rpModelTip(); } catch (e) {} }
@@ -7985,6 +7987,24 @@
       });
     } catch (e) {}
 
+    try {
+      if (window.PL) PL.init({
+        send: function (o) { return wsSend(o); },
+        toast: function (m) { toast(m); },
+        me: function () { return { uid: S.uid || 0, nick: S.nick || '', avatar: S.avatar || '' }; },
+        version: function () { return Number(window.APP_CODE || 0) || 0; },
+        isDev: function () { try { return isDevUid(Number(S.uid)); } catch (e) { return false; } },
+        imgSrc: function (p) { return /^\//.test(p) ? httpBase() + p : p; },
+        viewImage: function (src) { openViewer(src); },
+        notify: function (t, x) { try { nativeNotify(t, x); } catch (e) {} },
+        confirmTap: function (key) { return confirmTap(key, '再点一次确定'); },
+        hideTab: function (on) {
+          var bar = $('#tabbar');
+          if (bar) bar.classList.toggle('hidden', !!on);
+        }
+      });
+    } catch (e) {}
+
     try { applyTheme(localStorage.getItem('paperlite.theme') || ''); } catch (e) {}
     setCurrentServer(currentServer() || DEFAULT_SERVER);
     migrateLegacy();
@@ -8069,6 +8089,15 @@
       blockRoom(rid);
     });
     on('#btnBlocked', 'click', function () { openBlockPage(); });
+    on('#btnModules', 'click', function () {
+      try { PL.setTab('mine'); PL.open(); } catch (e) {}
+    });
+    on('#btnModMarket', 'click', function () {
+      try { PL.setTab('market'); PL.open(); } catch (e) {}
+    });
+    on('#btnModUpload', 'click', function () {
+      try { PL.setTab('mine'); PL.open(); PL.openUpload(); } catch (e) {}
+    });
     on('#blockBack', 'click', function () { $('#blockPage').classList.add('hidden'); showTab('me'); });
     on('#blockedUsers', 'click', function (e) {
       var b = e.target.closest('[data-unblock]');

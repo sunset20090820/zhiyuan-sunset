@@ -495,6 +495,15 @@
       </div>
     </div>
 
+    <div class="me-sec" data-sec="mods">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🧩</span>模块<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
+        <button id="btnModules" class="me-row" type="button"><span class="me-ico">📦</span>我的模块<span class="me-arrow">›</span></button>
+        <button id="btnModMarket" class="me-row" type="button"><span class="me-ico">🛒</span>模块市场<span class="me-arrow">›</span></button>
+        <button id="btnModUpload" class="me-row" type="button"><span class="me-ico">⬆️</span>上传模块<span class="me-arrow">›</span></button>
+      </div>
+    </div>
+
     <div class="me-sec" data-sec="look">
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🎨</span>外观与玻璃<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
@@ -1055,6 +1064,48 @@
 
 <div id="toast" class="toast"></div>
 
+<!-- ===== 模块（插件） ===== -->
+<div id="modPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="modBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">模块</div>
+    <button id="modRefresh" class="icon-btn" type="button" aria-label="刷新">↻</button>
+  </header>
+  <div class="mod-tabs" id="modTabs">
+    <button class="mod-tab on" type="button" data-mod-tab="mine">我的模块</button>
+    <button class="mod-tab" type="button" data-mod-tab="market">模块市场</button>
+    <button class="mod-tab" type="button" id="modUploadBtn">上传</button>
+  </div>
+  <div id="modList" class="mod-list-wrap"></div>
+</div>
+
+<div id="modRun" class="mod-run hidden">
+  <header class="topbar">
+    <button id="modRunBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand" id="modRunTitle">模块</div>
+    <span class="logout-chip" style="visibility:hidden">·</span>
+  </header>
+  <div id="modRunBody" class="mod-run-body"></div>
+</div>
+
+<div id="modUpload" class="action-layer hidden">
+  <div class="action-scrim"></div>
+  <div class="action-card mod-up-card" role="dialog" aria-modal="true" aria-label="上传模块">
+    <div class="remark-title">上传模块</div>
+    <p class="hint">填模块描述（JSON）和 client.js 代码。普通用户提交后要开发者审核才会出现在市场里；开发者上传直接上架。</p>
+    <label class="field"><span>模块描述 manifest.json</span>
+      <textarea id="modUpManifest" rows="9" spellcheck="false"></textarea>
+    </label>
+    <label class="field"><span>模块代码 client.js</span>
+      <textarea id="modUpCode" rows="9" spellcheck="false" placeholder="function mount(ctx) { ctx.el.innerHTML = '<p>你好</p>'; }"></textarea>
+    </label>
+    <div class="mo-actions">
+      <button id="modUpCancel" class="flat" type="button">取消</button>
+      <button id="modUpSend" class="primary" type="button">上传</button>
+    </div>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script src="version.js"></script>
 <script src="game.js"></script>
@@ -1063,6 +1114,7 @@
 <script src="export.js"></script>
 <script src="ctx.js"></script>
 <script src="moments.js"></script>
+<script src="pl.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

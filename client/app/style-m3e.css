@@ -2512,3 +2512,9 @@ html[data-skin] .tabbar {
 html[data-skin][data-theme="dark"] .tabbar {
   background-color: color-mix(in srgb, #17151d 86%, var(--accent)) !important;
 }
+
+/* 模块页：跟随 M3 玻璃语言 */
+html[data-skin] .mod-item { background: color-mix(in srgb, var(--m3e-surface) 92%, transparent);
+  box-shadow: none; border: 1px solid color-mix(in srgb, var(--m3e-outline) 40%, transparent); }
+html[data-skin] .mod-btn { border-radius: var(--m3e-full, 99px); }
+html[data-skin] .mod-tab { border-radius: var(--m3e-full, 99px); }

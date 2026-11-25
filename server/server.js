@@ -72,6 +72,58 @@ const DEV_UID = DEV_UIDS[0];   // 旧代码兼容：回复时用第一个
 // ---- 广场（朋友圈式公共动态） ----
 const MOMENT_FILE = path.join(DATA_DIR, 'moments.json');
 const MOMENT_MAX = 600;          // 最多保留多少条动态
+
+/* ============ 模块（插件）系统 ============
+   模块 = manifest.json + client.js，放在 data/modules/<id>/ 下。
+   客户端模块跑在用户自己手机上（安装时展示权限），服务端这里只管：
+   索引、下载、上传（进待审队列）、审核、以及模块专用的 kv 存储。
+   注意：第一期不执行服务端模块的 JS —— 那等于把服务器交给上传者。 */
+const MOD_DIR = path.join(__dirname, 'data', 'modules');
+const MOD_INDEX = path.join(MOD_DIR, 'index.json');
+const MOD_MAX_CODE = 200 * 1024;   // 单个模块代码上限
+const MOD_MAX_KV = 200;            // 每个模块每个用户最多多少键
+const MOD_MAX_KV_BYTES = 64 * 1024;
+const MOD_PERMS = ['store', 'ui', 'notify', 'image'];
+let modIndex = [];
+try { modIndex = JSON.parse(require('fs').readFileSync(MOD_INDEX, 'utf8')) || []; } catch (e) { modIndex = []; }
+if (!Array.isArray(modIndex)) modIndex = [];
+function modSaveSoon() {
+  clearTimeout(modSaveSoon.t);
+  modSaveSoon.t = setTimeout(function () {
+    try {
+      require('fs').mkdirSync(MOD_DIR, { recursive: true });
+      require('fs').writeFileSync(MOD_INDEX, JSON.stringify(modIndex, null, 1));
+    } catch (e) { console.log('[modules] 保存索引失败', e.message); }
+  }, 300);
+}
+function modFind(id) {
+  const k = String(id || '').slice(0, 40);
+  return modIndex.filter(m => m && m.id === k)[0] || null;
+}
+function modDir(id) { return path.join(MOD_DIR, String(id).replace(/[^a-z0-9_-]/gi, '_')); }
+function modPublic(m) {
+  return { id: m.id, name: m.name, ver: m.ver || '1.0', desc: m.desc || '', author: m.author || '',
+    perms: m.perms || [], icon: m.icon || '', status: m.status || 'approved',
+    minApp: m.minApp || 190, ts: m.ts || 0, size: m.size || 0, official: !!m.official };
+}
+function modWriteFile(id, name, text) {
+  const d = modDir(id);
+  require('fs').mkdirSync(d, { recursive: true });
+  require('fs').writeFileSync(path.join(d, name), text);
+}
+function modReadFile(id, name) {
+  try { return require('fs').readFileSync(path.join(modDir(id), name), 'utf8'); } catch (e) { return ''; }
+}
+function modKvPath(id, uid) { return path.join(modDir(id), 'kv', String(uid | 0) + '.json'); }
+function modKvLoad(id, uid) {
+  try { const o = JSON.parse(require('fs').readFileSync(modKvPath(id, uid), 'utf8')); return o && typeof o === 'object' ? o : {}; }
+  catch (e) { return {}; }
+}
+function modKvSave(id, uid, obj) {
+  const p2 = modKvPath(id, uid);
+  require('fs').mkdirSync(path.dirname(p2), { recursive: true });
+  require('fs').writeFileSync(p2, JSON.stringify(obj));
+}
 const MOMENT_TEXT = 600;         // 单条正文上限
 const MOMENT_COMMENT = 200;      // 单条评论上限
 const MOMENT_CMT_MAX = 40;       // 每条动态最多多少条评论
@@ -631,7 +683,8 @@ function handleMessage(c, buf, opcode) {
   // 只读查询不算刷屏：客户端刚连上会一次发好几个（版本、恢复、join、群组、好友、私信、动态列表…），
   // 以前 8 条/秒会把「广场首屏」这类紧跟着的连接期消息挡掉，表现就是列表一直转、不显示。
   const isReadQuery = d.t === 'moment_list' || d.t === 'fb_mine' || d.t === 'groups' ||
-                      d.t === 'contacts' || d.t === 'pm_history' || d.t === 'version_check';
+                      d.t === 'contacts' || d.t === 'pm_history' || d.t === 'version_check' ||
+                      d.t === 'mod_index' || d.t === 'mod_get' || d.t === 'mod_kv_get';
   const isUploadChunk = d.t === 'file_part' || d.t === 'file_start' || d.t === 'file_end';
   if (!isUploadChunk) {
     const t = now();
@@ -786,6 +839,123 @@ function handleMessage(c, buf, opcode) {
     return;
   }
   // ---------- 广场（公共动态） ----------
+  /* ---------------- 模块系统 ---------------- */
+  if (d.t === 'mod_index') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const myUid = acc ? Number(acc.uid) || 0 : 0;
+    const dev = isDevAccount(acc);
+    const items = modIndex.filter(m => m && (m.status === 'approved' || m.official || dev || Number(m.uid) === myUid))
+      .map(modPublic).sort((a, b) => (b.official ? 1 : 0) - (a.official ? 1 : 0) || b.ts - a.ts);
+    send(c, { t: 'mod_index', items: items });
+    return;
+  }
+  if (d.t === 'mod_get') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const myUid = acc ? Number(acc.uid) || 0 : 0;
+    const m = modFind(d.id);
+    if (!m) { send(c, { t: 'error', message: '没有这个模块' }); return; }
+    const ok = m.status === 'approved' || m.official || isDevAccount(acc) || Number(m.uid) === myUid;
+    if (!ok) { send(c, { t: 'error', message: '这个模块还在审核中' }); return; }
+    send(c, { t: 'mod_get', id: m.id, manifest: modPublic(m), code: modReadFile(m.id, 'client.js') });
+    return;
+  }
+  if (d.t === 'mod_upload') {
+    if (!rateOk(c, 'modup', 6, 60000)) { tooFast(c, '上传太频繁，等一会儿'); return; }
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const man = d.manifest && typeof d.manifest === 'object' ? d.manifest : null;
+    const code = String(d.code || '');
+    if (!man) { send(c, { t: 'error', message: '模块描述缺失' }); return; }
+    const id = String(man.id || '').toLowerCase();
+    if (!/^[a-z][a-z0-9_-]{2,24}$/.test(id)) { send(c, { t: 'error', message: '模块 id 只能用小写字母/数字/-_，3–25 位' }); return; }
+    if (code.length > MOD_MAX_CODE) { send(c, { t: 'error', message: '模块代码太大（上限 200KB）' }); return; }
+    if (!code.trim()) { send(c, { t: 'error', message: '模块代码是空的' }); return; }
+    const myUid = Number(acc.uid) || 0;
+    const dev = isDevAccount(acc);
+    const old = modFind(id);
+    if (old && !dev && Number(old.uid) !== myUid) { send(c, { t: 'error', message: '这个模块 id 已经有人用了' }); return; }
+    const perms = Array.isArray(man.perms) ? man.perms.filter(x => MOD_PERMS.indexOf(x) >= 0).slice(0, 8) : [];
+    const rec = {
+      id: id, name: clean(man.name, 24) || id, ver: clean(man.ver, 10) || '1.0',
+      desc: clean(man.desc, 160), author: clean(man.author, 20) || (acc.nick || ''),
+      perms: perms, icon: clean(man.icon, 4), minApp: parseInt(man.minApp, 10) || 190,
+      uid: myUid, ts: now(), size: code.length,
+      status: dev ? 'approved' : 'pending', official: !!old && !!old.official
+    };
+    if (old) { modIndex[modIndex.indexOf(old)] = rec; } else { modIndex.push(rec); }
+    modWriteFile(id, 'client.js', code);
+    modWriteFile(id, 'manifest.json', JSON.stringify(modPublic(rec), null, 1));
+    modSaveSoon();
+    send(c, { t: 'mod_upload_ok', id: id, status: rec.status });
+    return;
+  }
+  if (d.t === 'mod_review') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!isDevAccount(acc)) { send(c, { t: 'error', message: '只有开发者能审核' }); return; }
+    const m = modFind(d.id);
+    if (!m) { send(c, { t: 'error', message: '没有这个模块' }); return; }
+    if (d.ok) { m.status = 'approved'; m.ts = now(); }
+    else { modIndex = modIndex.filter(x => x !== m); try { require('fs').rmSync(modDir(m.id), { recursive: true, force: true }); } catch (e) {} }
+    modSaveSoon();
+    send(c, { t: 'mod_review_ok', id: m.id, ok: !!d.ok });
+    return;
+  }
+  if (d.t === 'mod_del') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const m = modFind(d.id);
+    if (!m) { send(c, { t: 'error', message: '没有这个模块' }); return; }
+    if (!isDevAccount(acc) && Number(m.uid) !== (Number(acc.uid) || 0)) { send(c, { t: 'error', message: '只能删自己上传的模块' }); return; }
+    modIndex = modIndex.filter(x => x !== m);
+    try { require('fs').rmSync(modDir(m.id), { recursive: true, force: true }); } catch (e) {}
+    modSaveSoon();
+    send(c, { t: 'mod_del_ok', id: m.id });
+    return;
+  }
+  if (d.t === 'mod_kv_get') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const m = modFind(d.id);
+    if (!m) { send(c, { t: 'error', message: '没有这个模块' }); return; }
+    const kv = modKvLoad(m.id, Number(acc.uid) || 0);
+    const key = String(d.key || '').slice(0, 60);
+    send(c, { t: 'mod_kv', id: m.id, key: key, value: key ? (kv[key] === undefined ? null : kv[key]) : null,
+      keys: key ? undefined : Object.keys(kv) });
+    return;
+  }
+  if (d.t === 'mod_kv_set') {
+    if (!rateOk(c, 'modkv', 40, 20000)) { tooFast(c, '存太快了'); return; }
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const m = modFind(d.id);
+    if (!m) { send(c, { t: 'error', message: '没有这个模块' }); return; }
+    const uid = Number(acc.uid) || 0;
+    const kv = modKvLoad(m.id, uid);
+    const key = String(d.key || '').slice(0, 60);
+    if (!key) { send(c, { t: 'error', message: '缺少 key' }); return; }
+    if (d.value === null || d.value === undefined) delete kv[key];
+    else kv[key] = d.value;
+    const keys = Object.keys(kv);
+    if (keys.length > MOD_MAX_KV) { send(c, { t: 'error', message: '这个模块的存储满了（' + MOD_MAX_KV + ' 个键）' }); return; }
+    const raw = JSON.stringify(kv);
+    if (raw.length > MOD_MAX_KV_BYTES) { send(c, { t: 'error', message: '这个模块的存储满了（64KB）' }); return; }
+    modKvSave(m.id, uid, kv);
+    send(c, { t: 'mod_kv_ok', id: m.id, key: key });
+    return;
+  }
+  if (d.t === 'mod_relay') {
+    // 模块之间的公开消息：校验命名空间后原样转发给所有在线客户端（客户端按模块前缀再过滤）
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    if (!rateOk(c, 'modre', 20, 10000)) { tooFast(c, '慢一点'); return; }
+    const mod = String(d.mod || '');
+    if (!/^[a-z][a-z0-9_-]{2,24}$/.test(mod)) { send(c, { t: 'error', message: '模块名不合法' }); return; }
+    const body = d.body && typeof d.body === 'object' ? d.body : {};
+    const raw = JSON.stringify(body);
+    if (raw.length > 8192) { send(c, { t: 'error', message: '消息太大' }); return; }
+    broadcastAll({ t: 'mod_push', mod: mod, from: Number(acc.uid) || 0, name: acc.nick || '', body: body, ts: now() });
+    return;
+  }
   if (d.t === 'moment_list') {
     const before = Number(d.before) || 0;
     const limit = Math.max(1, Math.min(30, Number(d.limit) || 12));
