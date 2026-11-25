@@ -3565,3 +3565,8 @@ html[data-pop-solid] .mod-item {
 }
 /* 弹窗里的分隔线和按钮仍然要清楚 */
 .action-card .hint-sub, .action-card .hint { color: var(--sub); }
+
+/* 兜底：没加 .open 的浮层一律不吃触摸。
+   以前踩过坑——只把 .hidden 去掉，层就变成「完全透明但仍然盖住整屏」，
+   用户看到的是界面卡死（点哪都没反应，甚至还能敲进看不见的输入框）。 */
+.action-layer:not(.open) { pointer-events: none !important; }

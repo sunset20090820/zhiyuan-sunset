@@ -359,7 +359,9 @@
   function openUpload() {
     var box = $('#modUpload');
     if (!box) return;
+    step('打开上传面板');
     box.classList.remove('hidden');
+    requestAnimationFrame(function () { box.classList.add('open'); });
     var m = $('#modUpManifest');
     if (m && !m.value) {
       m.value = JSON.stringify({
@@ -368,7 +370,12 @@
       }, null, 2);
     }
   }
-  function closeUpload() { var box = $('#modUpload'); if (box) box.classList.add('hidden'); }
+  function closeUpload() {
+    var box = $('#modUpload');
+    if (!box) return;
+    box.classList.remove('open');
+    setTimeout(function () { box.classList.add('hidden'); }, 220);
+  }
   function submitUpload() {
     var manTxt = ($('#modUpManifest') || {}).value || '';
     var code = ($('#modUpCode') || {}).value || '';
@@ -518,6 +525,7 @@
     if (up && !up.__modBound) {
       up.__modBound = true;
       up.addEventListener('click', function (e) {
+        if (e.target.closest('.action-scrim')) { closeUpload(); return; }
         if (e.target.closest('#modUpCancel')) { closeUpload(); return; }
         if (e.target.closest('#modUpSend')) { submitUpload(); return; }
       });
