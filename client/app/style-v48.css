@@ -3429,12 +3429,21 @@ html .relay-hint, html .hint { font-size: calc(12px * var(--fs, 1)); }
 .mo-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mo-cmts { margin-top: 8px; padding: 8px 10px; border-radius: 10px;
   background: color-mix(in srgb, var(--bg-soft) 80%, transparent); display: flex; flex-direction: column; gap: 3px; }
-.mo-cmt { font-size: 12.5px; line-height: 1.5; color: var(--text); word-break: break-word; }
+.mo-cmt { font-size: 12.5px; line-height: 1.5; color: var(--text); word-break: break-word;
+  display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
 .mo-cmt b { color: var(--tg-blue); font-weight: 600; }
 .mo-foot { display: flex; gap: 14px; margin-top: 8px; }
 .mo-btn { border: 0; background: transparent; padding: 4px 0; font-size: 12.5px; color: var(--tg-sub); }
 .mo-btn.on { color: #e0567e; font-weight: 600; }
-.mo-cmt-row { display: flex; gap: 8px; margin-top: 8px; }
+.mo-cmt-body { flex: 1; min-width: 0; }
+.mo-cmt-del { flex: none; font-size: 11.5px; color: var(--sub); padding: 1px 2px; }
+.mo-cmt-more { display: block; margin-top: 4px; font-size: 12.5px; color: var(--tg-blue); padding: 2px 0; text-align: left; }
+.mo-cmt-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 8px; }
+.mo-cmt-line { display: flex; gap: 8px; align-items: center; }
+.mo-reply-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); padding-left: 2px; }
+.mo-reply-chip.hidden { display: none; }
+.mo-reply-x { width: 20px; height: 20px; border-radius: 50%; background: rgba(0, 0, 0, .07);
+  color: var(--sub); font-size: 13px; line-height: 20px; padding: 0; }
 .mo-cmt-input {
   flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--bg-soft); color: var(--text); font-size: 13px;

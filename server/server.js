@@ -848,12 +848,39 @@ function handleMessage(c, buf, opcode) {
     if (!Array.isArray(m.comments)) m.comments = [];
     if (m.comments.length >= MOMENT_CMT_MAX) { send(c, { t: 'error', message: '这条评论太多了' }); return; }
     const cm = {
-      id: uid(), uid: Number(acc.uid) || 0, name: c.name || acc.nick || '某人',
+      id: 'c' + uid().toString(36), uid: Number(acc.uid) || 0, name: c.name || acc.nick || '某人',
       text: text, ts: now()
     };
+    // 回复别人：记下被回复的评论（QQ空间式的「A 回复 B：…」，只保留直接父级）
+    const pid = String(d.replyTo || '');
+    if (pid) {
+      const parent = m.comments.filter(x => x && String(x.id) === pid)[0];
+      if (parent) { cm.toId = parent.id; cm.toName = parent.name || '某人'; cm.toUid = Number(parent.uid) || 0; }
+    }
     m.comments.push(cm);
     saveMomentsSoon();
     broadcastAll({ t: 'moment_comment', id: m.id, comment: cm });
+    return;
+  }
+  if (d.t === 'moment_cmt_del') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const myUid = Number(acc.uid) || 0;
+    const m = moments.filter(x => x.id === String(d.id || ''))[0];
+    if (!m) { send(c, { t: 'error', message: '这条动态已经不在了' }); return; }
+    if (!Array.isArray(m.comments)) m.comments = [];
+    const cid = String(d.cid || '');
+    const cm = m.comments.filter(x => x && String(x.id) === cid)[0];
+    if (!cm) { send(c, { t: 'error', message: '这条评论已经不在了' }); return; }
+    // 评论作者、动态作者（主人）、开发者可以删
+    if (!(Number(cm.uid) === myUid || Number(m.uid) === myUid || isDevAccount(acc))) {
+      send(c, { t: 'error', message: '只能删自己的评论' });
+      return;
+    }
+    const gone = m.comments.filter(x => x && (String(x.id) === cid || String(x.toId || '') === cid)).map(x => x.id);
+    m.comments = m.comments.filter(x => x && String(x.id) !== cid && String(x.toId || '') !== cid);
+    saveMomentsSoon();
+    broadcastAll({ t: 'moment_cmt_del', id: m.id, cid: cid, gone: gone });
     return;
   }
   if (d.t === 'moment_del') {

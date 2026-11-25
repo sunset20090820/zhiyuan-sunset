@@ -5,6 +5,8 @@
   var MOM = {};
   var api = null;
   var items = [];        // 新 → 旧
+  var expanded = {};     // 动态 id → 评论是否全展开
+  var replyTo = {};      // 动态 id → { cid, name } 当前回复谁
   var more = false;        // 还没拉过就是 false，别急着显示「加载更早」
   var loading = false;
   var myUid = 0;
@@ -48,6 +50,16 @@
   }
 
   /* ---------------- 渲染 ---------------- */
+  function cmtHTML(m, c) {
+    var mineC = Number(c.uid) === uidNow();
+    var canDel = mineC || isMine(m) || api.isDev();
+    var who = '<b>' + esc(c.name || '某人') + '</b>' +
+      (c.toName ? ' 回复 <b>' + esc(c.toName) + '</b>' : '') + '：';
+    return '<div class="mo-cmt" data-mo-replyto="' + esc(c.id || '') + '">' +
+      '<span class="mo-cmt-body">' + who + esc(c.text) + '</span>' +
+      (canDel ? '<button class="mo-cmt-del" type="button" data-mo-cmtdel="' + esc(c.id || '') + '">删除</button>' : '') +
+      '</div>';
+  }
   function cardHTML(m) {
     var mine = isMine(m);
     var img = '';
@@ -60,9 +72,14 @@
       img = '<div class="mo-img" data-mo-img="' + esc(src) + '" style="height:' + hgt + 'px">' +
             '<img src="' + esc(src) + '" alt=""></div>';
     }
-    var cmts = (m.comments || []).map(function (c) {
-      return '<div class="mo-cmt"><b>' + esc(c.name || '某人') + '</b>：' + esc(c.text) + '</div>';
-    }).join('');
+    var allC = m.comments || [];
+    var exp = !!expanded[m.id];
+    // 卡片上只摆最新两条，其余收在「查看全部 N 条评论」后面（QQ空间 也是这样）
+    var showC = exp ? allC : allC.slice(Math.max(0, allC.length - 2));
+    var cmts = showC.map(function (c) { return cmtHTML(m, c); }).join('');
+    var moreC = (!exp && allC.length > showC.length)
+      ? '<button class="mo-cmt-more" type="button" data-mo-expand="' + esc(m.id) + '">查看全部 ' + allC.length + ' 条评论</button>'
+      : '';
     var nLike = (m.likes || []).length;
     return '<li class="mo-item' + (mine ? ' mine' : '') + '" data-mo-id="' + esc(m.id) + '">' +
       '<div class="mo-ava" style="background:' + (api.colorOf ? api.colorOf(m.uid || m.name) : '#8fa4f5') + '">' +
@@ -76,15 +93,19 @@
         '</div>' +
         (m.text ? '<div class="mo-text-body">' + esc(m.text) + '</div>' : '') +
         img +
-        (cmts ? '<div class="mo-cmts">' + cmts + '</div>' : '') +
+        (cmts || moreC ? '<div class="mo-cmts">' + cmts + moreC + '</div>' : '') +
         '<div class="mo-foot">' +
           '<button class="mo-btn' + (likedBy(m, uidNow()) ? ' on' : '') + '" type="button" data-mo-like="' + esc(m.id) + '">' +
             (likedBy(m, uidNow()) ? '♥ 已赞' : '♡ 赞') + (nLike ? ' ' + nLike : '') + '</button>' +
           '<button class="mo-btn" type="button" data-mo-cmt="' + esc(m.id) + '">💬 评论' + ((m.comments || []).length ? ' ' + (m.comments || []).length : '') + '</button>' +
         '</div>' +
-        '<div class="mo-cmt-row hidden" data-mo-row="' + esc(m.id) + '">' +
-          '<input class="mo-cmt-input" maxlength="200" placeholder="评论…">' +
-          '<button class="mo-cmt-send" type="button" data-mo-cmt-send="' + esc(m.id) + '">发送</button>' +
+        '<div class="mo-cmt-row hidden" data-mo-row="' + esc(m.id) + '" data-reply-to="">' +
+          '<div class="mo-reply-chip hidden"><span class="mo-reply-text"></span>' +
+            '<button class="mo-reply-x" type="button" data-mo-reply-x="' + esc(m.id) + '" aria-label="取消回复">×</button></div>' +
+          '<div class="mo-cmt-line">' +
+            '<input class="mo-cmt-input" maxlength="200" placeholder="评论…">' +
+            '<button class="mo-cmt-send" type="button" data-mo-cmt-send="' + esc(m.id) + '">发送</button>' +
+          '</div>' +
         '</div>' +
       '</div></li>';
   }
@@ -187,6 +208,41 @@
   }
 
   /* ---------------- 事件 ---------------- */
+  // 打开某条动态的评论输入行；target 为空表示发普通评论，否则是「回复某人」
+  function openRow(mid, target) {
+    var list = el('feedList');
+    if (!list) return;
+    var row = list.querySelector('[data-mo-row="' + mid + '"]');
+    if (!row) return;
+    if (target && target.cid) {
+      replyTo[mid] = target;
+      row.setAttribute('data-reply-to', String(target.cid));
+      row.setAttribute('data-reply-name', String(target.name || '某人').slice(0, 24));
+    } else {
+      replyTo[mid] = null;
+      row.setAttribute('data-reply-to', '');
+      row.removeAttribute('data-reply-name');
+    }
+    paintReply(row);
+    row.classList.remove('hidden');
+    try { row.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+    var inp = row.querySelector('.mo-cmt-input');
+    if (inp) {
+      inp.placeholder = (target && target.cid) ? ('回复 ' + String(target.name || '某人').slice(0, 12) + '…') : '评论…';
+      setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
+    }
+  }
+  function paintReply(row) {
+    var chip = row.querySelector('.mo-reply-chip');
+    var txt = row.querySelector('.mo-reply-text');
+    if (!chip || !txt) return;
+    if (row.getAttribute('data-reply-to')) {
+      txt.textContent = '回复 ' + (row.getAttribute('data-reply-name') || '某人');
+      chip.classList.remove('hidden');
+    } else {
+      chip.classList.add('hidden');
+    }
+  }
   function bind() {
     var list = el('feedList');
     if (list && !list.__momBound) {
@@ -200,14 +256,39 @@
         }
         var cmt = t.closest('[data-mo-cmt]');
         if (cmt) {
-          var row = list.querySelector('[data-mo-row="' + cmt.getAttribute('data-mo-cmt') + '"]');
-          if (row) {
-            row.classList.toggle('hidden');
-            if (!row.classList.contains('hidden')) {
-              var inp = row.querySelector('.mo-cmt-input');
-              if (inp) setTimeout(function () { try { inp.focus(); } catch (e) {} }, 60);
-            }
+          openRow(cmt.getAttribute('data-mo-cmt'), null);
+          return;
+        }
+        // 点某条评论 = 回复这条评论（QQ空间 那样）
+        var cmtLine = t.closest('[data-mo-replyto]');
+        if (cmtLine && !t.closest('[data-mo-cmtdel]')) {
+          var li = cmtLine.closest('[data-mo-id]');
+          var mid = li && li.getAttribute('data-mo-id');
+          if (mid) openRow(mid, { cid: cmtLine.getAttribute('data-mo-replyto'), name: cmtLine.querySelector('b').textContent });
+          return;
+        }
+        var cmtDel = t.closest('[data-mo-cmtdel]');
+        if (cmtDel) {
+          var li2 = cmtDel.closest('[data-mo-id]');
+          var mid2 = li2 && li2.getAttribute('data-mo-id');
+          var cid = cmtDel.getAttribute('data-mo-cmtdel');
+          if (!mid2) return;
+          if (!api.confirmTap || api.confirmTap('moment-cmtdel-' + cid)) {
+            if (!api.send({ t: 'moment_cmt_del', id: mid2, cid: cid })) api.toast('没连上服务器');
           }
+          return;
+        }
+        var exp = t.closest('[data-mo-expand]');
+        if (exp) {
+          expanded[exp.getAttribute('data-mo-expand')] = true;
+          render();
+          return;
+        }
+        var rx = t.closest('[data-mo-reply-x]');
+        if (rx) {
+          var rid = rx.getAttribute('data-mo-reply-x');
+          var rowx = list.querySelector('[data-mo-row="' + rid + '"]');
+          if (rowx) { rowx.setAttribute('data-reply-to', ''); paintReply(rowx); }
           return;
         }
         var sendBtn = t.closest('[data-mo-cmt-send]');
@@ -217,8 +298,12 @@
           var inp2 = row2 && row2.querySelector('.mo-cmt-input');
           var txt = (inp2 && inp2.value || '').trim();
           if (!txt) return;
-          if (!api.send({ t: 'moment_comment', id: id, text: txt.slice(0, 200) })) { api.toast('没连上服务器'); return; }
+          var rt = row2 && row2.getAttribute('data-reply-to');
+          var payload = { t: 'moment_comment', id: id, text: txt.slice(0, 200) };
+          if (rt) payload.replyTo = rt;
+          if (!api.send(payload)) { api.toast('没连上服务器'); return; }
           inp2.value = '';
+          if (row2) { row2.setAttribute('data-reply-to', ''); paintReply(row2); }
           return;
         }
         var del = t.closest('[data-mo-del]');
@@ -241,7 +326,13 @@
         var txt = (inp.value || '').trim();
         if (!id || !txt) return;
         e.preventDefault();
-        if (api.send({ t: 'moment_comment', id: id, text: txt.slice(0, 200) })) inp.value = '';
+        var rt2 = row && row.getAttribute('data-reply-to');
+        var pay2 = { t: 'moment_comment', id: id, text: txt.slice(0, 200) };
+        if (rt2) pay2.replyTo = rt2;
+        if (api.send(pay2)) {
+          inp.value = '';
+          if (row) { row.setAttribute('data-reply-to', ''); paintReply(row); }
+        }
       });
       list.addEventListener('scroll', function () {
         if (!more || loading) return;
@@ -318,6 +409,16 @@
           items[k].comments = (items[k].comments || []).concat([d.comment]);
           break;
         }
+      }
+      if (opened) render();
+      return;
+    }
+    if (d.t === 'moment_cmt_del') {
+      for (var q = 0; q < items.length; q++) {
+        if (items[q].id !== d.id) continue;
+        var gone = d.gone || [d.cid];
+        items[q].comments = (items[q].comments || []).filter(function (c) { return gone.indexOf(String(c.id)) < 0; });
+        break;
       }
       if (opened) render();
       return;
