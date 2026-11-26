@@ -70,9 +70,151 @@
   }
   RP.newId = newId;
 
+  /* ---------------- v3：结构化人设 ----------------
+     旧字段（desc/personality/likes…）原样保留，新增的分组字段只做"补充"：
+     空值不覆盖旧字段，迁移时从旧字段推导，所以老的卡不会丢东西。 */
+  var V3 = {
+    str: function (v, max) { return s(v, max || 600); },
+    arr: function (v, maxN, maxLen) {
+      var out = [];
+      if (typeof v === 'string') v = v.split(/[\n、,，;；]+/);
+      (Array.isArray(v) ? v : []).forEach(function (x) {
+        var t = s(x, maxLen || 60).trim();
+        if (t && out.length < (maxN || 40)) out.push(t);
+      });
+      return out;
+    },
+    bool: function (v) { return v !== false; }
+  };
+  function normV3(r) {
+    var p = r.profile || {}, t = r.touch || {}, pa = r.persona || {}, v = r.values || {};
+    var pr = r.prefs || {}, b = r.body || {}, ps = r.psych || {};
+    var at = r.attitude || {}, sc = r.scene || {}, fm = r.format || {};
+    var online = fm.online || {}, offline = fm.offline || {}, fb = r.forbidden || {};
+    return {
+      profile: {
+        gender: V3.str(p.gender, 12), age: V3.str(p.age, 12), height: V3.str(p.height, 16),
+        role: V3.str(p.role, 40), identity: V3.str(p.identity, 60),
+        tags: V3.arr(p.tags, 20, 20)
+      },
+      touch: { toUser: V3.str(t.toUser, 300), toOthers: V3.str(t.toOthers, 300) },
+      persona: {
+        outer: V3.str(pa.outer, 600), inner: V3.str(pa.inner, 600),
+        jealous: V3.str(pa.jealous, 400),
+        switchWhen: V3.str(pa.switchWhen, 120), switchDo: V3.str(pa.switchDo, 200)
+      },
+      values: { world: V3.str(v.world, 200), life: V3.str(v.life, 200), value: V3.str(v.value, 200) },
+      prefs: {
+        likes: V3.arr(pr.likes, 12, 80), dislikes: V3.arr(pr.dislikes, 12, 80),
+        pros: V3.arr(pr.pros, 8, 80), cons: V3.arr(pr.cons, 8, 80)
+      },
+      body: { allergy: V3.str(b.allergy, 200) },
+      psych: {
+        state: V3.str(ps.state, 300),
+        triggers: (Array.isArray(ps.triggers) ? ps.triggers : []).slice(0, 8).map(function (x) {
+          x = x || {};
+          var d = x.dials || {};
+          return {
+            when: V3.str(x.when, 80), feel: V3.str(x.feel, 40), do: V3.str(x.do, 200),
+            dials: { drama: num(d.drama, -1, -1, 100), initiative: num(d.initiative, -1, -1, 100) }
+          };
+        }).filter(function (x) { return x.when || x.do; })
+      },
+      family: V3.str(r.family, 400),
+      attitude: { toUser: V3.str(at.toUser, 400), toOthers: V3.str(at.toOthers, 400) },
+      atmosphere: V3.str(r.atmosphere, 300),
+      backstory: V3.str(r.backstory, 2000),
+      scene: {
+        time: V3.str(sc.time, 24), place: V3.str(sc.place, 40),
+        present: V3.arr(sc.present, 10, 24)
+      },
+      opening: (Array.isArray(r.opening) ? r.opening : []).slice(0, 12).map(function (x) {
+        x = (typeof x === 'string') ? { type: 'msg', text: x } : (x || {});
+        var ty = String(x.type || 'msg');
+        if (['time', 'msg', 'voice', 'call', 'transfer', 'narration'].indexOf(ty) < 0) ty = 'msg';
+        return { type: ty, text: s(x.text, 600) };
+      }).filter(function (x) { return x.text; }),
+      format: {
+        mode: /^(online|offline|auto)$/.test(String(fm.mode || '')) ? fm.mode : 'offline',
+        online: {
+          maxChars: num(online.maxChars, 15, 0, 200),
+          timeRule: V3.str(online.timeRule, 400),
+          blocks: V3.arr(online.blocks && online.blocks.length ? online.blocks : ['time', 'msg', 'voice', 'call', 'transfer'], 8, 12)
+        },
+        offline: { template: V3.str(offline.template, 300) || '`旁白`\n>角色名：台词' },
+        forbidMix: V3.bool(fm.forbidMix)
+      },
+      branch: (Array.isArray(r.branch) ? r.branch : []).slice(0, 12).map(function (x) {
+        x = x || {};
+        return { when: V3.str(x.when, 120), do: V3.str(x.do, 300) };
+      }).filter(function (x) { return x.when || x.do; }),
+      forbidden: {
+        call: V3.arr(fb.call, 80, 20), words: V3.arr(fb.words, 120, 16),
+        patterns: V3.arr(fb.patterns, 80, 40), metaphor: V3.arr(fb.metaphor, 80, 16),
+        abstract: V3.str(fb.abstract, 300)
+      },
+      selfCheck: V3.arr(r.selfCheck, 8, 120),
+      raw: (Array.isArray(r.raw) ? r.raw : []).slice(0, 40).map(function (x) {
+        x = x || {};
+        return { title: V3.str(x.title, 40), text: s(x.text, 4000) };
+      }).filter(function (x) { return x.text; })
+    };
+  }
+  RP.normV3 = normV3;
+
+  /* v2 → v3：只从旧字段推导，不编造 */
+  function migrateV3(card) {
+    var out = JSON.parse(JSON.stringify(card || {}));
+    var has = out.persona || out.prefs || out.profile;
+    if (has) return out;                        // 已经是 v3
+    var split = function (txt) { return String(txt || '').split(/[\n、,，;；]+/).filter(Boolean); };
+    out.profile = { gender: '', age: '', height: '', role: '', identity: '', tags: [] };
+    out.touch = { toUser: '', toOthers: '' };
+    out.persona = { outer: '', inner: out.personality || '', jealous: '', switchWhen: '', switchDo: '' };
+    out.values = { world: '', life: '', value: '' };
+    out.prefs = { likes: split(out.likes), dislikes: split(out.dislikes), pros: [], cons: [] };
+    out.body = { allergy: '' };
+    out.psych = { state: '', triggers: [] };
+    out.family = '';
+    out.attitude = { toUser: out.relation || '', toOthers: '' };
+    out.atmosphere = out.pace || '';
+    out.backstory = '';
+    out.scene = { time: '', place: '', present: [] };
+    out.opening = out.firstMes ? [{ type: 'msg', text: out.firstMes }] : [];
+    // 老 bug：这里原来无条件覆盖 format，于是「只填了 format 的老卡」的
+    // 线上/线下设置每次归一化都被重置成 offline。改为只在缺失时补默认。
+    if (!out.format || typeof out.format !== 'object') {
+      out.format = { mode: 'offline', online: { maxChars: 15, timeRule: '', blocks: ['time', 'msg', 'voice', 'call', 'transfer'] },
+                     offline: { template: '`旁白`\n>角色名：台词' }, forbidMix: true };
+    } else {
+      if (!/^(online|offline|auto)$/.test(String(out.format.mode || ''))) out.format.mode = 'offline';
+      if (!out.format.online || typeof out.format.online !== 'object') {
+        out.format.online = { maxChars: 15, timeRule: '', blocks: ['time', 'msg', 'voice', 'call', 'transfer'] };
+      }
+      if (!out.format.offline || typeof out.format.offline !== 'object') {
+        out.format.offline = { template: '`旁白`\n>角色名：台词' };
+      }
+      if (out.format.forbidMix === undefined) out.format.forbidMix = true;
+    }
+    out.branch = [];
+    out.forbidden = { call: [], words: [], patterns: [], metaphor: [], abstract: '' };
+    out.selfCheck = [];
+    out.raw = [];
+    return out;
+  }
+  RP.migrateV3 = migrateV3;
+
+  /* 导出白名单：一处维护，export.js 也从这里取，避免"导出一次人设归零" */
+  var CARD_KEEP = ['id', 'name', 'avatar', 'worldId', 'desc', 'personality', 'scenario', 'firstMes',
+    'mesExample', 'rules', 'style', 'callUser', 'relation', 'tic', 'likes', 'dislikes', 'secret',
+    'look', 'limits', 'pace', 'mood', 'dials', 'model', 'temp', 'builtin', 'brake', 'v',
+    'profile', 'touch', 'persona', 'values', 'prefs', 'body', 'psych', 'family', 'attitude',
+    'atmosphere', 'backstory', 'scene', 'opening', 'format', 'branch', 'forbidden', 'selfCheck', 'raw'];
+  RP.cardKeep = function () { return CARD_KEEP.slice(); };
+
   /* ---------- 归一化（编辑器、导入都走这里） ---------- */
   function normCard(raw) {
-    var r = raw || {};
+    var r = migrateV3(raw || {});        // 老卡先补上 v3 结构（只推导，不编造）
     var style = r.style || {};
     var ex = [];
     if (Array.isArray(r.mesExample)) {
@@ -82,7 +224,7 @@
         if (u || a) ex.push({ u: u, a: a });
       });
     }
-    return {
+    var out = {
       id: s(r.id, 60) || newId('c_'),
       name: s(r.name, 40) || '未命名角色',
       avatar: /^data:image\//.test(String(r.avatar || '')) ? String(r.avatar) : '',
@@ -122,8 +264,15 @@
         };
       })(),
       builtin: !!r.builtin,
-      v: 2
+      // 破甲：只在 deepseek 类模型上生效，默认关。开启后注入"记录体"框架、
+      // 客户端识别软拒绝并自动续写。老卡没有这个字段 → false，行为不变。
+      brake: !!r.brake,
+      v: 3
     };
+    // v3 分组字段（结构化人设）：空组不影响旧字段，注入层优先用新字段
+    var v3 = normV3(r);
+    for (var k in v3) if (v3.hasOwnProperty(k)) out[k] = v3[k];
+    return out;
   }
 
   function normWorld(raw) {

@@ -355,6 +355,252 @@
   PL.closeRun = closeRun;
   PL.setTab = function (t) { tab = t; if (t === 'market') PL.loadMarket(); else render(); };
 
+  /* ---------------- 模块包：内置 ZIP 读取（无依赖） ----------------
+     目标：像装插件一样，直接选一个 .zip（manifest.json + client.js）就能装，
+     不再让人手粘 JSON 和代码。Android WebView 里没有 Node 的 zlib，
+     所以这里自带一个 RFC1951 的 inflate（只支持 store / fixed / dynamic 三种块）。 */
+  var LBASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+  var LEXTRA = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+  var DBASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+  var DEXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+  var CORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+  function BitReader(data, pos) { this.d = data; this.p = pos || 0; this.b = 0; this.n = 0; }
+  BitReader.prototype.bit = function () {
+    if (!this.n) { this.b = this.d[this.p++] || 0; this.n = 8; }
+    var v = this.b & 1; this.b >>= 1; this.n--; return v;
+  };
+  BitReader.prototype.bits = function (k) {
+    var v = 0;
+    for (var i = 0; i < k; i++) v |= this.bit() << i;
+    return v;
+  };
+  BitReader.prototype.align = function () { this.b = 0; this.n = 0; };
+
+  function buildHuff(lengths) {
+    var count = [], sym = [], i;
+    for (i = 0; i < 16; i++) count[i] = 0;
+    for (i = 0; i < lengths.length; i++) count[lengths[i]]++;
+    count[0] = 0;
+    var offs = [], total = 0;
+    for (i = 1; i < 16; i++) { offs[i] = total; total += count[i]; }
+    for (i = 0; i < lengths.length; i++) if (lengths[i]) sym[offs[lengths[i]]++] = i;
+    return { count: count, symbol: sym };
+  }
+  function decodeSym(br, h) {
+    var code = 0, first = 0, index = 0;
+    for (var len = 1; len <= 15; len++) {
+      code |= br.bit();
+      var c = h.count[len];
+      if (code - first < c) return h.symbol[index + (code - first)];
+      index += c;
+      first = (first + c) << 1;
+      code <<= 1;
+    }
+    throw new Error('inflate: 无效的哈夫曼码');
+  }
+  function fixedTables() {
+    var ll = [], dd = [], i;
+    for (i = 0; i < 144; i++) ll[i] = 8;
+    for (; i < 256; i++) ll[i] = 9;
+    for (; i < 280; i++) ll[i] = 7;
+    for (; i < 288; i++) ll[i] = 8;
+    for (i = 0; i < 30; i++) dd[i] = 5;
+    return { lit: buildHuff(ll), dist: buildHuff(dd) };
+  }
+  /* 解压一段 raw deflate，输出长度已知（uncompressed size） */
+  function inflateRaw(src, outLen) {
+    var out = new Uint8Array(outLen || 0), op = 0;
+    var br = new BitReader(src, 0), fixed = null;
+    function put(b) { if (op >= out.length) { var n2 = new Uint8Array(Math.max(64, out.length * 2 + (op - out.length + 32))); n2.set(out); out = n2; } out[op++] = b; }
+    var last = 0;
+    while (!last) {
+      last = br.bit();
+      var type = br.bits(2);
+      if (type === 0) {                       // stored
+        br.align();
+        var len = src[br.p] | (src[br.p + 1] << 8);
+        var nlen = src[br.p + 2] | (src[br.p + 3] << 8);
+        br.p += 4;
+        if ((len ^ 0xffff) !== nlen) throw new Error('inflate: stored 长度校验失败');
+        for (var i0 = 0; i0 < len; i0++) put(src[br.p++]);
+        continue;
+      }
+      var lit, dist;
+      if (type === 1) { if (!fixed) fixed = fixedTables(); lit = fixed.lit; dist = fixed.dist; }
+      else if (type === 2) {
+        var hlit = br.bits(5) + 257, hdist = br.bits(5) + 1, hclen = br.bits(4) + 4;
+        var clen = [], k;
+        for (k = 0; k < 19; k++) clen[k] = 0;
+        for (k = 0; k < hclen; k++) clen[CORDER[k]] = br.bits(3);
+        var ch = buildHuff(clen), lens = [];
+        var total = hlit + hdist;
+        for (k = 0; k < total;) {
+          var sym = decodeSym(br, ch);
+          if (sym < 16) { lens[k++] = sym; continue; }
+          var rep = 0, val = 0;
+          if (sym === 16) { if (!k) throw new Error('inflate: 重复码前面没有值'); val = lens[k - 1]; rep = 3 + br.bits(2); }
+          else if (sym === 17) { rep = 3 + br.bits(3); }
+          else { rep = 11 + br.bits(7); }
+          while (rep--) lens[k++] = val;
+        }
+        var ll = lens.slice(0, hlit), dd = lens.slice(hlit, hlit + hdist);
+        lit = buildHuff(ll); dist = buildHuff(dd);
+      } else throw new Error('inflate: 块类型 3');
+
+      for (;;) {
+        var s = decodeSym(br, lit);
+        if (s === 256) break;
+        if (s < 256) { put(s); continue; }
+        s -= 257;
+        var L = LBASE[s] + br.bits(LEXTRA[s]);
+        var ds = decodeSym(br, dist);
+        var D = DBASE[ds] + br.bits(DEXTRA[ds]);
+        for (var j = 0; j < L; j++) put(out[op - D]);
+      }
+    }
+    return op === out.length ? out : out.subarray(0, op);
+  }
+
+  function u16(b, i) { return b[i] | (b[i + 1] << 8); }
+  function u32(b, i) { return (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0; }
+
+  /* 读 zip：返回 { name: string/Uint8Array } */
+  function unzip(buf) {
+    var b = new Uint8Array(buf), i;
+    // End of central directory
+    var eocd = -1;
+    for (i = b.length - 22; i >= 0 && i > b.length - 66000; i--) {
+      if (b[i] === 0x50 && b[i + 1] === 0x4b && b[i + 2] === 0x05 && b[i + 3] === 0x06) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('不是 zip 文件（找不到中央目录）');
+    var count = u16(b, eocd + 10), cdOff = u32(b, eocd + 16);
+    var out = {}, p = cdOff;
+    for (var n = 0; n < count; n++) {
+      if (u32(b, p) !== 0x02014b50) break;
+      var method = u16(b, p + 10);
+      var csize = u32(b, p + 20), usize = u32(b, p + 24);
+      var fnLen = u16(b, p + 28), exLen = u16(b, p + 30), cmLen = u16(b, p + 32);
+      var lho = u32(b, p + 42);
+      var name = '';
+      for (var c = 0; c < fnLen; c++) name += String.fromCharCode(b[p + 46 + c]);
+      // 有些 zip 用 UTF-8 名字：按 UTF-8 解一遍
+      try {
+        var bytes = b.subarray(p + 46, p + 46 + fnLen);
+        name = decodeURIComponent(bytes.reduce(function (acc, x) { return acc + '%' + ('0' + x.toString(16)).slice(-2); }, ''));
+      } catch (e) {}
+      p += 46 + fnLen + exLen + cmLen;
+      if (/\/$/.test(name)) continue;                        // 目录
+      if (u32(b, lho) !== 0x04034b50) continue;
+      var lfn = u16(b, lho + 26), lex = u16(b, lho + 28);
+      var dataOff = lho + 30 + lfn + lex;
+      var data = b.subarray(dataOff, dataOff + csize);
+      var raw;
+      if (method === 0) raw = data;
+      else if (method === 8) raw = inflateRaw(data, usize);
+      else throw new Error('不支持的压缩方式 ' + method);
+      out[name] = raw;
+    }
+    return out;
+  }
+  function bytesToText(u8) {
+    try { return new TextDecoder('utf-8').decode(u8); } catch (e) {}
+    var s2 = '';
+    for (var i = 0; i < u8.length; i++) s2 += String.fromCharCode(u8[i]);
+    try { return decodeURIComponent(escape(s2)); } catch (e2) { return s2; }
+  }
+  /* 在 zip 里找 manifest.json / client.js（允许包一层目录） */
+  function pickModuleFiles(files) {
+    var man = null, code = null, k;
+    for (k in files) {
+      if (!files.hasOwnProperty(k)) continue;
+      if (/(^|\/)manifest\.json$/i.test(k)) man = k;
+      else if (/(^|\/)client\.js$/i.test(k)) code = k;
+    }
+    if (!man || !code) return null;
+    return {
+      manifest: bytesToText(files[man]),
+      code: bytesToText(files[code])
+    };
+  }
+
+  PL.installFromFile = function (f) { return readPkgFile(f); };
+  PL.unzip = unzip;
+  PL.pickModuleFiles = pickModuleFiles;
+  PL.inflateRaw = inflateRaw;
+
+  /* ---------------- 从文件安装模块包 ---------------- */
+  function pkgMsg(t) {
+    var el = $('#modPkgMsg');
+    if (el) el.textContent = String(t || '');
+  }
+  function normManifest(man) {
+    if (!man || typeof man !== 'object') return null;
+    var id = String(man.id || '').trim();
+    if (!/^[a-z0-9][a-z0-9_.-]{1,39}$/i.test(id)) return { err: 'manifest 里的 id 不合法（2-40 位字母数字，可带 . _ -）' };
+    var out = {
+      id: id, name: String(man.name || id).slice(0, 40), ver: String(man.ver || '1.0').slice(0, 20),
+      desc: String(man.desc || '').slice(0, 200), author: String(man.author || '').slice(0, 40),
+      icon: String(man.icon || '🧩').slice(0, 4),
+      perms: (Array.isArray(man.perms) ? man.perms : []).map(function (x) { return String(x).slice(0, 20); }).slice(0, 8),
+      minApp: parseInt(man.minApp, 10) || 0
+    };
+    return { manifest: out };
+  }
+  function installPackage(text, code) {
+    var parsed = normManifest(text);
+    if (parsed && parsed.err) { pkgMsg(parsed.err); api.toast(parsed.err); return; }
+    var man = parsed.manifest;
+    if (!/function\s+mount\s*\(/.test(code)) {
+      pkgMsg('client.js 里找不到 function mount(ctx)，装的会是个打不开的模块');
+      api.toast('模块代码不完整');
+      return;
+    }
+    var need = man.minApp || 0, have = (api.version && api.version()) || 0;
+    if (need && have && need > have) { api.toast('这个模块要 App ' + need + ' 以上'); return; }
+    var perms = man.perms || [];
+    (api.confirmBox || confirmBox)('装「' + man.name + '」？' +
+      (perms.length ? '\n它要用：' + perms.join(' / ') : '') +
+      '\n模块代码会跑在你手机上，只装你信得过的包。', function () {
+      doInstall(man, code);
+      pkgMsg('已安装：' + man.name + '（v' + man.ver + '）');
+      api.toast('装好了，去「我的模块」里打开');
+      try { PL.setTab('mine'); } catch (e) {}
+    });
+  }
+  function readPkgFile(file) {
+    if (!file) return;
+    pkgMsg('正在读取 ' + file.name + '…');
+    var fr = new FileReader();
+    fr.onerror = function () { pkgMsg('读不了这个文件'); };
+    fr.onload = function () {
+      try {
+        var name = String(file.name || '').toLowerCase();
+        if (/\.json$/.test(name)) {
+          // 也接受单个 json：{manifest:{...}, code:"..."} 或 {id,name,code}
+          var o = JSON.parse(String(fr.result));
+          if (o && o.code) {
+            var man = o.manifest || o;
+            installPackage(man, String(o.code));
+            return;
+          }
+          pkgMsg('这个 JSON 里没有 code 字段');
+          return;
+        }
+        var files = unzip(fr.result);
+        var picked = pickModuleFiles(files);
+        if (!picked) { pkgMsg('包里没找到 manifest.json / client.js'); return; }
+        var manText = null;
+        try { manText = JSON.parse(picked.manifest); } catch (e) { pkgMsg('manifest.json 不是合法 JSON'); return; }
+        installPackage(manText, picked.code);
+      } catch (err) {
+        pkgMsg('安装失败：' + (err && err.message || err));
+      }
+    };
+    if (/\.json$/.test(String(file.name || '').toLowerCase())) fr.readAsText(file);
+    else fr.readAsArrayBuffer(file);
+  }
+
   /* ---------------- 上传 ---------------- */
   function openUpload() {
     var box = $('#modUpload');
@@ -528,6 +774,19 @@
         if (e.target.closest('.action-scrim')) { closeUpload(); return; }
         if (e.target.closest('#modUpCancel')) { closeUpload(); return; }
         if (e.target.closest('#modUpSend')) { submitUpload(); return; }
+        if (e.target.closest('#modPickPkg')) {
+          var inp = $('#modPkgInput');
+          if (inp) { inp.value = ''; inp.click(); }
+          return;
+        }
+      });
+    }
+    var pkgIn = $('#modPkgInput');
+    if (pkgIn && !pkgIn.__pkgBound) {
+      pkgIn.__pkgBound = true;
+      pkgIn.addEventListener('change', function (e) {
+        var f = e.target.files && e.target.files[0];
+        if (f) readPkgFile(f);
       });
     }
     render();

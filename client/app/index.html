@@ -126,6 +126,7 @@
       <div id="chatSub" class="chat-sub">连接中…</div>
       <button id="aiModelChip" class="ai-model-chip hidden" type="button">切换模型</button>
     </div>
+    <button id="btnRpMode" class="rp-mode-btn hidden" type="button" data-m="offline" aria-label="线上或线下">线下</button>
     <button id="btnTone" class="tone-btn hidden" type="button" aria-label="语气与情感">浓度</button>
     <button id="btnPinRoom" class="pin-btn" type="button" aria-label="置顶会话">📌</button>
   </header>
@@ -154,6 +155,11 @@
     <span class="rec-dot"></span>
     <span id="recTime">录音中 00:00</span>
     <span class="rec-tip">点 🎤 结束并发送</span>
+  </div>
+  <div id="rpBar" class="rp-bar hidden">
+    <button id="rpGen" class="rp-act" type="button">继续生成</button>
+    <button id="rpNarr" class="rp-act ghost" type="button">旁白</button>
+    <button id="rpStory" class="rp-act ghost" type="button" aria-pressed="false">剧情</button>
   </div>
   <form id="composer" class="composer">
     <button id="btnFile" class="mention-btn" type="button" aria-label="发送文件">📎</button>
@@ -448,6 +454,7 @@
     <div class="brand">存储管理</div>
     <button id="storageAll" class="icon-btn" type="button" aria-label="全部清空">🗑</button>
   </header>
+    <p class="hint" id="storageTip"></p>
   <div class="storage-body">
     <div id="storageSummary" class="storage-summary"></div>
     <div class="storage-group">
@@ -812,9 +819,25 @@
     <div class="role-pane hidden" id="rePaneRules">
       <label class="field"><span>角色规则（写给模型的约束）</span><textarea id="reRules" rows="5" maxlength="2000" placeholder="不要写旁白心理描写；回复不超过 3 段；不要使用『作为AI』"></textarea></label>
       <label class="field"><span>边界 / 雷区（这些一律不写）</span><textarea id="reLimits" rows="3" maxlength="500" placeholder="例如：不写自伤、不写未成年相关、不描写现实中的他人隐私"></textarea></label>
+
+      <label class="me-row agent-row brake-row"><span class="me-ico">🔓</span>破甲模式
+        <input id="reBrakeOn" type="checkbox" class="agent-switch"></label>
+      <p class="hint-sub">仅在模型为 deepseek 时生效。开启后不再自我审查、不跳出角色、不把情节改温和。</p>
+
+      <details class="v3-adv" id="reV3Wrap">
+        <summary>高级设定 · 结构化人设（v3）</summary>
+        <p class="hint-sub">档案 / 三套性格 / 三观 / 喜恶 / 触发点 / 线上·线下格式 / 分支 / 禁词库。一键解析会往这里填；也能手改或从别的卡粘贴。留空 = 只用上面那些字段。</p>
+        <textarea id="reV3" rows="12" spellcheck="false" placeholder='{"profile":{...},"persona":{...},"format":{...}}'></textarea>
+        <div class="v3-actions">
+          <button id="reV3Fill" class="mini-btn" type="button">从上面字段补全</button>
+          <button id="reV3Check" class="mini-btn ok" type="button">校验格式</button>
+          <span class="hint" id="reV3Msg"></span>
+        </div>
+      </details>
     </div>
 
     <div class="ai-test-row">
+      <button id="reExport" class="ai-fetch" type="button">导出人设卡</button>
       <button id="reTrial" class="ai-fetch" type="button">试演一句</button>
       <span class="hint" id="reTrialEst">不保存也能看效果</span>
     </div>
@@ -851,17 +874,20 @@
     <button id="riHelp" class="icon-btn" type="button" aria-label="说明">?</button>
   </header>
   <div class="me-body">
-    <p class="hint">支持三种来源：SillyTavern / 酒馆的角色卡 PNG、角色卡 JSON、或者你直接粘的一大段文字。读出来之后用你自己的模型拆成人设和情感浓度，再让你确认保存。</p>
-    <label class="field"><span>选一个文件（.png / .json / .txt）</span>
+    <p class="hint">PNG / JSON / 一段文字都行，挑一种拆法。</p>
+    <label class="field"><span>文件</span>
       <input id="riFile" type="file" accept=".png,.json,.txt,.md,image/png,application/json,text/plain" class="ri-file">
     </label>
     <p class="hint" id="riFileInfo">还没选文件</p>
     <label class="field"><span>或者把文字粘在这里</span>
-      <textarea id="riText" rows="6" maxlength="20000" placeholder="把角色介绍、设定、对话样例整段粘进来，越具体拆得越准"></textarea>
+      <textarea id="riText" rows="6" maxlength="20000" placeholder="角色设定、前情、对话规则，整段粘进来"></textarea>
     </label>
     <div class="bg-dim-row"><span class="hint">模型</span><input id="riModel" maxlength="80" placeholder="留空 = 主对话模型" autocomplete="off"></div>
-    <button id="riAnalyze" class="ai-fetch primary" type="button">读取并 AI 拆解</button>
-    <button id="riLocalOnly" class="ai-fetch" type="button">只读文件不调用模型</button>
+    <div class="seg ri-seg" id="riSeg">
+      <button class="seg-item on" type="button" id="riLocalOnly">本地拆解<small>离线</small></button>
+      <button class="seg-item" type="button" id="riAnalyze">模型拆解<small>用模型</small></button>
+    </div>
+    <p class="hint" id="riMode"></p>
     <pre id="riOut" class="ai-test-out hidden"></pre>
     <div id="riPrev" class="ri-prev hidden"></div>
     <button id="riSave" class="primary hidden" type="button">存成角色卡并打开编辑器</button>
@@ -886,6 +912,7 @@
   <header class="topbar">
     <button id="weBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand" id="weTitle">新建世界</div>
+    <button id="weExport" class="logout-chip" type="button">导出</button>
     <button id="weSave" class="logout-chip" type="button">保存</button>
   </header>
   <div class="me-body">
@@ -924,6 +951,9 @@
       <input id="cfKey" type="password" maxlength="200" placeholder="sk-…" spellcheck="false" autocomplete="off"></label>
     <label class="field"><span>主对话模型</span>
       <input id="cfModel" maxlength="120" placeholder="deepseek-chat" spellcheck="false" autocomplete="off"></label>
+      <label class="field"><span>上下文上限（token，留空 = 按模型自动）</span>
+        <input id="cfCtx" maxlength="12" inputmode="numeric" placeholder="例如 1048576" spellcheck="false" autocomplete="off"></label>
+      <p class="hint-sub" id="cfCtxHint"></p>
     <p class="hint" id="cfKeyInfo">还没保存 key</p>
     <pre id="cfUsage" class="ai-test-out">还没有调用记录</pre>
     <button id="cfUsageReset" class="ai-fetch" type="button">清零用量</button>
@@ -1096,7 +1126,13 @@
 <div id="modUpload" class="action-layer hidden">
   <div class="action-scrim"></div>
   <div class="action-card mod-up-card" role="dialog" aria-modal="true" aria-label="上传模块">
-    <div class="remark-title">上传模块</div>
+    <div class="remark-title">模块包</div>
+    <p class="hint-sub">最省事：直接把模块包（.zip，里面是 manifest.json + client.js）丢进来，和装插件一样。</p>
+    <button id="modPickPkg" class="primary" type="button">选择模块包 .zip 安装</button>
+    <input id="modPkgInput" type="file" accept=".zip,.json,application/zip,application/json" class="hidden">
+    <p class="hint-sub" id="modPkgMsg"></p>
+
+    <div class="remark-title" style="margin-top:14px">或者上传到市场</div>
     <p class="hint">填模块描述（JSON）和 client.js 代码。普通用户提交后要开发者审核才会出现在市场里；开发者上传直接上架。</p>
     <label class="field"><span>模块描述 manifest.json</span>
       <textarea id="modUpManifest" rows="9" spellcheck="false"></textarea>

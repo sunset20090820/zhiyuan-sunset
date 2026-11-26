@@ -40,14 +40,19 @@
   }
 
   /* 只挑导出需要的字段，顺手把不该外发的都丢掉 */
+  /* 白名单只在这里维护一次（cards.js 的 RP.cardKeep），
+     以前手写枚举漏了 callUser/dials/look…，导出再导入人设会归零。 */
   function cleanCard(c) {
-    return {
-      id: c.id, name: c.name, avatar: /^data:image\//.test(String(c.avatar || '')) ? c.avatar : '',
-      worldId: c.worldId || '', desc: c.desc || '', personality: c.personality || '',
-      scenario: c.scenario || '', firstMes: c.firstMes || '',
-      mesExample: (c.mesExample || []).slice(0, 12), rules: c.rules || '',
-      style: c.style || {}, model: c.model || '', temp: c.temp, v: 1
-    };
+    var keep = (window.RP && RP.cardKeep) ? RP.cardKeep() : [];
+    var out = {};
+    var norm = (window.RP && RP.normCard) ? RP.normCard(c) : c;
+    keep.forEach(function (k) {
+      if (k === 'id' || k === 'builtin') return;
+      if (k === 'avatar') { out.avatar = /^data:image\//.test(String(c.avatar || '')) ? c.avatar : ''; return; }
+      if (norm[k] !== undefined) out[k] = norm[k];
+    });
+    out.v = 3;
+    return out;
   }
   function cleanWorld(w) {
     return {
@@ -212,11 +217,15 @@
       if (byId || (strategy === 'overwrite' && byName)) id = (byId || byName).id;
       else if (!byId && byName && strategy === 'overwrite') id = byName.id;
       idMap[c.id] = id;
-      var res = RP.saveCard({
-        id: id, name: c.name, avatar: c.avatar, worldId: mapWorldId(c.worldId || ''),
-        desc: c.desc, personality: c.personality, scenario: c.scenario, firstMes: c.firstMes,
-        mesExample: c.mesExample, rules: c.rules, style: c.style, model: c.model, temp: c.temp
+      // 导入也走白名单：v3 的结构化字段一并搬过来（旧文件没有这些字段就是空）
+      var keep = (window.RP && RP.cardKeep) ? RP.cardKeep() : [];
+      var card = { id: id, avatar: c.avatar, worldId: mapWorldId(c.worldId || '') };
+      keep.forEach(function (k) {
+        if (k === 'id' || k === 'avatar' || k === 'worldId' || k === 'builtin') return;
+        if (c[k] !== undefined) card[k] = c[k];
       });
+      if (!card.name) card.name = c.name;
+      var res = RP.saveCard(card);
       if (res.ok) stat.cards++;
       return res.card;
     }

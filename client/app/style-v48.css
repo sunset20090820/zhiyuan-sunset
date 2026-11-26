@@ -352,6 +352,46 @@ html[data-theme="dark"] .day { background: rgba(255, 255, 255, .12); }
   border-radius: 10px; background: rgba(0,0,0,.06);
   animation: img-pop .24s cubic-bezier(.2,.75,.25,1) both;
 }
+/* 扮演回复的块：旁白 / 台词 / 时间行 / 语音·转账 */
+.rp-say { display: block; }
+.rp-say + .rp-say { margin-top: 4px; }
+.rp-who {
+  display: inline-block; margin-right: 4px; padding: 0 6px;
+  font-size: 11.5px; font-weight: 600; border-radius: 6px;
+  color: var(--accent-ink); background: rgba(124, 139, 250, .14);
+  vertical-align: 1px;
+}
+.rp-act-line {
+  display: block; margin: 2px 0 4px; font-size: 13px; line-height: 1.55;
+  color: var(--tg-sub); font-style: italic;
+}
+.rp-time {
+  display: block; margin: 6px 0 2px; text-align: center;
+  font-size: 11.5px; color: var(--tg-sub); letter-spacing: .5px;
+}
+.rp-tag {
+  display: inline-block; margin: 3px 0; padding: 4px 10px; border-radius: 10px;
+  font-size: 13px; background: rgba(240, 170, 90, .16);
+  border: 1px solid rgba(240, 170, 90, .26);
+}
+html[data-theme="dark"] .rp-tag { background: rgba(240, 170, 90, .14); }
+/* 导入页：两种拆法做成一个分段控件（吃同一颗果冻药丸） */
+.ri-seg { margin: 10px 0 8px; }
+.ri-seg .seg-item {
+  display: flex; flex-direction: column; gap: 1px; align-items: center;
+  padding: 9px 6px; line-height: 1.2;
+}
+.ri-seg .seg-item small { font-size: 10.5px; font-weight: 400; opacity: .72; }
+/* v3 开场块：通话 / 转账 */
+.blk-call, .blk-transfer {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 14px; font-size: 13.5px;
+  background: rgba(124, 139, 250, .10); border: 1px solid rgba(124, 139, 250, .18);
+  color: var(--text);
+}
+.blk-transfer { background: rgba(255, 190, 120, .16); border-color: rgba(240, 170, 90, .28); }
+html[data-theme="dark"] .blk-call { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .14); }
+html[data-theme="dark"] .blk-transfer { background: rgba(255, 190, 120, .12); border-color: rgba(240, 170, 90, .26); }
 .img-gone {
   padding: 10px 12px; border-radius: 10px; font-size: 12.5px; color: var(--tg-sub);
   background: rgba(0,0,0,.05); border: 1px dashed rgba(128,128,128,.35);
@@ -3136,6 +3176,27 @@ html[data-skin] .roles-screen { padding-bottom: calc(80px + var(--safe-bottom));
   color: var(--tg-blue); background: color-mix(in srgb, var(--tg-blue) 14%, transparent);
 }
 .tone-btn:active { transform: scale(.94); }
+/* 顶栏「线上/线下」两态开关：只在扮演会话出现。线上=实心，线下=浅底，一眼分辨 */
+.rp-mode-btn {
+  flex: 0 0 auto; height: 34px; padding: 0 10px; margin-right: 4px;
+  border-radius: 12px; border: 0; font-size: 12.5px; font-weight: 600;
+  color: var(--tg-blue); background: color-mix(in srgb, var(--tg-blue) 14%, transparent);
+}
+.rp-mode-btn:active { transform: scale(.94); }
+.rp-mode-btn[data-m="online"] { color: #fff; background: color-mix(in srgb, var(--tg-blue) 82%, transparent); }
+/* 扮演工具条：固定在输入框上方。以前「继续写」挂在消息列表末尾，会跟着滚动跑掉 */
+.rp-bar { display: flex; gap: 8px; padding: 8px 12px 2px; align-items: center; }
+.rp-act {
+  flex: 0 0 auto; height: 32px; padding: 0 13px; border-radius: 12px; border: 0;
+  font-size: 12.5px; font-weight: 600; color: var(--tg-blue);
+  background: color-mix(in srgb, var(--tg-blue) 14%, transparent);
+}
+.rp-act:active { transform: scale(.94); }
+.rp-act.ghost { background: transparent; color: var(--tg-sub);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tg-sub) 24%, transparent); }
+.rp-act.on { color: #fff; background: color-mix(in srgb, var(--tg-blue) 82%, transparent); }
+.rp-act[disabled] { opacity: .45; }
+.rp-bar .rp-spacer { flex: 1 1 auto; }
 .rp-dial.compact { margin: 8px 0 10px; }
 .rp-dial.compact .rp-dial-ends { display: none; }
 #toneSheet .tone-list { max-height: 47vh; }
