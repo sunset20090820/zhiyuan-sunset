@@ -1031,6 +1031,85 @@ public class MainActivity extends Activity {
             }).start();
         }
 
+        /**
+         * 导出二进制（PNG 人设图卡等）到「下载/DSH-Go/纸鸢备份/」。
+         * 和 exportFile 同一条落盘路径，只是按 base64 还原字节、用指定 MIME。
+         */
+        @JavascriptInterface
+        public void exportBytes(final String name, final String base64, final String mime) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    String safe = String.valueOf(name == null ? "export.png" : name)
+                            .replaceAll("[\\/:*?\"<>|]", "_");
+                    String mimeType = (mime == null || mime.trim().length() == 0) ? "image/png" : mime.trim();
+                    byte[] data;
+                    try {
+                        data = android.util.Base64.decode(String.valueOf(base64), android.util.Base64.DEFAULT);
+                    } catch (Exception e) {
+                        final String err = String.valueOf(e.getMessage());
+                        act.runOnUiThread(new Runnable() { @Override public void run() {
+                            try { act.web.evaluateJavascript("try{window.__exportResult&&window.__exportResult(false," + org.json.JSONObject.quote(err) + ")}catch(e){}", null); } catch (Exception e2) { } } });
+                        return;
+                    }
+                    String path = "";
+                    boolean ok = false;
+                    try {
+                        if (Build.VERSION.SDK_INT >= 29) {
+                            android.content.ContentValues cv = new android.content.ContentValues();
+                            cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safe);
+                            cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType);
+                            cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                                    Environment.DIRECTORY_DOWNLOADS + "/DSH-Go/纸鸢备份");
+                            android.net.Uri uri = act.getContentResolver().insert(
+                                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                            if (uri == null) throw new Exception("建不了文件");
+                            java.io.OutputStream os = act.getContentResolver().openOutputStream(uri);
+                            os.write(data);
+                            os.flush(); os.close();
+                            path = "Download/DSH-Go/纸鸢备份/" + safe;
+                            ok = true;
+                        } else {
+                            java.io.File dir = new java.io.File(Environment.getExternalStorageDirectory(),
+                                    "Download/DSH-Go/纸鸢备份");
+                            if (!dir.exists()) dir.mkdirs();
+                            java.io.File f = new java.io.File(dir, safe);
+                            java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
+                            fo.write(data);
+                            fo.flush();
+                            try { fo.getFD().sync(); } catch (Exception e2) { }
+                            fo.close();
+                            path = f.getAbsolutePath();
+                            ok = true;
+                        }
+                    } catch (Exception e) {
+                        try {
+                            java.io.File dir = new java.io.File(act.getExternalFilesDir(null), "纸鸢备份");
+                            if (!dir.exists()) dir.mkdirs();
+                            java.io.File f = new java.io.File(dir, safe);
+                            java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
+                            fo.write(data);
+                            fo.close();
+                            path = f.getAbsolutePath();
+                            ok = true;
+                        } catch (Exception e3) { path = String.valueOf(e3.getMessage()); ok = false; }
+                    }
+                    final boolean okf = ok;
+                    final String pathf = path;
+                    try {
+                        act.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    act.web.evaluateJavascript(
+                                        "try{window.__exportResult&&window.__exportResult(" + okf + ","
+                                        + org.json.JSONObject.quote(pathf) + ")}catch(e){}", null);
+                                } catch (Exception e) { }
+                            }
+                        });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
         /** 自动备份：写到应用私有目录，同名覆盖，不占 Downloads、不需要权限 */
         @JavascriptInterface
         public void exportFilePrivate(final String name, final String text) {

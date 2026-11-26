@@ -838,6 +838,7 @@
 
     <div class="ai-test-row">
       <button id="reExport" class="ai-fetch" type="button">导出人设卡</button>
+      <button id="reExportPng" class="ai-fetch" type="button">导出图卡 PNG</button>
       <button id="reTrial" class="ai-fetch" type="button">试演一句</button>
       <span class="hint" id="reTrialEst">不保存也能看效果</span>
     </div>
@@ -870,15 +871,27 @@
 <div id="rpImportPage" class="me-page hidden">
   <header class="topbar">
     <button id="riBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand">导入角色包</div>
+    <div class="brand">导入</div>
     <button id="riHelp" class="icon-btn" type="button" aria-label="说明">?</button>
   </header>
   <div class="me-body">
-    <p class="hint">PNG / JSON / 一段文字都行，挑一种拆法。</p>
-    <label class="field"><span>文件</span>
-      <input id="riFile" type="file" accept=".png,.json,.txt,.md,image/png,application/json,text/plain" class="ri-file">
-    </label>
-    <p class="hint" id="riFileInfo">还没选文件</p>
+    <div class="imp-sec">
+      <div class="imp-title">人设卡<i>自己或朋友分享的卡</i></div>
+      <p class="hint">.zycard.json 或带卡的 PNG。<b>原样导入</b>：自定义调节里的全部参数（情绪/亲密/主动/行动/戏剧、语气、长度、人称、禁词、模型、温度、破甲、结构化人设）一个不丢，不经过拆解。</p>
+      <label class="field"><span>选卡文件</span>
+        <input id="riCardFile" type="file" accept=".json,.png,application/json,image/png" class="ri-file">
+      </label>
+      <p class="hint" id="riCardInfo">还没选卡</p>
+    </div>
+
+    <div class="imp-sec">
+      <div class="imp-title">人设包<i>网上下的设定文档</i></div>
+      <p class="hint">txt / md / docx，或者直接把文字粘进来——这种是「一堆设定」，需要拆解成卡。</p>
+      <label class="field"><span>选文档</span>
+        <input id="riFile" type="file" accept=".txt,.md,.docx,.json,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="ri-file">
+      </label>
+      <p class="hint" id="riFileInfo">还没选文件</p>
+    </div>
     <label class="field"><span>或者把文字粘在这里</span>
       <textarea id="riText" rows="6" maxlength="20000" placeholder="角色设定、前情、对话规则，整段粘进来"></textarea>
     </label>

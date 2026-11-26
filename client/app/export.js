@@ -157,6 +157,175 @@
     return { ok: true, kind: kind, pay: p, meta: meta, data: o };
   };
 
+  /* ---------- PNG 图卡（图片即卡） ----------
+     PNG 的 tEXt 段里存两份数据：
+       zycard → 纸鸢自己的完整卡（含自定义调节全部参数，导入时原样还原）
+       chara  → 按 SillyTavern v2 的写法再存一份，方便别的软件也能读
+     读的时候先看 zycard，读到就是原样卡，不再做字段映射。 */
+  var CRC_TABLE = (function () {
+    var t = [], c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(u8) {
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function utf8Bytes(str) {
+    var out = [], i, c;
+    str = String(str == null ? '' : str);
+    for (i = 0; i < str.length; i++) {
+      c = str.charCodeAt(i);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xC0 | (c >> 6), 0x80 | (c & 0x3F));
+      else if (c < 0xD800 || c >= 0xE000) out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+      else {
+        i++;
+        c = 0x10000 + (((c & 0x3FF) << 10) | (str.charCodeAt(i) & 0x3FF));
+        out.push(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+      }
+    }
+    return new Uint8Array(out);
+  }
+  function bytesFromB64(b64) {
+    var bin = atob(b64), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function b64FromBytes(u8) {
+    var s = '', i, step = 0x8000;
+    for (i = 0; i < u8.length; i += step) {
+      s += String.fromCharCode.apply(null, u8.subarray(i, i + step));
+    }
+    return btoa(s);
+  }
+  function pngChunk(keyword, text) {
+    var kw = utf8Bytes(keyword), tx = utf8Bytes(text);
+    var data = new Uint8Array(kw.length + 1 + tx.length);
+    data.set(kw, 0);
+    data[kw.length] = 0;
+    data.set(tx, kw.length + 1);
+    var type = utf8Bytes('tEXt');
+    var out = new Uint8Array(12 + data.length);
+    var dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length);
+    out.set(type, 4);
+    out.set(data, 8);
+    var crcBuf = new Uint8Array(type.length + data.length);
+    crcBuf.set(type, 0); crcBuf.set(data, 4);
+    dv.setUint32(8 + data.length, crc32(crcBuf));
+    return out;
+  }
+  // 在 IEND 之前插入若干 tEXt 段
+  function insertTextChunks(pngBytes, chunks) {
+    var u8 = pngBytes, pos = 8, iendAt = -1;
+    while (pos + 8 <= u8.length) {
+      var len = ((u8[pos] << 24) | (u8[pos + 1] << 16) | (u8[pos + 2] << 8) | u8[pos + 3]) >>> 0;
+      var type = String.fromCharCode(u8[pos + 4], u8[pos + 5], u8[pos + 6], u8[pos + 7]);
+      if (type === 'IEND') { iendAt = pos; break; }
+      pos = pos + 8 + len + 4;
+    }
+    if (iendAt < 0) return u8;
+    var extra = [];
+    for (var k = 0; k < chunks.length; k++) extra.push(pngChunk(chunks[k][0], chunks[k][1]));
+    var add = 0;
+    for (var m = 0; m < extra.length; m++) add += extra[m].length;
+    var out = new Uint8Array(u8.length + add);
+    out.set(u8.subarray(0, iendAt), 0);
+    var at = iendAt;
+    for (var n = 0; n < extra.length; n++) { out.set(extra[n], at); at += extra[n].length; }
+    out.set(u8.subarray(iendAt), at);
+    return out;
+  }
+  // SillyTavern v2 的最小兼容写法（给别的软件读；我们自己读 zycard 段）
+  function stV2(card) {
+    var ex = (card.mesExample || []).map(function (e) {
+      return '<START>\n{{user}}: ' + (e.u || '') + '\n{{char}}: ' + (e.a || '');
+    }).join('\n');
+    return {
+      name: card.name || '',
+      description: card.desc || '',
+      personality: card.personality || '',
+      scenario: card.scenario || '',
+      first_mes: card.firstMes || '',
+      mes_example: ex,
+      system_prompt: card.rules || '',
+      spec: 'chara_card_v2', spec_version: '2.0',
+      data: { name: card.name || '', creator_notes: card.desc || '', extensions: { paperlite: card } }
+    };
+  }
+
+  /* 画一张 512×768 的图卡底图，再把卡数据塞进 tEXt；cb(err, base64) */
+  EX.png = function (card, withWorld, cb) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 768;
+    var g = canvas.getContext('2d');
+    var grad = g.createLinearGradient(0, 0, 512, 768);
+    grad.addColorStop(0, '#e8eefc'); grad.addColorStop(1, '#f7e9f3');
+    g.fillStyle = grad; g.fillRect(0, 0, 512, 768);
+    var json = JSON.stringify(EX.card(card, withWorld));
+
+    function finish() {
+      try {
+        var src = canvas.toDataURL('image/png');
+        var png = insertTextChunks(bytesFromB64(src.split(',')[1]), [
+          ['zycard', b64FromBytes(utf8Bytes(json))],
+          ['chara', b64FromBytes(utf8Bytes(JSON.stringify(stV2(card))))]
+        ]);
+        cb(null, b64FromBytes(png));
+      } catch (e) { cb(String((e && e.message) || e)); }
+    }
+
+    function decorate() {
+      // 无头像时上半区太空：铺一点柔光和纸纹感的圆
+      var r1 = g.createRadialGradient(140, 150, 10, 140, 150, 240);
+      r1.addColorStop(0, 'rgba(122,157,255,.28)'); r1.addColorStop(1, 'rgba(122,157,255,0)');
+      g.fillStyle = r1; g.beginPath(); g.arc(140, 150, 240, 0, Math.PI * 2); g.fill();
+      var r2 = g.createRadialGradient(400, 320, 10, 400, 320, 220);
+      r2.addColorStop(0, 'rgba(255,150,205,.22)'); r2.addColorStop(1, 'rgba(255,150,205,0)');
+      g.fillStyle = r2; g.beginPath(); g.arc(400, 320, 220, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(29,35,64,.08)';
+      g.font = '700 200px system-ui, -apple-system, sans-serif';
+      g.fillText(String(card.name || '★').slice(0, 1), 300, 340);
+    }
+
+    function drawText() {
+      g.fillStyle = '#1d2340';
+      g.font = '700 40px system-ui, -apple-system, sans-serif';
+      g.fillText(String(card.name || '未命名').slice(0, 12), 40, 556);
+      g.font = '20px system-ui, -apple-system, sans-serif';
+      g.fillStyle = 'rgba(29,35,64,.72)';
+      g.fillText(String(card.desc || card.personality || '').replace(/\s+/g, ' ').slice(0, 46), 40, 600);
+      var quote = String(card.firstMes || '').replace(/\s+/g, ' ').slice(0, 40);
+      if (quote) {
+        g.fillStyle = 'rgba(29,35,64,.5)';
+        g.fillText('「' + quote + '」', 40, 640);
+      }
+      g.fillStyle = 'rgba(29,35,64,.42)';
+      g.font = '16px system-ui, -apple-system, sans-serif';
+      g.fillText('纸鸢人设卡 · 导回纸鸢即可还原全部设定', 40, 712);
+      finish();
+    }
+
+    var av = String(card.avatar || '');
+    if (/^data:image\//.test(av)) {
+      var im = new Image();
+      im.onload = function () {
+        var w = im.width, h = im.height, sc = Math.min(512 / w, 476 / h);
+        var dw = Math.round(w * sc), dh = Math.round(h * sc);
+        g.drawImage(im, Math.round((512 - dw) / 2), Math.round((476 - dh) / 2), dw, dh);
+        drawText();
+      };
+      im.onerror = drawText;
+      im.src = av;
+    } else { decorate(); drawText(); }
+  };
+
   /* ---------- 导入 ---------- */
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
 

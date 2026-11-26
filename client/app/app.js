@@ -4580,7 +4580,8 @@
       if (len > u8.length) break;
       if (type === 'tEXt' || type === 'iTXt') {
         var chunk = readStr(dataStart, Math.min(len, 2000000));
-        if (chunk.indexOf('chara') === 0 || chunk.indexOf('ccv3') === 0 || chunk.indexOf('CCv3') === 0) {
+        var isOurs = chunk.indexOf('zycard') === 0;
+        if (isOurs || chunk.indexOf('chara') === 0 || chunk.indexOf('ccv3') === 0 || chunk.indexOf('CCv3') === 0) {
           var rest = chunk.slice(5);
           var idx = rest.indexOf('\u0000');
           var body = idx >= 0 ? rest.slice(idx + 1) : rest;
@@ -4589,7 +4590,11 @@
             if (parts.length >= 4) body = parts.slice(3).join('');
           }
           var txt = b64utf8(body.trim());
-          if (txt) { try { out = JSON.parse(txt); } catch (e) { out = { __raw: txt }; } }
+          if (txt) {
+            try { out = JSON.parse(txt); } catch (e) { out = { __raw: txt }; }
+            // 纸鸢图卡：整份导出文件都塞在这儿，导入时原样还原
+            if (isOurs && out && (out.payload || out.kind)) out = { __zycard: out };
+          }
         }
       }
       pos = dataStart + len + 4;
@@ -4632,13 +4637,60 @@
 
   var riRawText = '';          // 原文纯文本（两种拆解都读它）
   var riFileCard = null;       // 文件本身带来的卡（PNG/JSON），与拆解结果分开存
+  // 人设包：网上下的 txt / md / docx 设定文档，读成纯文字再拆解
+  function riDocxText(buf) {
+    try {
+      if (!window.PL || !PL.unzip) return '';
+      var files = PL.unzip(buf);
+      var xml = files['word/document.xml'] || files['word\document.xml'] || '';
+      if (!xml) {
+        for (var k in files) if (files.hasOwnProperty(k) && /document\.xml$/i.test(k)) { xml = files[k]; break; }
+      }
+      if (!xml) return '';
+      // PL.unzip 给的是字节（Uint8Array），先按 UTF-8 解码，别直接 String()
+      if (typeof xml !== 'string') {
+        var u8 = (xml instanceof Uint8Array) ? xml : new Uint8Array(xml.buffer || xml);
+        try { xml = new TextDecoder('utf-8').decode(u8); }
+        catch (e1) {
+          var bin = '';
+          for (var q = 0; q < u8.length; q++) bin += String.fromCharCode(u8[q]);
+          try { xml = decodeURIComponent(escape(bin)); } catch (e2) { xml = bin; }
+        }
+      }
+      var txt = String(xml)
+        .replace(/<w:tab\/>/g, '\t')
+        .replace(/<\/w:p>/g, '\n')
+        .replace(/<w:br\/>/g, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+      return txt.replace(/\n{3,}/g, '\n\n').trim();
+    } catch (e) { return ''; }
+  }
+
   function riReadFile(file, cb) {
     var fr = new FileReader();
     var isPng = /\.png$/i.test(file.name) || file.type === 'image/png';
+    var isDocx = /\.docx$/i.test(file.name) || /wordprocessingml/i.test(file.type || '');
     fr.onload = function () {
       try {
+        if (isDocx) {
+          var dt = riDocxText(fr.result);
+          if (!dt) { cb(null, 'err', '这个 docx 读不出文字（可能是 .doc 或加密文档，先另存成 txt）'); return; }
+          riRawText = dt;
+          cb(null, 'txt');
+          return;
+        }
         if (isPng) {
           var card = riPngCard(fr.result);
+          if (card && card.__zycard) {
+            var pz2 = (window.EX && EX.parse) ? EX.parse(JSON.stringify(card.__zycard)) : null;
+            if (pz2 && pz2.ok && pz2.kind === 'card' && pz2.pay && pz2.pay.card) {
+              riFileCard = RP.normCard(pz2.pay.card);   // 纸鸢图卡：原样还原，参数全在
+              cb(riFileCard, 'card');
+              return;
+            }
+          }
           if (card) { riFileCard = riNormalizeST(card); cb(riFileCard, 'png'); return; }
           cb(null, 'png', '这个 PNG 里没有角色卡数据（可能只是普通图片）');
           return;
@@ -4665,7 +4717,7 @@
         }
       } catch (e2) { cb(null, 'err', String(e2 && e2.message || e2)); }
     };
-    if (isPng) fr.readAsArrayBuffer(file); else fr.readAsText(file);
+    if (isPng || isDocx) fr.readAsArrayBuffer(file); else fr.readAsText(file);
   }
 
   /* 把拆解结果铺到基础卡上：只填空位，不覆盖已有内容 */
@@ -5801,6 +5853,34 @@
       e.preventDefault();
       toast('酒馆的 PNG 卡直接选；普通 JSON 也行；纯文字就粘进来，会用你的模型拆');
     });
+    // 人设卡：原样导入。卡里本来就有全套自定义参数，所以这里不做任何拆解/补全
+    on('#riCardFile', 'change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var info = $('#riCardInfo');
+      info.textContent = '读到：' + f.name + '（' + Math.round(f.size / 1024) + ' KB）';
+      riFileCard = null;
+      riReadFile(f, function (card, kind, err) {
+        if (err) { info.textContent = '读不了：' + err; return; }
+        if (!card) {
+          info.textContent = '这不像人设卡（里面没有参数数据）。网上下的人设包请用下面「人设包」入口。';
+          return;
+        }
+        card.id = '';                       // 换新 id：导入别人的卡不会覆盖你本机同名卡
+        var saved = RP.saveCard(card);
+        if (!saved || saved.ok === false) {
+          info.textContent = '存卡失败：' + ((saved && (saved.err || saved.error)) || '未知原因');
+          return;
+        }
+        var d = (card.dials || {});
+        info.textContent = '已导入「' + (card.name || '未命名') + '」· 情绪 ' + d.emotion +
+          ' / 亲密 ' + d.intimacy + ' / 主动 ' + d.initiative + ' / 行动 ' + d.action + ' / 戏剧 ' + d.drama +
+          ' · 语气 ' + ((card.style && card.style.len) || '-') + ' / 温度 ' + card.temp;
+        toast('人设卡已导入（参数原样还原）');
+        try { openRoleEditor(saved.card.id); } catch (x) {}
+      });
+    });
+
     on('#riFile', 'change', function (e) {
       var f = e.target.files && e.target.files[0];
       if (!f) return;
@@ -6087,6 +6167,25 @@
       b.classList.add('on');
     });
     // 试演
+    on('#reExportPng', 'click', function (e) {
+      e.preventDefault();
+      var card = reSave(true);
+      if (!card) return;
+      var full = (window.RP && RP.card(card.id)) || card;
+      if (!window.EX || !EX.png) { toast('导出模块没加载'); return; }
+      toast('正在生成图卡…');
+      EX.png(full, true, function (err, b64) {
+        if (err || !b64) { toast('生成图卡失败：' + (err || '空')); return; }
+        var name = '人设卡-' + (EX.safeName(full.name) || '未命名') + '.png';
+        if (window.PaperNative && PaperNative.exportBytes) {
+          PaperNative.exportBytes(name, b64, 'image/png');
+          toast('正在保存到「下载/DSH-Go/纸鸢备份」');
+        } else {
+          toast('这个版本不支持图卡导出（需要新版 App）');
+        }
+      });
+    });
+
     on('#reExport', 'click', function (e) {
       e.preventDefault();
       var card = reSave(true);                 // 先存，保证导出的是最新内容

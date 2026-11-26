@@ -3631,3 +3631,11 @@ html[data-pop-solid] .mod-item {
    以前踩过坑——只把 .hidden 去掉，层就变成「完全透明但仍然盖住整屏」，
    用户看到的是界面卡死（点哪都没反应，甚至还能敲进看不见的输入框）。 */
 .action-layer:not(.open) { pointer-events: none !important; }
+
+/* 导入页：人设卡 / 人设包 两块分开 */
+.imp-sec { margin: 14px 0 6px; padding: 12px 12px 6px; border-radius: 14px; background: var(--card); }
+.imp-sec + .imp-sec { margin-top: 18px; }
+.imp-title { font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.imp-title i { font-style: normal; font-size: 11.5px; font-weight: 400; color: var(--sub); margin-left: 8px; }
+.imp-sec .hint, .imp-sec .hint-sub { padding-left: 0; margin: 4px 0 8px; text-align: left; line-height: 1.6; }
+.imp-sec .field > span { font-size: 12.5px; }
