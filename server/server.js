@@ -249,6 +249,43 @@ function deviceOf(c, d) {
   if (/^[a-f0-9]{32}$/i.test(raw)) { c.deviceId = raw.toLowerCase(); return c.deviceId; }
   return null;
 }
+/* ------------------------- 封禁 ------------------------- */
+// acc.ban = { reason, ts, until, by }；until=0 表示永久
+function isBannedAcc(acc) {
+  const b = acc && acc.ban;
+  if (!b) return false;
+  return !b.until || b.until > now();
+}
+function banState(acc) {              // 到期自动解封
+  if (!acc || !acc.ban) return null;
+  if (acc.ban.until && acc.ban.until <= now()) { delete acc.ban; saveAccounts(); return null; }
+  return acc.ban;
+}
+function banPayload(acc) {
+  const b = (acc && acc.ban) || null;
+  return b ? { reason: b.reason || '', until: b.until || 0, ts: b.ts || 0 } : null;
+}
+function banText(b) {
+  const reason = (b && b.reason) || '违反使用规则';
+  if (!b || !b.until) return '这个账号已被封禁：' + reason + '（永久）';
+  const d = new Date(b.until);
+  const pad = n => (n < 10 ? '0' : '') + n;
+  return '这个账号已被封禁：' + reason + '（解封时间 ' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + '）';
+}
+function resolveTarget(raw) {
+  const s = String(raw || '').trim();
+  let m = /^(?:uid:)?(\d{4,9})$/.exec(s);
+  if (m) { const key = uidIndex[m[1]]; if (key && accounts[key]) return { key, acc: accounts[key] }; return null; }
+  const key = findUser(s);
+  return key ? { key, acc: accounts[key] } : null;
+}
+function kickAccount(key, ban) {
+  for (const c2 of [...clients]) {
+    if (c2.account !== key) continue;
+    try { send(c2, { t: 'kicked', reason: (ban && ban.reason) || '', until: (ban && ban.until) || 0 }); } catch (e) {}
+    try { if (c2.socket && !c2.socket.destroyed) c2.socket.end(); } catch (e) {}
+  }
+}
 function maskUser(u) {
   if (u.length <= 2) return u[0] + '*';
   return u[0] + '*'.repeat(Math.max(1, u.length - 2)) + u[u.length - 1];
@@ -294,6 +331,7 @@ function membersIn(roomId) {
 function peopleList() {
   const seen = new Map();
   for (const c of clients) {
+    if (c.account && isBannedAcc(accounts[c.account])) continue;
     const id = c.deviceId || c.id;
     if (!seen.has(id)) seen.set(id, { id, name: c.name, avatar: avatarOfConn(c),
       uid: (c.account && accounts[c.account] && accounts[c.account].uid) || 0 });
@@ -702,6 +740,14 @@ function handleMessage(c, buf, opcode) {
     c.hits = c.hits.filter(x => t - x < 1000);
     if (!isReadQuery && c.hits.length > 10) { send(c, { t: 'error', message: '慢一点，消息太密了' }); return; }
     c.hits.push(t);
+  }
+
+  // 封禁中的长连接：任何消息都挡掉，直接踢
+  if (c.account && accounts[c.account] && isBannedAcc(accounts[c.account])) {
+    const b = accounts[c.account].ban;
+    try { send(c, { t: 'kicked', reason: b.reason || '', until: b.until || 0 }); } catch (e) {}
+    try { if (c.socket && !c.socket.destroyed) c.socket.end(); } catch (e) {}
+    return;
   }
 
   if (typeof d.t === 'string' && d.t.indexOf('ww_') === 0) {
@@ -1221,6 +1267,58 @@ function handleMessage(c, buf, opcode) {
     return;
   }
 
+  // ---------- 用户管理（仅开发者）：查人 / 封号 / 解封 ----------
+  if (d.t === 'user_find' || d.t === 'ban' || d.t === 'unban' || d.t === 'ban_list') {
+    const me = (c.account && accounts[c.account]) || null;
+    if (!isDevAccount(me)) { send(c, { t: 'error', message: '只有开发者能管理用户' }); return; }
+    if (d.t === 'ban_list') {
+      const list = [];
+      for (const k of Object.keys(accounts)) {
+        const a = accounts[k];
+        if (!banState(a)) continue;
+        list.push({ uid: a.uid, user: a.user, nick: a.nick || a.user, ban: banPayload(a) });
+      }
+      list.sort((x, y) => (y.ban.ts || 0) - (x.ban.ts || 0));
+      send(c, { t: 'ban_list', ok: true, list });
+      return;
+    }
+    const q = clean(d.target || d.q || '', 32);
+    const hit = resolveTarget(q);
+    if (!hit) { send(c, { t: 'ban_result', ok: false, err: '没找到「' + q + '」——用 uid:100001 或用户名' }); return; }
+    const tacc = hit.acc;
+    const tinfo = { uid: tacc.uid, user: tacc.user, nick: tacc.nick || tacc.user };
+    if (d.t === 'user_find') {
+      send(c, { t: 'user_result', ok: true, user: {
+        uid: tacc.uid, user: tacc.user, nick: tacc.nick || tacc.user,
+        banned: isBannedAcc(tacc), ban: banPayload(tacc),
+        online: onlineOfUid(tacc.uid), created: tacc.created || 0,
+        dev: isDevAccount(tacc)
+      } });
+      return;
+    }
+    if (d.t === 'ban') {
+      if (isDevAccount(tacc)) { send(c, { t: 'ban_result', ok: false, err: '不能封开发者账号' }); return; }
+      const days = Math.max(0, Math.min(3650, Number(d.days) || 0));
+      tacc.ban = {
+        reason: clean(d.reason, 60) || '违反使用规则',
+        ts: now(),
+        until: days > 0 ? now() + days * 86400000 : 0,
+        by: Number(me.uid) || 0
+      };
+      saveAccounts();
+      kickAccount(hit.key, tacc.ban);
+      send(c, { t: 'ban_result', ok: true, action: 'ban', target: tinfo, ban: banPayload(tacc) });
+      console.log('[ban]', tacc.user, 'uid', tacc.uid, days ? days + '天' : '永久', tacc.ban.reason);
+      return;
+    }
+    // unban
+    delete tacc.ban;
+    saveAccounts();
+    send(c, { t: 'ban_result', ok: true, action: 'unban', target: tinfo, ban: null });
+    console.log('[unban]', tacc.user, 'uid', tacc.uid);
+    return;
+  }
+
   // ---------- 账号 ----------
   if (d.t === 'register') {
     if (!ipRateOk(c.__req, 'reg', 6, 60000)) { tooFast(c, '注册太频繁，等一分钟'); return; }
@@ -1267,6 +1365,8 @@ function handleMessage(c, buf, opcode) {
     if (!key) { send(c, { t: 'auth', ok: false, err: '没有这个账号' }); return; }
     const acc = accounts[key];
     if (hash(String(d.pass || ''), acc.salt) !== acc.hash) { send(c, { t: 'auth', ok: false, err: '密码不对' }); return; }
+    const bs = banState(acc);
+    if (bs) { send(c, { t: 'auth', ok: false, action: 'login', banned: true, reason: bs.reason || '', until: bs.until || 0, err: banText(bs) }); return; }
     const dev = deviceOf(c, d);
     if (dev && acc.devices.indexOf(dev) < 0) {
       acc.devices.push(dev);
@@ -1293,6 +1393,8 @@ function handleMessage(c, buf, opcode) {
     }
     if (!hit) { send(c, { t: 'auth', ok: false, action: 'resume', err: '令牌已失效' }); return; }
     const acc = ensureFriendFields(accounts[hit]);
+    const bs = banState(acc);
+    if (bs) { send(c, { t: 'auth', ok: false, action: 'resume', banned: true, reason: bs.reason || '', until: bs.until || 0, err: banText(bs) }); return; }
     if (!acc.uid) rebuildUidIndex();
     const dev = deviceOf(c, d);
     if (dev && acc.devices.indexOf(dev) < 0) {

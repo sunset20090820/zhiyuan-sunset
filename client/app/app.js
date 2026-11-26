@@ -11,6 +11,9 @@
   var FEEDBACK_RID = 'dm:feedback';
   var DEV_UID = 'uid:100002';
   var isDeveloper = false;   // 自己是开发者：会话列表里有反馈箱，能收到所有人的反馈
+  var bannedNow = false;     // 被封禁：不自动重连，停在封禁页
+  var duTarget = null;       // 用户管理里当前查到的人
+  var duDaysPick = 1;        // 封禁天数，0=永久
   function isDevUid(n) {
     var list = (S && S.devUids && S.devUids.length) ? S.devUids : [100002];
     return list.indexOf(Number(n)) >= 0;
@@ -555,6 +558,7 @@
   // 看门狗：WebSocket 半开连接不会触发 onclose，只能靠“多久没收到东西”判断
   function watchdog() {
     if (!S.server) return;
+    if (bannedNow) return;
     if (!ws || ws.readyState > 1) {
       if (!retryTimer) scheduleRetry();
       return;
@@ -572,6 +576,7 @@
   function scheduleRetry() {
     clearTimeout(retryTimer);
     if (!S.server) return;
+    if (bannedNow) return;
     retry = Math.min(retry + 1, 5);
     retryTimer = setTimeout(connect, Math.min(15000, 800 * Math.pow(2, retry - 1)));
   }
@@ -603,6 +608,7 @@
     return false;
   }
   function connect() {
+    if (bannedNow) return;
     if (!S.server) return setConn(false);
     if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
     var sock;
@@ -748,7 +754,24 @@
       else clearUpdateBadge();
       return;
     }
+    if (d.t === 'kicked') { showBanScreen(d.reason || '', d.until || 0); return; }
+    if (d.t === 'user_result') {
+      if (d.ok && d.user) { duTarget = d.user; renderDuCard(d.user); if ($('#duQ')) $('#duQ').value = 'uid:' + d.user.uid; }
+      else { duTarget = null; renderDuCard(null); toast(d.err || '没找到'); }
+      return;
+    }
+    if (d.t === 'ban_result') {
+      if (!d.ok) { toast(d.err || '操作失败'); return; }
+      var nm = d.target ? (d.target.nick || d.target.user) + '(uid:' + d.target.uid + ')' : '';
+      toast(d.action === 'ban' ? ('已封禁 ' + nm) : ('已解封 ' + nm));
+      if (d.target) { try { wsSend({ t: 'user_find', q: 'uid:' + d.target.uid }); } catch (e) {} }
+      try { wsSend({ t: 'ban_list' }); } catch (e) {}
+      if (d.action === 'unban' && $('#duReason')) $('#duReason').value = '';
+      return;
+    }
+    if (d.t === 'ban_list') { renderDuList(d.list || []); return; }
     if (d.t === 'auth' && d.action === 'resume' && !d.ok) {
+      if (d.banned) { blog('令牌恢复被拒：账号已封禁'); showBanScreen(d.reason || '', d.until || 0); return; }
       blog('令牌恢复失败: ' + (d.err || ''));
       S.auth = false; S.token = '';
       save();
@@ -763,6 +786,7 @@
       S.pendingAuth = null;
       clearTimeout(authTimer);
       if (!d.ok) {
+        if (d.banned) { showBanScreen(d.reason || '', d.until || 0); return; }
         $('#setup').classList.remove('hidden');
         var box = wasKind === 'register' ? $('#regError') : $('#loginError');
         if (box) { box.textContent = d.err || '验证失败'; box.classList.remove('hidden'); }
@@ -788,6 +812,7 @@
         if (!S.devUids || !S.devUids.length) S.devUids = [100002];
         isDeveloper = (d.dev === true) || (S.devUids.indexOf(Number(S.uid)) >= 0);
       } catch (e) {}
+      try { S.banned = null; bannedNow = false; syncDevRow(); } catch (e) {}
       try {
         if (isDeveloper) { S.fbLastUid = S.fbLastUid || 0; wsSend({ t: 'fb_list' }); }
         else { wsSend({ t: 'fb_mine' }); }        // 拿回开发者对我的反馈的回复（离线也补）
@@ -1704,6 +1729,120 @@
     } catch (e) {}
   }
   // 普通用户的反馈页：写一段 → 发给开发者（服务端进反馈库，开发者登录就能看到）
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function showBanScreen(reason, until) {
+    bannedNow = true;
+    // 保留登录态与令牌：解除封禁后下次启动能自动恢复，不用重新输密码
+    S.banned = { reason: reason || '', until: until || 0 };
+    try { save(); } catch (e) {}
+    try { if ($('#setup')) $('#setup').classList.add('hidden'); } catch (e) {}
+    try { if ($('#chat')) $('#chat').classList.add('hidden'); } catch (e) {}
+    try { if ($('#tabbar')) $('#tabbar').classList.add('hidden'); } catch (e) {}
+    if ($('#banReason')) $('#banReason').textContent = reason || '违反使用规则';
+    if ($('#banUntil')) {
+      if (!until) $('#banUntil').textContent = '这次是永久封禁。如果是误封，可以通过反馈箱联系开发者。';
+      else {
+        var dt = new Date(until);
+        $('#banUntil').textContent = '解封时间 ' + dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()) +
+          ' ' + pad2(dt.getHours()) + ':' + pad2(dt.getMinutes()) + '，到时用原账号密码重新登录即可。';
+      }
+    }
+    var el = $('#banScreen'); if (el) el.classList.remove('hidden');
+    try { clearTimeout(retryTimer); retryTimer = null; } catch (e) {}
+    try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) {}
+    try { ws = null; } catch (e) {}
+  }
+  function leaveBanScreen() {
+    bannedNow = false;
+    S.banned = null;
+    S.auth = false; S.token = ''; S.pendingAuth = null;
+    try { save(); } catch (e) {}
+    var el = $('#banScreen'); if (el) el.classList.add('hidden');
+    var st = $('#setup'); if (st) st.classList.remove('hidden');
+    if ($('#inServer')) $('#inServer').value = S.server || guessServer();
+    if ($('#regServer')) $('#regServer').value = S.server || guessServer();
+  }
+  function syncDevRow() {
+    var row = $('#btnDevUsers');
+    if (!row) return;
+    var dev = isDeveloper;
+    try { dev = dev || isDevUid(Number(S.uid)); } catch (e) {}
+    row.classList.toggle('hidden', !dev);
+  }
+  function openDevUsers() {
+    try { wsSend({ t: 'ban_list' }); } catch (e) {}
+    renderDuList([]);
+    duTarget = null;
+    if ($('#duCard')) $('#duCard').classList.add('hidden');
+    var pg = $('#devUsers'); if (!pg) return;
+    ['#chats', '#contacts', '#roles', '#mePage', '#storagePage', '#blockPage', '#groupPanel'].forEach(function (sel) {
+      var el = $(sel); if (el) el.classList.add('hidden');
+    });
+    pg.classList.remove('hidden');
+    try { $('#tabbar').classList.remove('hidden'); } catch (e) {}
+    if ($('#duQ')) { $('#duQ').value = ''; }
+    if ($('#duReason')) $('#duReason').value = '';
+  }
+  function duFind(quiet) {
+    var q = ($('#duQ') && $('#duQ').value || '').trim();
+    if (!q) { if (!quiet) toast('先填 uid 或用户名'); return; }
+    var ok = wsSend({ t: 'user_find', q: q });
+    if (!ok && !quiet) toast('没连上服务器');
+  }
+  function renderDuCard(u) {
+    var box = $('#duCard'); if (!box) return;
+    if (!u) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    var b = u.ban;
+    var lines = [
+      ['uid', u.uid],
+      ['用户名', u.user],
+      ['昵称', u.nick || u.user],
+      ['状态', b ? '已封禁' : '正常'],
+      ['在线', u.online ? '在线' : '离线']
+    ];
+    if (b) {
+      lines.push(['原因', b.reason || '（未写）']);
+      if (!b.until) lines.push(['期限', '永久']);
+      else {
+        var dt = new Date(b.until);
+        lines.push(['解封时间', dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()) + ' ' + pad2(dt.getHours()) + ':' + pad2(dt.getMinutes())]);
+      }
+    }
+    box.innerHTML = lines.map(function (r, i) {
+      if (i === 3) return '<div class="du-line"><span>' + esc(r[0]) + '</span><b class="du-flag ' + (b ? 'on' : 'off') + '">' + esc(r[1]) + '</b></div>';
+      return '<div class="du-line"><span>' + esc(r[0]) + '</span><b>' + esc(String(r[1])) + '</b></div>';
+    }).join('') + (u.dev ? '<div class="du-line"><span>身份</span><b>开发者</b></div>' : '');
+    box.classList.remove('hidden');
+  }
+  function renderDuList(list) {
+    var box = $('#duList'); if (!box) return;
+    if (!list || !list.length) { box.innerHTML = '<div class="me-row" style="color:var(--tg-sub)">还没有封禁任何人</div>'; return; }
+    box.innerHTML = list.map(function (x) {
+      var b = x.ban || {};
+      var sub = (b.reason || '未写原因') + (b.until ? ' · 至 ' + (function () {
+        var dt = new Date(b.until); return pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()) + ' ' + pad2(dt.getHours()) + ':' + pad2(dt.getMinutes());
+      })() : ' · 永久');
+      return '<div class="me-row du-item" data-du="uid:' + esc(x.uid) + '"><span class="me-ico">🚫</span>' +
+        '<span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.35">' +
+        '<span>' + esc(x.nick || x.user) + ' <span style="font-size:11.5px;color:var(--tg-sub)">uid:' + esc(x.uid) + '</span></span>' +
+        '<span class="du-item-sub">' + esc(sub) + '</span></span></div>';
+    }).join('');
+  }
+  function duBanUser() {
+    if (!duTarget) { toast('先查一个人'); return; }
+    if (duTarget.dev) { toast('不能封开发者账号'); return; }
+    var reason = ($('#duReason') && $('#duReason').value || '').trim();
+    if (!reason) { toast('写一句封禁原因，对方能看到'); return; }
+    var days = Number(duDaysPick) || 0;
+    var label = days ? days + ' 天' : '永久';
+    var tid = duTarget.uid;
+    var go = function () { wsSend({ t: 'ban', target: 'uid:' + tid, reason: reason, days: days }); };
+    if (!confirmTap('duBan', '再点一次就封禁 uid:' + tid + '（' + label + '）', go)) return;
+  }
+  function duUnbanUser() {
+    if (!duTarget) { toast('先查一个人'); return; }
+    wsSend({ t: 'unban', target: 'uid:' + duTarget.uid });
+  }
   function openFbPage() {
     hideTabShell();
     var pageEl = $('#fbPage');
@@ -4313,7 +4452,7 @@
   }
   function closeRpPages() {
     ['#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#exportPage',
-     '#fbPage', '#rpImportPage'].forEach(function (sel) {
+     '#fbPage', '#rpImportPage', '#devUsers'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
   }
@@ -9155,7 +9294,7 @@
     ['#storagePage', '#groupPanel', '#imgViewer', '#dmSheet', '#msgActions', '#peerActions',
      '#groupSheet', '#remarkSheet', '#roleEditor', '#worldPage', '#worldEditor',
      '#aiConfPage', '#exportPage', '#volSheet', '#fbPage', '#rpImportPage',
-     '#modPage', '#modRun', '#modUpload'].forEach(function (sel) {
+     '#modPage', '#modRun', '#modUpload', '#devUsers'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
     if (name === 'roles') { try { rpSyncCounts(); renderRoleList(); rpModelTip(); } catch (e) {} }
@@ -9478,6 +9617,7 @@
     try { bindVolSheet(); } catch (e) {}
     try { bindExportPage(); } catch (e) {}
     setTimeout(function () { try { exAutoBackupIfDue(); } catch (e) {} }, 6000);
+    try { syncDevRow(); } catch (e) {}
     try { rpSyncCounts(); } catch (e) {}
     try { rpModelTip(); } catch (e) {}
     try { rpSyncBudgetUi(); } catch (e) {}
@@ -9592,6 +9732,28 @@
       if (isDeveloper) openFeedback(); else openFbPage();
     });
     on('#fbClose', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#btnDevUsers', 'click', function (e) { e.preventDefault(); openDevUsers(); });
+    on('#duClose', 'click', function (e) { e.preventDefault(); $('#devUsers').classList.add('hidden'); showTab('me'); });
+    on('#duFind', 'click', function (e) { e.preventDefault(); duFind(false); });
+    on('#duQ', 'keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); duFind(false); } });
+    on('#duBan', 'click', function (e) { e.preventDefault(); duBanUser(); });
+    on('#duUnban', 'click', function (e) { e.preventDefault(); duUnbanUser(); });
+    on('#duDays', 'click', function (e) {
+      var b = e.target.closest('[data-days]');
+      if (!b) return;
+      duDaysPick = Number(b.getAttribute('data-days')) || 0;
+      Array.prototype.forEach.call(document.querySelectorAll('#duDays .seg-item'), function (x) {
+        x.classList.toggle('on', x === b);
+      });
+    });
+    on('#duList', 'click', function (e) {
+      var row = e.target.closest('[data-du]');
+      if (!row) return;
+      var q = row.getAttribute('data-du');
+      if ($('#duQ')) $('#duQ').value = q;
+      duFind(false);
+    });
+    on('#banLogout', 'click', function (e) { e.preventDefault(); leaveBanScreen(); });
     on('#btnFbQuoteCancel', 'click', function (e) { e.preventDefault(); clearFbQuote(); });
     // 进反馈箱时清掉上一次的引用（openFeedback 里处理）
     on('#fbSend', 'click', function (e) { e.preventDefault(); fbPageSend(); });
@@ -9675,6 +9837,7 @@
 
     // 旧版本保存的状态里没有令牌：服务端认不出身份，会一直卡在连接中
     if (S.auth && !S.token) needRelogin('需要重新登录一次（本次更新新增了登录凭证）');
+    if (S.banned && S.banned.until && S.banned.until < Date.now()) { S.banned = null; }   // 到期了就当没封
     if (!S.auth) {
       // 没登录过：停在登录页，服务器地址给个默认值
       $('#inServer').value = S.server || guessServer();

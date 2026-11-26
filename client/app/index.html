@@ -88,6 +88,17 @@
   </div>
 </div>
 
+<!-- ===== 账号被封禁 ===== -->
+<div id="banScreen" class="setup hidden">
+  <div class="setup-card">
+    <div class="plane">🚫</div>
+    <h1>账号已被封禁</h1>
+    <p id="banReason" class="setup-sub">-</p>
+    <p id="banUntil" class="hint" style="text-align:center"></p>
+    <button id="banLogout" class="primary" type="button">换个账号登录</button>
+  </div>
+</div>
+
 <!-- ===== 会话列表 ===== -->
 <main id="chats" class="screen">
   <header class="topbar">
@@ -613,6 +624,7 @@
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">📮</span>反馈与关于<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
         <button id="btnFeedback" class="me-row" type="button"><span class="me-ico">📮</span>反馈箱<span class="me-arrow">›</span></button>
+        <button id="btnDevUsers" class="me-row hidden" type="button"><span class="me-ico">🚫</span>用户管理<span class="me-arrow">›</span></button>
         <div class="me-row" style="flex-direction:column;align-items:flex-start;gap:4px">
           <span style="font-size:14px">登录状态诊断</span>
           <span id="meDiag" style="font-size:12px;color:var(--tg-sub);line-height:1.6">-</span>
@@ -864,6 +876,38 @@
     <button id="fbSend" class="primary" type="button">发送反馈</button>
     <div class="me-sec-head" style="cursor:default"><span class="me-ico">🗂</span>我发过的</div>
     <div id="fbHist" class="fb-hist"></div>
+  </div>
+</div>
+
+<!-- ===== 用户管理(开发者) ===== -->
+<div id="devUsers" class="me-page hidden">
+  <header class="topbar">
+    <button id="duClose" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand">用户管理</div>
+    <span class="logout-chip" style="visibility:hidden">·</span>
+  </header>
+  <div class="me-body">
+    <p class="hint">按 uid 或用户名查人。封禁后对方立刻掉线，登录、令牌恢复、找回密码都会被挡；封禁期间不会出现在「在线的人」列表里。解封后原账号密码照旧可用。</p>
+    <label class="field"><span>查谁</span>
+      <input id="duQ" maxlength="32" placeholder="uid:100001 或用户名" autocomplete="off" spellcheck="false"></label>
+    <div class="du-row">
+      <button id="duFind" class="primary" type="button">查询</button>
+    </div>
+    <div id="duCard" class="du-card hidden"></div>
+    <label class="field"><span>封禁原因(对方能看到)</span>
+      <input id="duReason" maxlength="60" placeholder="例如：刷屏、辱骂他人" autocomplete="off"></label>
+    <div class="seg" id="duDays">
+      <button class="seg-item" type="button" data-days="0">永久</button>
+      <button class="seg-item on" type="button" data-days="1">1 天</button>
+      <button class="seg-item" type="button" data-days="7">7 天</button>
+      <button class="seg-item" type="button" data-days="30">30 天</button>
+    </div>
+    <div class="du-row">
+      <button id="duBan" class="primary du-ban" type="button">封禁</button>
+      <button id="duUnban" class="flat" type="button">解封</button>
+    </div>
+    <div class="me-sec-head" style="cursor:default"><span class="me-ico">🚫</span>已封禁</div>
+    <div id="duList" class="fb-hist"></div>
   </div>
 </div>
 

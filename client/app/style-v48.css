@@ -3639,3 +3639,23 @@ html[data-pop-solid] .mod-item {
 .imp-title i { font-style: normal; font-size: 11.5px; font-weight: 400; color: var(--sub); margin-left: 8px; }
 .imp-sec .hint, .imp-sec .hint-sub { padding-left: 0; margin: 4px 0 8px; text-align: left; line-height: 1.6; }
 .imp-sec .field > span { font-size: 12.5px; }
+
+/* ===== 用户管理（开发者）===== */
+.du-row { display: flex; gap: 8px; margin: 8px 0 4px; }
+.du-row .primary, .du-row .flat { width: auto; flex: 1; }
+.du-ban { background: var(--danger, #cf3438) !important; color: #fff !important; }
+.du-card {
+  margin: 10px 0 4px; padding: 12px 14px; border-radius: 14px;
+  background: var(--bg-soft, rgba(255,255,255,.06));
+  border: 1px solid var(--line, rgba(255,255,255,.08));
+}
+.du-card .du-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 3px 0; }
+.du-card .du-line b { font-weight: 600; }
+.du-card .du-flag { font-size: 12px; padding: 1px 8px; border-radius: 999px; }
+.du-flag.on { background: rgba(207,52,56,.16); color: #e5535a; }
+.du-flag.off { background: rgba(80,200,120,.14); color: #42b883; }
+.du-item { cursor: pointer; }
+.du-item .du-item-sub { font-size: 11.5px; color: var(--tg-sub); }
+#devUsers .hint { text-align: left; padding: 0 2px 12px; line-height: 1.7; }
+#devUsers .me-body { padding-bottom: 104px; }
+#devUsers .du-card { margin-top: 12px; }
