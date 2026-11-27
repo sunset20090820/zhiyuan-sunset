@@ -1659,24 +1659,19 @@ html[data-skin] .chat-top.no-anim .chat-name { transition: none !important; }
 /* 打开会话时消息区整块重建，最后一条不必再弹一次 */
 html[data-skin] .msgs.fresh .msg:last-child { animation: none !important; }
 
-/* 顶栏收起：高度和留白一起缩，头像变小，副标题淡出 */
+/* 顶栏收起：只让顶栏自己重排（contain），头像用 transform 缩，不再每帧改宽高。
+   耗时从 300ms 收到 180ms：过渡越短，列表重排的帧数越少。 */
 html[data-skin] .chat-top {
+  contain: layout paint;
   transition:
-    height 300ms cubic-bezier(.16, .94, .24, 1.12),
-    min-height 300ms cubic-bezier(.16, .94, .24, 1.12),
-    padding 300ms cubic-bezier(.16, .94, .24, 1.12),
-    box-shadow 300ms ease;
+    height 180ms cubic-bezier(.16, .94, .24, 1.12),
+    min-height 180ms cubic-bezier(.16, .94, .24, 1.12),
+    padding 180ms cubic-bezier(.16, .94, .24, 1.12),
+    box-shadow 180ms ease;
 }
 html[data-skin] .chat-top .ava {
-  transition:
-    width 240ms cubic-bezier(.2, .9, .25, 1.15),
-    height 240ms cubic-bezier(.2, .9, .25, 1.15),
-    min-width 240ms cubic-bezier(.2, .9, .25, 1.15),
-    min-height 240ms cubic-bezier(.2, .9, .25, 1.15),
-    max-width 240ms cubic-bezier(.2, .9, .25, 1.15),
-    max-height 240ms cubic-bezier(.2, .9, .25, 1.15),
-    flex-basis 240ms cubic-bezier(.2, .9, .25, 1.15),
-    font-size 240ms ease;
+  transition: transform var(--dur-base, 240ms) cubic-bezier(.2, .9, .25, 1.15);
+  transform-origin: 50% 50%;
 }
 html[data-skin] .chat-top .chat-sub {
   transition: opacity 160ms ease, transform 220ms cubic-bezier(.2, .9, .25, 1.1);
@@ -1695,11 +1690,8 @@ html[data-skin] .chat-top.compact {
     0 4px 14px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 html[data-skin] .chat-top.compact .ava {
-  width: 32px; height: 32px;
-  min-width: 32px; min-height: 32px;
-  max-width: 32px; max-height: 32px;
-  flex: 0 0 32px;
-  font-size: 15px;
+  /* 尺寸不动（不动布局），只缩视觉：40 → 32 大约是 .8 */
+  transform: scale(.8);
 }
 html[data-skin] .chat-top.compact .chat-sub { opacity: 0; transform: translateY(-4px); }
 html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }

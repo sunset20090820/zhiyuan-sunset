@@ -2973,22 +2973,23 @@
     $('#chat').classList.remove('hidden');
     $('#chat').classList.remove('chat-close');
     $('#chat').classList.add('chat-open');
-    // 要等进场动画（400ms）走完再撤类，不然会被截断
-    setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, 430);
+    // 要等进场动画走完再撤类，不然会被截断（时长跟 --dur-slow 走，别写死）
+    animBusy(MF.slow + 160);
+    setTimeout(function () { try { $('#chat').classList.remove('chat-open'); } catch (e) {} }, MF.slow + 30);
     try {
       var _ct = document.querySelector('.chat-top');
       if (_ct) {
         // 收起的顶栏要「立刻」还原，不能跟着 300ms 过渡长大——进会话时那也是一下抽搐
         _ct.classList.add('no-anim');
         _ct.classList.remove('compact');
-        setTimeout(function () { try { _ct.classList.remove('no-anim'); } catch (e) {} }, 260);
+        setTimeout(function () { try { _ct.classList.remove('no-anim'); } catch (e) {} }, MF.base + 20);
       }
       var _ms = $('#msgs');
       if (_ms && _ms.__chatReset) _ms.__chatReset();
       if (_ms) {
         // 首屏整块重建，最后一条不该再弹一次
         _ms.classList.add('fresh');
-        setTimeout(function () { try { _ms.classList.remove('fresh'); } catch (e) {} }, 420);
+        setTimeout(function () { try { _ms.classList.remove('fresh'); } catch (e) {} }, MF.slow + 40);
       }
     } catch (e) {}
     $('#tabbar').classList.add('hidden');
@@ -3076,11 +3077,14 @@
   }
   function closeRoom() {
     var ch = $('#chat');
-    if (ch && !ch.classList.contains('hidden') && !document.documentElement.classList.contains('no-motion')) {
+    if (ch && !ch.classList.contains('hidden') && !MF.reduce) {
       ch.classList.add('chat-close');
-      setTimeout(function () { try { ch.classList.remove('chat-close'); ch.classList.add('hidden'); } catch (e) {} }, 215);
+      animBusy(MF.base + 120);
+      afterLeave(ch, MF.base - 40, function () {
+        try { ch.classList.remove('chat-close'); ch.classList.add('hidden'); } catch (e) {}
+      });
     } else {
-      ch.classList.add('hidden');
+      if (ch) { ch.classList.remove('chat-close'); ch.classList.add('hidden'); }
     }
     S.cur = null;
     try { syncAiModelUi(); } catch (e) {}
@@ -7135,6 +7139,7 @@
       }
 
       box.addEventListener('scroll', function () {
+        if (MF.reduce) return;                    // 系统要求减少动效:只保留原生滚动
         var now = performance.now();
         var t = box.scrollTop;
         var dt = lastT ? Math.max(8, now - lastT) : 16;
@@ -7168,6 +7173,7 @@
       }, { passive: true });
 
       box.addEventListener('touchmove', function (e) {
+        if (MF.reduce) return;
         if (!band.active || !e.touches || e.touches.length !== 1) return;
         var y = e.touches[0].clientY;
         if (!band.dir) {
@@ -8287,6 +8293,50 @@
   }
 
   /* ---------------- 图片放大查看 ---------------- */
+  /* ---------------- 动效:时长只认 CSS 里的 token，别再各自写死 ---------------- */
+  var MF = { fast: 160, base: 240, slow: 400, reduce: false, ready: false };
+  function motionRead() {
+    try {
+      var cs = getComputedStyle(document.documentElement);
+      function d(name, fb) {
+        var v = (cs.getPropertyValue('--' + name) || '').trim();
+        if (!v) return fb;
+        var n = parseFloat(v);
+        if (!n && n !== 0) return fb;
+        return /ms$/.test(v) ? n : (n * 1000);
+      }
+      MF.fast = d('dur-fast', 160);
+      MF.base = d('dur-base', 240);
+      MF.slow = d('dur-slow', 400);
+    } catch (e) {}
+    try { MF.reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    MF.ready = true;
+    var h = document.documentElement;
+    if (MF.reduce) h.classList.add('no-motion'); else h.classList.remove('no-motion');
+  }
+  // 过渡期间临时关掉毛玻璃：静态样子不变，只省掉最贵的合成
+  function animBusy(ms) {
+    var h = document.documentElement;
+    if (!h) return;
+    h.classList.add('anim-busy');
+    clearTimeout(animBusy.t);
+    animBusy.t = setTimeout(function () { try { h.classList.remove('anim-busy'); } catch (e) {} }, Math.max(120, ms || 0));
+  }
+  // 等元素的某个 CSS 动画真跑完再干活；动画被截/被禁用时靠定时器兜底
+  function afterLeave(el, ms, cb) {
+    if (!el || !cb) return;
+    var done = false;
+    function fin() {
+      if (done) return;
+      done = true;
+      try { el.removeEventListener('animationend', onEnd); } catch (e) {}
+      cb();
+    }
+    function onEnd(e) { if (!e || e.target === el) fin(); }
+    if (MF.reduce) { fin(); return; }
+    try { el.addEventListener('animationend', onEnd); } catch (e) {}
+    setTimeout(fin, Math.max(60, (ms || MF.base) + 40));
+  }
   var viewScale = 1, viewX = 0, viewY = 0, pinch = null, dragStart = null, lastTap = 0, viewSrc = '';
   function applyView(animated) {
     var img = $('#viewerImg');
@@ -9426,7 +9476,8 @@
       var el = $(sel); if (el) el.classList.add('hidden');
     });
     if (name === 'roles') { try { rpSyncCounts(); renderRoleList(); rpModelTip(); } catch (e) {} }
-    var animate = byUser && (Date.now() - navBootAt) > 200;
+    var animate = byUser && (Date.now() - navBootAt) > 200 && !MF.reduce;
+    if (animate) animBusy(MF.slow + 120);
     var items = document.querySelectorAll('#tabbar .tab-item');
     Array.prototype.forEach.call(items, function (b) {
       var on = b.getAttribute('data-tab') === name;
@@ -9435,7 +9486,7 @@
       if (on && animate) {
         void b.offsetWidth;
         b.classList.add('pop');
-        setTimeout(function () { b.classList.remove('pop'); }, 560);
+        setTimeout(function () { b.classList.remove('pop'); }, MF.slow + 160);
       }
     });
     // 聊天页正在退场（chat-close）时也算已关闭：否则退场这 190ms 里底栏会被一起藏掉，
@@ -9455,7 +9506,7 @@
         barEl.classList.remove('bar-pop');
         void barEl.offsetWidth;
         barEl.classList.add('bar-pop');
-        setTimeout(function () { barEl.classList.remove('bar-pop'); }, 480);
+        setTimeout(function () { barEl.classList.remove('bar-pop'); }, MF.slow + 80);
       }
       var page = name === 'me' ? $('#mePage') : (name === 'contacts' ? $('#contacts') : $('#chats'));
       if (page) {
@@ -9464,7 +9515,7 @@
         page.classList.remove('tab-switch', 'slide-right', 'slide-left');
         void page.offsetWidth;
         page.classList.add('tab-switch', dir);
-        setTimeout(function () { page.classList.remove('tab-switch', 'slide-right', 'slide-left'); }, 460);
+        setTimeout(function () { page.classList.remove('tab-switch', 'slide-right', 'slide-left'); }, MF.slow + 60);
       }
     }
 
@@ -9673,6 +9724,16 @@
   }
 
   function boot() {
+    motionRead();                                  // 时长 token + 系统「减少动效」
+    try {
+      if (document.addEventListener && !window.__visBound) {
+        window.__visBound = true;
+        document.addEventListener('visibilitychange', function () {
+          var h = document.documentElement;
+          h.classList.toggle('page-hidden', document.visibilityState === 'hidden');
+        });
+      }
+    } catch (e) {}
     try {
       if (window.MOM) MOM.init({
         send: function (o) { return wsSend(o); },

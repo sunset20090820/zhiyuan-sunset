@@ -3684,3 +3684,44 @@ html[data-pop-solid] .mod-item {
 .rp-reason { width: 100%; box-sizing: border-box; min-height: 56px; margin-top: 8px;
   border-radius: 10px; border: 1px solid var(--line, rgba(0,0,0,.12)); padding: 8px 10px;
   font-size: 13px; background: var(--bg-soft, rgba(0,0,0,.03)); color: inherit; resize: none; }
+
+/* ===== 动效 token（JS 也读这几个值，别再各自写死时长） ===== */
+:root {
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 400ms;
+  --ease-std: cubic-bezier(.2, .75, .25, 1);
+  --ease-emph: cubic-bezier(.22, .9, .28, 1.06);
+}
+
+/* 页面切换期间：暂时关掉毛玻璃。过渡只有几百毫秒，看不出来，
+   但这一屏最贵的就是 backdrop-filter（实测关掉后卡顿帧消失）。 */
+html.anim-busy .chat-top,
+html.anim-busy .tabbar,
+html.anim-busy .action-card,
+html.anim-busy .screen,
+html.anim-busy .me-page,
+html.anim-busy .room,
+html.anim-busy .msg {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* 切到后台就暂停常驻动画（在线点、徽标呼吸、飞机浮动…），省电 */
+html.page-hidden *,
+html.page-hidden *::before,
+html.page-hidden *::after {
+  animation-play-state: paused !important;
+}
+
+/* 系统或用户要求「减少动效」：保留状态变化，去掉位移/回弹与常驻动画 */
+html.no-motion *,
+html.no-motion *::before,
+html.no-motion *::after {
+  animation-duration: .001ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: 0ms !important;
+  transition-duration: .001ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
