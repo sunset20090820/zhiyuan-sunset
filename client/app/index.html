@@ -516,7 +516,6 @@
     <div class="me-sec" data-sec="mods">
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🧩</span>模块<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnBooks" class="me-row" type="button"><span class="me-ico">📖</span>小说阅读<span class="me-arrow">›</span></button>
         <button id="btnModules" class="me-row" type="button"><span class="me-ico">📦</span>我的模块<span class="me-arrow">›</span></button>
         <button id="btnModMarket" class="me-row" type="button"><span class="me-ico">🛒</span>模块市场<span class="me-arrow">›</span></button>
         <button id="btnModUpload" class="me-row" type="button"><span class="me-ico">⬆️</span>上传模块<span class="me-arrow">›</span></button>
@@ -880,93 +879,6 @@
   </div>
 </div>
 
-<!-- ===== 小说阅读：书架 ===== -->
-<div id="bkShelf" class="me-page hidden">
-  <header class="topbar">
-    <button id="bkShelfBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand">小说阅读</div>
-    <button id="bkSrcBtn" class="icon-btn" type="button" aria-label="书源">书源</button>
-  </header>
-  <div class="me-body">
-    <div class="bk-find">
-      <input id="bkKey" type="search" maxlength="40" placeholder="搜书名或作者" autocomplete="off" spellcheck="false">
-      <button id="bkGo" class="primary" type="button">搜索</button>
-    </div>
-    <div id="bkShelfList" class="bk-grid"></div>
-    <p id="bkShelfTip" class="hint"></p>
-  </div>
-</div>
-
-<!-- ===== 小说阅读：搜索结果 ===== -->
-<div id="bkFind" class="me-page hidden">
-  <header class="topbar">
-    <button id="bkFindBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand" id="bkFindTitle">搜索</div>
-    <button id="bkFindStop" class="icon-btn" type="button" aria-label="停止">✕</button>
-  </header>
-  <div class="me-body">
-    <p id="bkFindProg" class="hint" style="text-align:left"></p>
-    <div id="bkFindList" class="bk-list"></div>
-  </div>
-</div>
-
-<!-- ===== 小说阅读：书籍详情 + 目录 ===== -->
-<div id="bkBook" class="me-page hidden">
-  <header class="topbar">
-    <button id="bkBookBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand" id="bkBookTitle">书籍</div>
-    <span class="logout-chip" style="visibility:hidden">·</span>
-  </header>
-  <div class="me-body">
-    <div id="bkBookHead" class="bk-bookhead"></div>
-    <div id="bkBookActs" class="bk-bookacts"></div>
-    <div id="bkToc" class="bk-toc"></div>
-  </div>
-</div>
-
-<!-- ===== 小说阅读：书源管理 ===== -->
-<div id="bkSrc" class="me-page hidden">
-  <header class="topbar">
-    <button id="bkSrcBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
-    <div class="brand">书源</div>
-    <button id="bkSrcAll" class="icon-btn" type="button" aria-label="全开">全开</button>
-  </header>
-  <div class="me-body">
-    <div class="bk-find">
-      <input id="bkSrcKey" type="search" maxlength="20" placeholder="筛书源名 / 分组" autocomplete="off">
-      <button id="bkSrcNone" class="flat" type="button" style="width:auto">全关</button>
-    </div>
-    <p id="bkSrcTip" class="hint" style="text-align:left"></p>
-    <div id="bkSrcList" class="bk-srclist"></div>
-    <div class="me-sec-head" style="cursor:default"><span class="me-ico">➕</span>添加书源</div>
-    <label class="field"><span>粘贴书源 JSON（阅读 App 的格式，可多个）</span>
-      <textarea id="bkSrcJson" rows="4" placeholder='[{"bookSourceName":"某某小说","bookSourceUrl":"https://…","searchUrl":"…","ruleSearch":{…}}]'></textarea></label>
-    <div class="bk-row2">
-      <button id="bkSrcImport" class="primary" type="button">导入粘贴</button>
-      <label class="flat bk-file-label" for="bkSrcFile">选文件</label>
-      <input id="bkSrcFile" type="file" accept=".json,application/json" hidden>
-    </div>
-  </div>
-</div>
-
-<!-- ===== 小说阅读：正文 ===== -->
-<div id="bkRead" class="bk-read hidden">
-  <div id="bkReadScroll" class="bk-read-scroll">
-    <div class="bk-read-inner">
-      <h2 id="bkReadTitle" class="bk-read-title"></h2>
-      <div id="bkReadBody" class="bk-read-body"></div>
-      <div id="bkReadFoot" class="bk-read-foot"></div>
-    </div>
-  </div>
-  <div id="bkReadBar" class="bk-read-bar hidden">
-    <button id="bkReadPrev" type="button">上一章</button>
-    <button id="bkReadToc" type="button">目录</button>
-    <button id="bkReadNext" type="button">下一章</button>
-    <button id="bkReadA" type="button">A+</button>
-    <button id="bkReadTheme" type="button">纸</button>
-  </div>
-</div>
-
 <!-- ===== 用户管理(开发者) ===== -->
 <div id="devUsers" class="me-page hidden">
   <header class="topbar">
@@ -1302,7 +1214,5 @@
 <script src="moments.js"></script>
 <script src="pl.js"></script>
 <script src="app.js"></script>
-<script src="bookrule.js"></script>
-<script src="books.js"></script>
 </body>
 </html>
