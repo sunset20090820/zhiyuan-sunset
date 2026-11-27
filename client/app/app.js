@@ -4452,7 +4452,7 @@
   }
   function closeRpPages() {
     ['#roleEditor', '#worldPage', '#worldEditor', '#aiConfPage', '#exportPage',
-     '#fbPage', '#rpImportPage', '#devUsers'].forEach(function (sel) {
+     '#fbPage', '#rpImportPage', '#devUsers', '#bkShelf', '#bkFind', '#bkBook', '#bkSrc'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
   }
@@ -9294,7 +9294,8 @@
     ['#storagePage', '#groupPanel', '#imgViewer', '#dmSheet', '#msgActions', '#peerActions',
      '#groupSheet', '#remarkSheet', '#roleEditor', '#worldPage', '#worldEditor',
      '#aiConfPage', '#exportPage', '#volSheet', '#fbPage', '#rpImportPage',
-     '#modPage', '#modRun', '#modUpload', '#devUsers'].forEach(function (sel) {
+     '#modPage', '#modRun', '#modUpload', '#devUsers',
+     '#bkShelf', '#bkFind', '#bkBook', '#bkSrc'].forEach(function (sel) {
       var el = $(sel); if (el) el.classList.add('hidden');
     });
     if (name === 'roles') { try { rpSyncCounts(); renderRoleList(); rpModelTip(); } catch (e) {} }
