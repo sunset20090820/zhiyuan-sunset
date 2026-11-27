@@ -3935,3 +3935,92 @@ html[data-skin] .mo-item:active { background-color: color-mix(in srgb, var(--sub
 html[data-skin] .mo-ava { width: 34px; height: 34px; font-size: 15px; }
 html[data-skin] .mo-foot { margin-top: 2px; }
 html[data-skin] .mo-cmts { border-radius: var(--r-chip); }
+
+/* =====================================================================
+   13.85：剩下的三处不统一一次收掉
+   1) 人设广场 / 反馈箱 / 举报台 → 和广场一样的时间线（无卡片、底部分隔线）
+   2) 广场的 赞 / 评论 → 有按钮形体（药丸底），不再像注释
+   3) 聊天气泡的时间戳 → 不再用 float 贴着最后一行,改成气泡底部独立一行右对齐
+   ===================================================================== */
+
+/* ---- 1) 三个列表统一成时间线 ---- */
+html[data-skin] .feed-card,
+html[data-skin] .fb-item,
+html[data-skin] .rp-card-item {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--sub) 16%, transparent) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 12px 4px 14px !important;
+}
+html[data-skin] .feed-card:last-child,
+html[data-skin] .fb-item:last-child,
+html[data-skin] .rp-card-item:last-child { border-bottom: 0 !important; }
+html[data-skin] .feed-card-title,
+html[data-skin] .rp-card-name { font-size: var(--fs-row); }
+html[data-skin] .feed-card-note { margin-bottom: 6px; }
+html[data-skin] .rp-card-text { margin: 6px 0; }
+html[data-skin] .rp-card-img { max-height: 220px; object-fit: cover; }
+html[data-skin] .fb-text { font-size: var(--fs-body); line-height: 1.55; }
+html[data-skin] .fb-reply { border-top: 1px solid color-mix(in srgb, var(--sub) 16%, transparent); }
+/* 列表容器不要额外的卡片内边距 */
+html[data-skin] #cardList, html[data-skin] #reportList, html[data-skin] #fbHist { padding: 0 2px; }
+
+/* ---- 2) 赞 / 评论：给药丸底,读起来是按钮 ---- */
+html[data-skin] .mo-foot { gap: 6px; padding-top: 4px; }
+html[data-skin] .mo-foot .mo-btn {
+  min-height: 36px; border-radius: 999px; padding: 0 13px; font-size: var(--fs-sub);
+  background: color-mix(in srgb, var(--sub) 9%, transparent);
+  color: var(--sub); transition: background-color var(--dur-fast, 160ms) ease, color var(--dur-fast, 160ms) ease;
+}
+html[data-skin] .mo-foot .mo-btn.on {
+  background: color-mix(in srgb, var(--accent, #3390ec) 16%, transparent);
+  color: var(--accent, #3390ec);
+}
+html[data-skin] .mo-foot .mo-btn:active { background: color-mix(in srgb, var(--sub) 18%, transparent); }
+
+/* ---- 3) 气泡时间戳：独立一行、右对齐,不再 float 压字 ---- */
+html[data-skin] .msgs .msg .bubble {
+  display: flex; flex-direction: column; align-items: stretch;
+}
+html[data-skin] .msgs .msg .bubble > .msg-text,
+html[data-skin] .msgs .msg .bubble > .quoted,
+html[data-skin] .msgs .msg .bubble > .caption,
+html[data-skin] .msgs .msg .bubble > .file-card { display: block; }
+html[data-skin] .msgs .msg .bubble > .meta {
+  float: none !important;
+  align-self: flex-end;
+  margin: 4px 0 -3px 0 !important;
+  font-size: var(--fs-cap);
+}
+
+/* 人设广场「下载」：别做成占满行高的圆钮,改成右下角的小胶囊 */
+html[data-skin] .feed-card-foot { align-items: center; padding-top: 2px; }
+html[data-skin] .feed-card-foot .flat {
+  width: auto !important; flex: 0 0 auto; margin-left: auto;
+  min-height: 34px; height: 34px; padding: 0 16px;
+  border-radius: 999px; font-size: var(--fs-sub);
+  background: color-mix(in srgb, var(--accent, #3390ec) 14%, transparent) !important;
+  color: var(--accent, #3390ec) !important;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* 广场页签选中态跟分段控件一致:淡底深字 */
+html[data-skin] .feed-tab.on {
+  background: color-mix(in srgb, var(--accent, #3390ec) 20%, transparent) !important;
+  color: var(--text) !important;
+  font-weight: 600;
+}
+
+/* 举报台/反馈箱里的动作按钮:统一 40px 高胶囊,别撑成一整块 */
+html[data-skin] .rp-acts { gap: 8px; margin-top: 10px; }
+html[data-skin] .rp-acts .flat,
+html[data-skin] .rp-acts .primary {
+  height: 40px; min-height: 40px; border-radius: 999px;
+  font-size: var(--fs-body); display: inline-flex; align-items: center; justify-content: center;
+}
+html[data-skin] .rp-reason { min-height: 44px; }
+html[data-skin] .fb-send, html[data-skin] #fbSend {
+  height: 40px; min-height: 40px; border-radius: 999px; font-size: var(--fs-body);
+}
