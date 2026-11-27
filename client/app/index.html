@@ -207,7 +207,7 @@
     <div class="action-grip"></div>
     <h3 class="remark-title">AI 助手</h3>
     <p class="remark-sub">填上 API key，会话列表里会多一个「AI 助手」，发消息它就回。和上面的「本地用户」互不影响，两个都开也行。</p>
-    <label class="me-row agent-row"><span class="me-ico">🤖</span>开启 AI 助手
+    <label class="me-row agent-row">开启 AI 助手
       <input id="aiOn" type="checkbox" class="agent-switch"></label>
     <div class="ai-idrow">
       <button id="aiAvatarBtn" class="ai-ava" type="button" aria-label="换头像">🤖</button>
@@ -218,14 +218,14 @@
       </div>
     </div>
     <div class="ai-field">
-      <div class="ai-rowhead"><span class="me-ico">🔗</span>接口地址</div>
+      <div class="ai-rowhead">接口地址</div>
       <div class="ai-inputwrap">
         <input id="aiBase" class="ai-input" type="text" inputmode="url" placeholder="https://api.deepseek.com/v1" spellcheck="false" autocomplete="off">
         <button class="ai-expand" type="button" data-expand="aiBase" aria-label="展开查看">⤢</button>
       </div>
     </div>
     <div class="ai-field">
-      <div class="ai-rowhead"><span class="me-ico">🧠</span>模型</div>
+      <div class="ai-rowhead">模型</div>
       <div class="ai-inputwrap">
         <input id="aiModel" class="ai-input" type="text" placeholder="deepseek-chat" spellcheck="false" autocomplete="off">
         <button id="aiFetchModels" class="ai-fetch" type="button">获取</button>
@@ -243,7 +243,7 @@
       <input id="aiModelFilter" class="ai-input ai-model-filter hidden" type="text" placeholder="筛选模型名，比如 deepseek" spellcheck="false" autocomplete="off">
       <div id="aiModelList" class="ai-model-list"></div>
       <div class="ai-field">
-        <div class="ai-rowhead"><span class="me-ico">💭</span>思考强度</div>
+        <div class="ai-rowhead">思考强度</div>
         <div class="ai-effort" id="aiEffort">
           <button type="button" class="ai-eff" data-eff="none">关</button>
           <button type="button" class="ai-eff" data-eff="low">低</button>
@@ -261,14 +261,14 @@
       <pre id="aiTestOut" class="ai-test-out hidden"></pre>
     </div>
     <div class="ai-field">
-      <div class="ai-rowhead"><span class="me-ico">🔑</span>API key</div>
+      <div class="ai-rowhead">API key</div>
       <div class="ai-inputwrap">
         <input id="aiKey" class="ai-input" type="password" placeholder="sk-…" spellcheck="false" autocomplete="off">
         <button class="ai-expand" type="button" data-expand="aiKey" aria-label="展开查看">⤢</button>
       </div>
     </div>
     <div class="ai-field">
-      <div class="ai-rowhead"><span class="me-ico">🏷</span>名称</div>
+      <div class="ai-rowhead">名称</div>
       <div class="ai-inputwrap">
         <input id="aiName" class="ai-input" type="text" maxlength="16" placeholder="AI 助手" spellcheck="false" autocomplete="off">
         <button class="ai-expand" type="button" data-expand="aiName" aria-label="展开查看">⤢</button>
@@ -303,15 +303,15 @@
     <div class="action-grip"></div>
     <h3 class="remark-title">本地用户</h3>
     <p class="remark-sub">通过本地端口接入 Agent（如 astrbot），在会话里直接对话</p>
-    <label class="me-row agent-row"><span class="me-ico">🖥</span>开启本地用户
+    <label class="me-row agent-row">开启本地用户
       <input id="agentOn" type="checkbox" class="agent-switch"></label>
-    <label class="me-row agent-row"><span class="me-ico">🔌</span>端口
+    <label class="me-row agent-row">端口
       <input id="agentPort" class="agent-input" type="number" min="1" max="65535" inputmode="numeric" value="6721"></label>
-    <label class="me-row agent-row"><span class="me-ico">🌐</span>允许局域网连接
+    <label class="me-row agent-row">允许局域网连接
       <input id="agentLan" type="checkbox" class="agent-switch"></label>
-    <label class="me-row agent-row"><span class="me-ico">🏷</span>名称
+    <label class="me-row agent-row">名称
       <input id="agentName" class="agent-input agent-name" type="text" maxlength="16" placeholder="本地用户"></label>
-    <div class="me-row agent-row"><span class="me-ico">🖼</span>头像
+    <div class="me-row agent-row">头像
       <button id="agentAvatarBtn" class="agent-ava" type="button"><span id="agentAvatarPrev">👤</span></button></div>
     <input id="agentAvatarInput" type="file" accept="image/*" class="hidden">
     <p class="hint" id="agentStat">未开启</p>
@@ -328,20 +328,20 @@
     <div class="action-grip"></div>
     <h3 class="remark-title">用户接入</h3>
     <p class="remark-sub">让 Agent 用真账号上线：别人能加它、私聊它，群里 @ 它才说话。消息同时进 astrbot 日志和服务器。</p>
-    <label class="me-row agent-row"><span class="me-ico">🛰</span>开启用户接入
+    <label class="me-row agent-row">开启用户接入
       <input id="agentUserOn" type="checkbox" class="agent-switch"></label>
-    <label class="me-row agent-row"><span class="me-ico">👤</span>账号
+    <label class="me-row agent-row">账号
       <input id="agentUserAcc" class="agent-input agent-name" type="text" maxlength="16" placeholder="如 my_agent"></label>
-    <label class="me-row agent-row"><span class="me-ico">🔑</span>密码
+    <label class="me-row agent-row">密码
       <input id="agentUserPass" class="agent-input agent-name" type="text" maxlength="64" placeholder="至少 4 位">
       <button id="agentUserRand" class="agent-mini" type="button">随机</button></label>
-    <label class="me-row agent-row"><span class="me-ico">🏷</span>名称
+    <label class="me-row agent-row">名称
       <input id="agentUserNick" class="agent-input agent-name" type="text" maxlength="16" placeholder="别人看到的名字"></label>
-    <label class="me-row agent-row"><span class="me-ico">🔌</span>端口
+    <label class="me-row agent-row">端口
       <input id="agentUserPort" class="agent-input" type="number" min="1" max="65535" inputmode="numeric" value="6722"></label>
-    <label class="me-row agent-row"><span class="me-ico">🌐</span>允许局域网连接
+    <label class="me-row agent-row">允许局域网连接
       <input id="agentUserLan" type="checkbox" class="agent-switch"></label>
-    <div class="me-row agent-row"><span class="me-ico">🖼</span>头像
+    <div class="me-row agent-row">头像
       <button id="agentUserAvatarBtn" class="agent-ava" type="button"><span id="agentUserAvatarPrev">🤖</span></button></div>
     <input id="agentUserAvatarInput" type="file" accept="image/*" class="hidden">
     <p class="hint" id="agentUserStat">未开启</p>
@@ -483,9 +483,9 @@
 <!-- ===== 我的（独立页面，不依赖浮层）===== -->
 <div id="mePage" class="me-page hidden">
   <header class="topbar">
-    <button id="meBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <span class="topbar-pad" aria-hidden="true"></span>
     <div class="brand">我的</div>
-    <button id="btnLogout" class="logout-chip" type="button">退出登录</button>
+    <span class="topbar-pad" aria-hidden="true"></span>
   </header>
   <div class="me-body">
     <div class="me-card">
@@ -494,39 +494,40 @@
         <span id="meUid" class="me-uid">我的 ID：--</span></div>
     </div>
 
+    <div class="me-panel">
     <div class="me-sec" data-sec="talk">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">💬</span>聊天与联系人<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="chat" aria-hidden="true"></span>聊天与联系人<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnNewGroup" class="me-row" type="button"><span class="me-ico">👥</span>新建群聊<span class="me-arrow">›</span></button>
-        <button id="btnNewChatRow" class="me-row" type="button"><span class="me-ico">✎</span>新建对话<span class="me-arrow">›</span></button>
-        <button id="btnBlocked" class="me-row" type="button"><span class="me-ico">🚫</span>黑名单<span class="me-arrow">›</span></button>
-        <button id="btnAvatar" class="me-row" type="button"><span class="me-ico">🖼</span>更换头像<span class="me-arrow">›</span></button>
+        <button id="btnNewGroup" class="me-row" type="button">新建群聊<span class="me-arrow">›</span></button>
+        <button id="btnNewChatRow" class="me-row" type="button">新建对话<span class="me-arrow">›</span></button>
+        <button id="btnBlocked" class="me-row" type="button">黑名单<span class="me-arrow">›</span></button>
+        <button id="btnAvatar" class="me-row" type="button">更换头像<span class="me-arrow">›</span></button>
       </div>
     </div>
 
     <div class="me-sec" data-sec="access">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🔌</span>接入与助手<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="plug" aria-hidden="true"></span>接入与助手<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnAi" class="me-row" type="button"><span class="me-ico">🤖</span>AI 助手<span class="me-arrow">›</span></button>
-        <button id="btnLocalAgent" class="me-row" type="button"><span class="me-ico">🖥</span>本地用户<span class="me-arrow">›</span></button>
-        <button id="btnAgentUser" class="me-row" type="button"><span class="me-ico">🛰</span>用户接入<span class="me-arrow">›</span></button>
+        <button id="btnAi" class="me-row" type="button">AI 助手<span class="me-arrow">›</span></button>
+        <button id="btnLocalAgent" class="me-row" type="button">本地用户<span class="me-arrow">›</span></button>
+        <button id="btnAgentUser" class="me-row" type="button">用户接入<span class="me-arrow">›</span></button>
       </div>
     </div>
 
     <div class="me-sec" data-sec="mods">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🧩</span>模块<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="grid" aria-hidden="true"></span>模块<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnModules" class="me-row" type="button"><span class="me-ico">📦</span>我的模块<span class="me-arrow">›</span></button>
-        <button id="btnModMarket" class="me-row" type="button"><span class="me-ico">🛒</span>模块市场<span class="me-arrow">›</span></button>
-        <button id="btnModUpload" class="me-row" type="button"><span class="me-ico">⬆️</span>上传模块<span class="me-arrow">›</span></button>
+        <button id="btnModules" class="me-row" type="button">我的模块<span class="me-arrow">›</span></button>
+        <button id="btnModMarket" class="me-row" type="button">模块市场<span class="me-arrow">›</span></button>
+        <button id="btnModUpload" class="me-row" type="button">上传模块<span class="me-arrow">›</span></button>
         <p class="hint-sub" id="modLastStep"></p>
       </div>
     </div>
 
     <div class="me-sec" data-sec="look">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🎨</span>外观与玻璃<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="palette" aria-hidden="true"></span>外观与玻璃<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnTheme" class="me-row" type="button"><span class="me-ico">🌗</span>主题（跟随系统 / 浅色 / 深色）<span class="me-arrow" id="themeState">跟随时</span></button>
+        <button id="btnTheme" class="me-row" type="button">主题（跟随系统 / 浅色 / 深色）<span class="me-arrow" id="themeState">跟随时</span></button>
         <div class="bg-dim-row"><span class="hint">字号</span>
           <div class="seg" id="fsSeg">
             <button class="seg-item" type="button" data-fs="s">小</button>
@@ -536,7 +537,7 @@
           </div>
         </div>
         <button id="btnBeauty" class="me-row" type="button" aria-expanded="false">
-        <span class="me-ico">🎨</span>美化设置<span class="me-arrow beauty-arrow" id="beautyArrow">›</span></button>
+        美化设置<span class="me-arrow beauty-arrow" id="beautyArrow">›</span></button>
 <div id="beautyPanel" class="beauty-panel">
         <div class="beauty-inner">
           <div class="beauty-block">
@@ -564,7 +565,7 @@
           </div>
           <div class="beauty-block">
             <div class="beauty-title">液态玻璃</div>
-            <button id="btnGlass" class="me-row" type="button"><span class="me-ico">✨</span>玻璃效果<span class="me-arrow" id="glassState">开</span></button>
+            <button id="btnGlass" class="me-row" type="button">玻璃效果<span class="me-arrow" id="glassState">开</span></button>
             <p class="hint-sub">开着像毛玻璃，能透出后面的壁纸；关掉变实色，最省电。</p>
 
             <div class="gl-preset-row" id="glassPresets">
@@ -604,8 +605,8 @@
 
           <div class="beauty-block">
             <div class="beauty-title">界面风格</div>
-            <button id="btnSkin" class="me-row" type="button"><span class="me-ico">📱</span>安卓 16 风格<span class="me-arrow" id="skinState">开</span></button>
-            <button id="btnTopbarText" class="me-row" type="button"><span class="me-ico">🔤</span>顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
+            <button id="btnSkin" class="me-row" type="button">安卓 16 风格<span class="me-arrow" id="skinState">开</span></button>
+            <button id="btnTopbarText" class="me-row" type="button">顶栏文字<span class="me-arrow" id="topbarTextState">自动</span></button>
           </div>
         </div>
       </div>
@@ -613,19 +614,19 @@
     </div>
 
     <div class="me-sec" data-sec="care">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">🧰</span>存储与维护<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="toolbox" aria-hidden="true"></span>存储与维护<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnStorage" class="me-row" type="button"><span class="me-ico">🗂</span>存储管理<span class="me-arrow">›</span></button>
-        <button id="btnCheckUpdate" class="me-row" type="button"><span class="me-ico">🔄</span>检查更新<span class="me-arrow">›</span></button>
+        <button id="btnStorage" class="me-row" type="button">存储管理<span class="me-arrow">›</span></button>
+        <button id="btnCheckUpdate" class="me-row" type="button">检查更新<span class="me-arrow">›</span></button>
       </div>
     </div>
 
     <div class="me-sec" data-sec="about">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">📮</span>反馈与关于<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="mail" aria-hidden="true"></span>反馈与关于<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
-        <button id="btnFeedback" class="me-row" type="button"><span class="me-ico">📮</span>反馈箱<span class="me-arrow">›</span></button>
-        <button id="btnMyReports" class="me-row hidden" type="button"><span class="me-ico">⚑</span>我的举报<span class="me-arrow">›</span></button>
-        <button id="btnDevUsers" class="me-row hidden" type="button"><span class="me-ico">🚫</span>用户管理<span class="me-arrow">›</span></button>
+        <button id="btnFeedback" class="me-row" type="button">反馈箱<span class="me-arrow">›</span></button>
+        <button id="btnMyReports" class="me-row hidden" type="button">我的举报<span class="me-arrow">›</span></button>
+        <button id="btnDevUsers" class="me-row hidden" type="button">用户管理<span class="me-arrow">›</span></button>
         <div class="me-row" style="flex-direction:column;align-items:flex-start;gap:4px">
           <span style="font-size:14px">登录状态诊断</span>
           <span id="meDiag" style="font-size:12px;color:var(--tg-sub);line-height:1.6">-</span>
@@ -634,20 +635,23 @@
       </div>
     </div>
 
-    <div class="me-group">
+    <div class="me-sec" data-sec="account">
+      <button class="me-sec-head" type="button" aria-expanded="false"><span class="mico" data-ico="user" aria-hidden="true"></span>账号<span class="me-sec-arrow">›</span></button>
+      <div class="me-sec-body">
       <label class="field"><span>昵称</span>
         <input id="setNick" maxlength="16" autocomplete="off"></label>
       <label class="field"><span>服务器 <button id="setServerEye" class="srv-eye" type="button" aria-label="显示服务器地址">👁</button></span>
         <input id="setServer" maxlength="120" autocomplete="off" spellcheck="false" placeholder="ws://你的服务器:8080"></label>
       <p class="hint-sub" id="setServerHint">地址默认不显示，免得截图或分享时把服务器暴露出去；直接在这里输入新地址就能换服。</p>
       <button id="btnSave" class="primary" type="button">保存并重连</button>
+      </div>
+    </div>
     </div>
 
-    <div class="me-group">
-      <button id="btnFlush" class="me-row" type="button"><span class="me-ico">💾</span>立即保存登录状态<span class="me-arrow">›</span></button>
-    </div>
+    <button id="btnFlush" class="me-row-plain me-row-flush" type="button">立即保存登录状态<span class="me-arrow">›</span></button>
+    <button id="btnLogout" class="me-row-plain me-row-danger" type="button">退出登录<span class="me-arrow">›</span></button>
 
-    <p class="hint" id="verLine">纸鸢</p>
+    <p class="hint hint-center" id="verLine">纸鸢</p>
   </div>
 </div>
 
@@ -738,11 +742,11 @@
     <button id="roleNew" class="icon-btn" type="button" aria-label="新建角色">＋</button>
   </header>
   <div class="me-body">
-    <p class="hint" id="roleTopHint">设定和剧情都存在手机本机；回复由你填的 API 模型生成（跟「AI 助手」一样填接口地址和 key）。</p>
+        <p class="hint" style="text-align:center">剧本存在本机，回话用你自己的模型接口</p>
     <button id="roleNoModel" class="role-empty role-cta hidden" type="button">还没填模型接口，点这里去配置 →</button>
     <div id="roleList" class="role-list"></div>
     <div class="me-sec open" data-sec="roleopts">
-      <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">⚙️</span>扮演设置<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button" aria-expanded="false">扮演设置<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
         <div class="bg-dim-row" style="flex-wrap:wrap"><span class="hint">上下文预算</span>
           <div class="seg rp-budget" id="rpBudget">
@@ -752,13 +756,13 @@
             <button class="seg-item" type="button" data-b="1048576">1M</button>
           </div>
         </div>
-        <p class="hint">预算越大记得越多，也越费 token。8k 够日常；128k / 1M 要模型本身支持长上下文（如 Gemini、Qwen-Long、Claude）。默认 8k。</p>
+        <p class="hint">预算越大记得越多、也越贵。8k 够日常；128k / 1M 要模型本身支持长上下文。</p>
         <p class="hint" id="rpBudgetHint"></p>
-        <button id="btnRoleImport" class="me-row" type="button"><span class="me-ico">📥</span>导入角色包（文件 / 文字）<span class="me-arrow">›</span></button>
-        <button id="btnRoleModel" class="me-row" type="button"><span class="me-ico">🔗</span>模型接口（key / 模型）<span class="me-arrow">›</span></button>
-        <button id="btnRoleWorlds" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow" id="worldCount">0</span></button>
-        <button id="btnRoleExport" class="me-row" type="button"><span class="me-ico">📦</span>导出 / 导入<span class="me-arrow">›</span></button>
-        <button id="btnRoleClean" class="me-row" type="button"><span class="me-ico">🧹</span>重建所有扮演会话<span class="me-arrow">›</span></button>
+        <button id="btnRoleImport" class="me-row" type="button">导入角色包（文件 / 文字）<span class="me-arrow">›</span></button>
+        <button id="btnRoleModel" class="me-row" type="button">模型接口（key / 模型）<span class="me-arrow">›</span></button>
+        <button id="btnRoleWorlds" class="me-row" type="button">世界包<span class="me-arrow" id="worldCount">0</span></button>
+        <button id="btnRoleExport" class="me-row" type="button">导出 / 导入<span class="me-arrow">›</span></button>
+        <button id="btnRoleClean" class="me-row" type="button">重建所有扮演会话<span class="me-arrow">›</span></button>
       </div>
     </div>
   </div>
@@ -783,7 +787,7 @@
 
     <div class="role-pane" id="rePaneBasic">
       <label class="field"><span>名字</span><input id="reName" maxlength="40" placeholder="例如：林晚" autocomplete="off"></label>
-      <div class="me-row"><span class="me-ico">🖼</span>头像
+      <div class="me-row">头像
         <button id="reAvaBtn" class="agent-ava" type="button" aria-label="换头像"><span id="reAvaPrev">🎭</span></button>
         <input id="reAvaInput" type="file" accept="image/*" class="hidden">
       </div>
@@ -886,7 +890,7 @@
       <label class="field"><span>角色规则（写给模型的约束）</span><textarea id="reRules" rows="5" maxlength="2000" placeholder="不要写旁白心理描写；回复不超过 3 段；不要使用『作为AI』"></textarea></label>
       <label class="field"><span>边界 / 雷区（这些一律不写）</span><textarea id="reLimits" rows="3" maxlength="500" placeholder="例如：不写自伤、不写未成年相关、不描写现实中的他人隐私"></textarea></label>
 
-      <label class="me-row agent-row brake-row"><span class="me-ico">🔓</span>破甲模式
+      <label class="me-row agent-row brake-row">破甲模式
         <input id="reBrakeOn" type="checkbox" class="agent-switch"></label>
       <p class="hint-sub">仅在模型为 deepseek 时生效。开启后不再自我审查、不跳出角色、不把情节改温和。</p>
 
@@ -928,7 +932,7 @@
       <textarea id="fbText" rows="6" maxlength="2000" placeholder="例如：13.37 在扮演页点导入角色包时，选 PNG 卡没有反应"></textarea>
     </label>
     <button id="fbSend" class="primary" type="button">发送反馈</button>
-    <div class="me-sec-head" style="cursor:default"><span class="me-ico">🗂</span>我发过的</div>
+    <div class="me-sec-head" style="cursor:default">我发过的</div>
     <div id="fbHist" class="fb-hist"></div>
   </div>
 </div>
@@ -960,7 +964,7 @@
       <button id="duBan" class="primary du-ban" type="button">封禁</button>
       <button id="duUnban" class="flat" type="button">解封</button>
     </div>
-    <div class="me-sec-head" style="cursor:default"><span class="me-ico">🚫</span>已封禁</div>
+    <div class="me-sec-head" style="cursor:default">已封禁</div>
     <div id="duList" class="fb-hist"></div>
   </div>
 </div>
@@ -1101,7 +1105,7 @@
   </header>
   <div class="me-body">
     <div class="me-sec open" data-sec="export">
-      <button class="me-sec-head" type="button"><span class="me-ico">📤</span>导出<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button">导出<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
         <div class="bg-dim-row"><span class="hint">剧情原文</span>
           <label class="mini-check"><input id="expRaw" type="checkbox">连原文一起打包</label></div>
@@ -1111,18 +1115,18 @@
         </div>
         <p class="hint">不含原文时只存设定与摘要，文件很小；含原文能完整还原每一句话。</p>
         <div id="expSummary" class="exp-summary"></div>
-        <button id="expBackup" class="me-row" type="button"><span class="me-ico">📦</span>全量备份<span class="me-arrow">›</span></button>
-        <button id="expStory" class="me-row" type="button"><span class="me-ico">🎬</span>剧情存档（当前会话）<span class="me-arrow">›</span></button>
-        <button id="expCard" class="me-row" type="button"><span class="me-ico">🎭</span>角色卡<span class="me-arrow">›</span></button>
-        <button id="expWorld" class="me-row" type="button"><span class="me-ico">🌍</span>世界包<span class="me-arrow">›</span></button>
+        <button id="expBackup" class="me-row" type="button">全量备份<span class="me-arrow">›</span></button>
+        <button id="expStory" class="me-row" type="button">剧情存档（当前会话）<span class="me-arrow">›</span></button>
+        <button id="expCard" class="me-row" type="button">角色卡<span class="me-arrow">›</span></button>
+        <button id="expWorld" class="me-row" type="button">世界包<span class="me-arrow">›</span></button>
         <div id="expPick" class="pick-list"></div>
       </div>
     </div>
     <div class="me-sec open" data-sec="import">
-      <button class="me-sec-head" type="button"><span class="me-ico">📥</span>导入<span class="me-sec-arrow">›</span></button>
+      <button class="me-sec-head" type="button">导入<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
         <p class="hint">支持角色卡 / 世界包 / 剧情存档 / 全量备份。导入前会自动导出一份快照，出问题能退回去。</p>
-        <button id="impPick" class="me-row" type="button"><span class="me-ico">📄</span>选择文件…<span class="me-arrow">›</span></button>
+        <button id="impPick" class="me-row" type="button">选择文件…<span class="me-arrow">›</span></button>
         <input id="impInput" type="file" accept=".json,application/json" class="hidden">
         <div id="impPreview" class="imp-preview hidden"></div>
         <div class="seg" id="impStrategy">

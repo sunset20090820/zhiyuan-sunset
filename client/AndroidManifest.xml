@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="app.paperlite.chat"
-    android:versionCode="212"
-    android:versionName="13.82">
+    android:versionCode="213"
+    android:versionName="13.83">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33" />
 

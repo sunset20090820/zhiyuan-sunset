@@ -89,8 +89,10 @@
         '<div class="mo-head"><b class="mo-name">' + esc(m.name || '某人') + '</b>' +
           (mine ? '<span class="mo-tag">我</span>' : '') +
           '<span class="mo-time">' + esc(timeAgo(m.ts)) + '</span>' +
-          (mine || api.isDev() ? '<button class="mo-del" type="button" data-mo-del="' + esc(m.id) + '" aria-label="删除">⋯</button>' : '') +
-          (!mine ? '<button class="mo-del mo-rep" type="button" data-mo-rep="' + esc(m.id) + '" aria-label="举报">⚑</button>' : '') +
+          (mine || api.isDev()
+            ? '<button class="mo-del" type="button" data-mo-del="' + esc(m.id) + '" aria-label="删除">⋯</button>'
+            : '<button class="mo-del" type="button" data-mo-rep="' + esc(m.id) + '" aria-label="举报这条动态">⋯</button>') +
+
         '</div>' +
         (m.text ? '<div class="mo-text-body">' + esc(m.text) + '</div>' : '') +
         img +
@@ -114,9 +116,14 @@
     var box = el('feedList');
     if (!box) return;
     if (!items.length) {
-      box.innerHTML = '';
+      box.innerHTML = '<div class="empty-plain">' +
+        '<span class="empty-ico"><span class="mico" data-ico="chat" aria-hidden="true"></span></span>' +
+        '<div class="empty-title">广场还空着</div>' +
+        '<div class="empty-sub">说点什么，让大家先认识你</div>' +
+        '<button class="empty-btn" type="button" data-mo-newpost>发第一条</button>' +
+        '</div>';
       var emp = el('feedEmpty');
-      if (emp) emp.style.display = '';
+      if (emp) emp.style.display = 'none';
       return;
     }
     var emp2 = el('feedEmpty');
@@ -317,6 +324,7 @@
         }
         var rep = t.closest('[data-mo-rep]');
         if (rep) { openReport(findMoment(rep.getAttribute('data-mo-rep'))); return; }
+        if (t.closest('[data-mo-newpost]')) { openSheet(); return; }
         var im = t.closest('[data-mo-img]');
         if (im && api.viewImage) api.viewImage(im.getAttribute('data-mo-img'));
       });
@@ -517,8 +525,13 @@
     if (!box) return;
     var emp = el('cardEmpty');
     if (!cards.length) {
-      box.innerHTML = '';
-      if (emp) emp.style.display = cardsLoaded ? '' : 'none';
+      box.innerHTML = cardsLoaded ? ('<div class="empty-plain">' +
+        '<span class="empty-ico"><span class="mico" data-ico="grid" aria-hidden="true"></span></span>' +
+        '<div class="empty-title">还没人分享人设</div>' +
+        '<div class="empty-sub">把你的卡分享出来，别人一点就能用</div>' +
+        '<button class="empty-btn" type="button" data-card-new>分享人设</button>' +
+        '</div>') : '';
+      if (emp) emp.style.display = 'none';
       return;
     }
     if (emp) emp.style.display = 'none';
@@ -629,6 +642,7 @@
     if (cl && !cl.__cardBound) {
       cl.__cardBound = true;
       cl.addEventListener('click', function (e) {
+        if (e.target.closest('[data-card-new]')) { openShareCard(); return; }
         var b = e.target.closest('[data-card-dl]');
         if (!b) return;
         if (!api.send({ t: 'card_get', id: b.getAttribute('data-card-dl') })) api.toast('没连上服务器');

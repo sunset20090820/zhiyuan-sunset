@@ -3725,3 +3725,191 @@ html.no-motion *::after {
   transition-delay: 0ms !important;
   scroll-behavior: auto !important;
 }
+
+/* =====================================================================
+   UI 统一（13.83）
+   1) 图标：我的页只留一套线条图标，行内 emoji 全部去掉
+   2) 「我的」改一段式列表：一张面板 + 分隔线，不再是 6 张浮动卡片
+   3) 分段控件选中态要看得见
+   ===================================================================== */
+/* 字号刻度：11 / 12.5 / 14 / 16 / 18 / 22 */
+:root {
+  --fs-cap: 11px;
+  --fs-sub: 12.5px;
+  --fs-body: 14px;
+  --fs-row: 16px;
+  --fs-title: 18px;
+  --fs-big: 22px;
+  --r-chip: 12px;
+  --r-card: 20px;
+}
+
+/* ---- 线条图标（统一 1.8px 描边，24 网格） ---- */
+.mico {
+  display: inline-block; flex: none;
+  width: 22px; height: 22px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: 22px 22px; mask-size: 22px 22px;
+  opacity: .82;
+}
+.mico[data-ico="chat"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 7.2A2.7 2.7 0 0 1 7.2 4.5h9.6a2.7 2.7 0 0 1 2.7 2.7v6.1a2.7 2.7 0 0 1-2.7 2.7h-6l-4.3 3.4v-3.7a2.7 2.7 0 0 1-2-2.6z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 7.2A2.7 2.7 0 0 1 7.2 4.5h9.6a2.7 2.7 0 0 1 2.7 2.7v6.1a2.7 2.7 0 0 1-2.7 2.7h-6l-4.3 3.4v-3.7a2.7 2.7 0 0 1-2-2.6z'/%3E%3C/svg%3E");
+}
+.mico[data-ico="plug"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 3.5v4.2M15 3.5v4.2M6.8 7.7h10.4v3.6a5.2 5.2 0 0 1-10.4 0zM12 16.5v4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 3.5v4.2M15 3.5v4.2M6.8 7.7h10.4v3.6a5.2 5.2 0 0 1-10.4 0zM12 16.5v4'/%3E%3C/svg%3E");
+}
+.mico[data-ico="grid"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='6.2' height='6.2' rx='1.4'/%3E%3Crect x='13.8' y='4' width='6.2' height='6.2' rx='1.4'/%3E%3Crect x='4' y='13.8' width='6.2' height='6.2' rx='1.4'/%3E%3Crect x='13.8' y='13.8' width='6.2' height='6.2' rx='1.4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='6.2' height='6.2' rx='1.4'/%3E%3Crect x='13.8' y='4' width='6.2' height='6.2' rx='1.4'/%3E%3Crect x='4' y='13.8' width='6.2' height='6.2' rx='1.4'/%3E%3Crect x='13.8' y='13.8' width='6.2' height='6.2' rx='1.4'/%3E%3C/svg%3E");
+}
+.mico[data-ico="palette"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.2a8.8 8.8 0 0 0 0 17.6c1.3 0 2-1 2-2 0-.6-.3-1-.6-1.4-.3-.4-.5-.8-.5-1.2 0-1 .8-1.6 2-1.6h1.6A4.5 4.5 0 0 0 21 10.9C21 6.6 17 3.2 12 3.2z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.2a8.8 8.8 0 0 0 0 17.6c1.3 0 2-1 2-2 0-.6-.3-1-.6-1.4-.3-.4-.5-.8-.5-1.2 0-1 .8-1.6 2-1.6h1.6A4.5 4.5 0 0 0 21 10.9C21 6.6 17 3.2 12 3.2z'/%3E%3C/svg%3E");
+}
+.mico[data-ico="toolbox"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.2h16v8.6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM9.2 9.2V6.6a2 2 0 0 1 2-2h1.6a2 2 0 0 1 2 2v2.6M4 13.4h16'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9.2h16v8.6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM9.2 9.2V6.6a2 2 0 0 1 2-2h1.6a2 2 0 0 1 2 2v2.6M4 13.4h16'/%3E%3C/svg%3E");
+}
+.mico[data-ico="mail"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.2' y='5.6' width='17.6' height='12.8' rx='2.2'/%3E%3Cpath d='M3.6 7.2 12 13l8.4-5.8'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.2' y='5.6' width='17.6' height='12.8' rx='2.2'/%3E%3Cpath d='M3.6 7.2 12 13l8.4-5.8'/%3E%3C/svg%3E");
+}
+.mico[data-ico="user"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8.4' r='3.9'/%3E%3Cpath d='M4.6 20.2c1.3-3.1 4.1-4.7 7.4-4.7s6.1 1.6 7.4 4.7'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8.4' r='3.9'/%3E%3Cpath d='M4.6 20.2c1.3-3.1 4.1-4.7 7.4-4.7s6.1 1.6 7.4 4.7'/%3E%3C/svg%3E");
+}
+
+/* 我的页顶部左右留白（原来左边是返回箭头的位置） */
+.topbar-pad { display: inline-block; width: 44px; height: 44px; }
+
+/* ---- 「我的」一段式列表 ---- */
+/* 一张面板装下所有分区:面板底色 + 行间分隔线 */
+html[data-skin] .me-body .me-card {
+  border-radius: var(--r-card);
+  background: var(--bg-soft);
+  margin-bottom: 10px;
+  box-shadow: none;
+}
+html[data-skin] .me-panel {
+  border-radius: var(--r-card);
+  background: var(--bg-soft);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+html[data-skin] .me-panel > .me-sec { border-radius: 0 !important; background: transparent !important; margin-bottom: 0 !important; }
+html[data-skin] .me-panel > .me-sec + .me-sec,
+html[data-skin] .me-panel > .me-sec + .me-row-plain,
+html[data-skin] .me-panel > .me-row-plain + .me-row-plain {
+  border-top: 1px solid color-mix(in srgb, var(--sub) 18%, transparent);
+}
+html[data-skin] .me-panel > .me-sec:last-of-type { padding-bottom: 2px; }
+html[data-skin] .me-sec-head { padding: 14px 16px; font-size: var(--fs-row); font-weight: 600; }
+html[data-skin] .me-sec-head .mico { margin-right: 2px; color: var(--accent, #3390ec); opacity: .9; }
+html[data-skin] .me-sec .me-row { padding: 12px 16px 12px 46px; font-size: var(--fs-body); }
+html[data-skin] .me-sec .me-row .me-arrow { font-size: var(--fs-sub); }
+/* 面板外的两行(立即保存 / 退出登录):各自一张小卡,和设置面板分开 */
+html[data-skin] .me-row-plain {
+  width: 100%; border: 0; background: var(--bg-soft); color: var(--text);
+  border-radius: var(--r-card); padding: 14px 16px; font-size: var(--fs-body); text-align: left;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px;
+}
+html[data-skin] .me-row-plain .me-arrow { margin-left: auto; color: var(--sub); }
+html[data-skin] .me-row-danger { color: #c62828; }
+html[data-skin] .hint-center { text-align: center; }
+
+/* 用户卡更紧凑 */
+html[data-skin] .me-card { padding: 14px 16px; }
+html[data-skin] .me-card .me-uid { font-size: var(--fs-cap); }
+
+/* ---- 分段控件：选中要看得见（原来背景是透明，只靠字浅深） ---- */
+html[data-skin] .seg-item.on,
+html[data-skin="m3e"] .seg-item.on {
+  background: var(--accent, #3390ec) !important;
+  color: #fff !important;
+  font-weight: 600;
+  box-shadow: none !important;
+}
+html[data-skin] .seg:not(.has-pill) .seg-item.on { opacity: 1; }
+/* 置顶按钮：已置顶 = 主色实心 */
+html[data-skin] .pin-btn.pinned { color: var(--accent, #3390ec); }
+html[data-skin="m3e"] .pin-btn.pinned { background: color-mix(in srgb, var(--accent, #3390ec) 16%, transparent); }
+
+/* ---- 空状态：聊天页居中、列表页轻量 ---- */
+.chat-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 16vh 26px 0; text-align: center;
+}
+.chat-empty-ico {
+  width: 54px; height: 54px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent, #3390ec);
+  background: color-mix(in srgb, var(--accent, #3390ec) 12%, transparent);
+}
+.chat-empty-ico .mico { width: 26px; height: 26px; -webkit-mask-size: 26px 26px; mask-size: 26px 26px; opacity: 1; }
+.chat-empty-title { font-size: var(--fs-row); font-weight: 600; color: var(--text); }
+.chat-empty-sub { font-size: var(--fs-sub); color: var(--tg-sub); line-height: 1.6; max-width: 240px; }
+
+.empty-plain {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 46px 26px; text-align: center; border: 0; background: transparent;
+  margin: 0;
+}
+.empty-plain .empty-ico {
+  width: 50px; height: 50px; border-radius: 50%; font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent, #3390ec) 12%, transparent);
+  color: var(--accent, #3390ec);
+}
+.empty-plain .empty-title { font-size: var(--fs-row); }
+.empty-plain .empty-sub { font-size: var(--fs-sub); }
+
+/* ---- 广场：按钮给足触摸目标 ---- */
+.mo-foot .mo-btn { min-height: 44px; padding: 0 14px; }
+.mo-del.mo-rep { display: none; }
+
+/* ---- 分段控件选中:淡色底 + 深色字(M3 的 tonal 做法,别再白字压淡蓝) ---- */
+html[data-skin] .seg-item.on,
+html[data-skin="m3e"] .seg-item.on {
+  background: color-mix(in srgb, var(--accent, #3390ec) 20%, transparent) !important;
+  color: var(--text) !important;
+  font-weight: 600;
+  box-shadow: none !important;
+}
+
+/* ---- 面板外的分区(扮演设置等)保持卡片底 + 行分隔 ---- */
+html[data-skin] .me-body > .me-sec, html[data-skin] #roles .me-sec {
+  border-radius: var(--r-card) !important;
+  background: var(--bg-soft) !important;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+html[data-skin] #roles .me-sec .me-row { padding: 12px 16px; }
+html[data-skin] #roles .me-sec .me-row + .me-row { border-top: 1px solid color-mix(in srgb, var(--sub) 16%, transparent); }
+html[data-skin] #roles .me-sec-body { padding-bottom: 4px; }
+
+/* ---- 角色卡:开始做主操作,编辑收窄,放在卡底部一行 ---- */
+html[data-skin] .role-card { flex-wrap: wrap; padding: 14px; gap: 10px; }
+html[data-skin] .role-actions {
+  flex: 1 0 100%; display: flex; flex-direction: row; gap: 8px; margin: 2px 0 0 0;
+}
+html[data-skin] .role-actions .role-btn { min-height: 40px; display: flex; align-items: center; justify-content: center; }
+html[data-skin] .role-actions .role-btn.primary-sm { flex: 1; font-size: var(--fs-body); font-weight: 600; }
+html[data-skin] .role-actions .role-btn:not(.primary-sm) { min-width: 84px; color: var(--sub); }
+
+html[data-skin] #roles .me-sec-body .hint { text-align: left; }
+html[data-skin] #roles .me-sec-body > p:first-of-type { margin-top: 6px; }
+
+/* 会话行右侧「⋯」：去掉描边胶囊,做成 44px 触摸目标 */
+html[data-skin] .room-more {
+  min-width: 40px; min-height: 40px; padding: 0; border: 0;
+  background: transparent; color: var(--sub); font-size: 17px; line-height: 1;
+  border-radius: 50%;
+}
+html[data-skin] .room-more:active { background: color-mix(in srgb, var(--sub) 14%, transparent); }
+/* 广场每条右上「⋯」同样给足触摸目标 */
+html[data-skin] .mo-del { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }

@@ -2548,7 +2548,8 @@
     var html = '';
     function item(r, isDM, peerId) {
       var last = S.last[r.id];
-      var preview = last ? (last.name ? last.name + '：' : '') + (last.retracted ? '消息已撤回' : last.text) : (isDM ? '开始私聊吧' : '还没有消息，打个招呼吧');
+      // 一句提示重复三遍像模板：没消息的房间只在私聊里给一句，公共房间留空
+      var preview = last ? (last.name ? last.name + '：' : '') + (last.retracted ? '消息已撤回' : last.text) : (isDM ? '开始私聊吧' : '还没有消息');
       var un = S.unread[r.id] || 0;
       var cls = 'room' + (isDM ? ' room-dm' : '') + (S.pins[r.id] ? ' pinned' : '');
       var avaUrl = '';
@@ -2746,7 +2747,11 @@
       prevFrom = m.from; prevTs = m.ts;
     });
 
-    box.innerHTML = html || '<div class="day">还没有消息</div>';
+    box.innerHTML = html || ('<div class="chat-empty">' +
+      '<span class="chat-empty-ico"><span class="mico" data-ico="chat" aria-hidden="true"></span></span>' +
+      '<div class="chat-empty-title">还没有消息</div>' +
+      '<div class="chat-empty-sub">发第一条吧，把气氛带起来</div>' +
+      '</div>');
     if (opts && opts.keepScroll) {
       box.scrollTop = prevTop + (box.scrollHeight - prevH);   // 往前面插了内容，视觉上别跳
     } else if (force || nearBottom) snapBottom(box);
@@ -9551,6 +9556,7 @@
     if (!b) return;
     var rid = S.cur || '';
     b.classList.toggle('off', !S.pins[rid]);
+    b.classList.toggle('pinned', !!S.pins[rid]);   // m3e 下靠这个换实心图标
     b.textContent = S.pins[rid] ? '📌' : '📍';
     var tone = $('#btnTone');
     if (tone) tone.classList.toggle('hidden', !isRpRoom(rid));
