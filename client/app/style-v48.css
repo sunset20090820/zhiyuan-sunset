@@ -4024,3 +4024,170 @@ html[data-skin] .rp-reason { min-height: 44px; }
 html[data-skin] .fb-send, html[data-skin] #fbSend {
   height: 40px; min-height: 40px; border-radius: 999px; font-size: var(--fs-body);
 }
+
+/* =====================================================================
+   13.86：统一二级页与列表的语法
+   —— 一个容器 = 一张面板；面板里的行靠分隔线，不再每行一张卡
+   —— 弹层/整页一律实底（92% 的浮层底在整页上会透出下层界面）
+   ===================================================================== */
+
+/* ---- 1) 整页浮层不再半透,里外都干净 ---- */
+html[data-skin] .plain-page { background-color: rgba(252, 251, 255, 1) !important; }
+html[data-skin][data-theme="dark"] .plain-page { background-color: rgb(24, 27, 38) !important; }
+
+/* ---- 2) 对话列表 / 联系人 列表：从「一张大玻璃卡」改成面板里的分隔线行 ---- */
+html[data-skin] .friend-list {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 14px !important;
+}
+html[data-skin] .friend-list .friend-row,
+html[data-skin] #friendList .room {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--sub) 15%, transparent) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 10px 2px !important;
+}
+html[data-skin] .friend-list .friend-row:last-child { border-bottom: 0 !important; }
+html[data-skin] .friend-list .empty-hint {
+  padding: 40px 16px !important;
+  border: 0 !important; background: transparent !important;
+  font-size: var(--fs-sub); color: var(--sub);
+}
+html[data-skin] .contact-hint {
+  border: 0 !important; background: transparent !important; box-shadow: none !important;
+  padding: 14px 4px 4px !important; font-size: var(--fs-cap); color: var(--sub);
+}
+
+/* ---- 3) 「我的」底部两个按钮：并成一张面板,行间分隔线 ---- */
+html[data-skin] .me-panel-actions { margin: 10px 14px 0 !important; overflow: hidden; }
+html[data-skin] .me-panel-actions .me-row-plain {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; margin: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--sub) 15%, transparent) !important;
+  padding: 0 14px !important; min-height: 52px;
+  font-size: var(--fs-body); text-align: left;
+}
+html[data-skin] .me-panel-actions .me-row-plain:last-child { border-bottom: 0 !important; }
+html[data-skin] .me-panel-actions .me-row-danger { color: #d64545; }
+
+/* ---- 4) 扮演页：主按钮实心、卡片内按钮 40px ---- */
+html[data-skin] #roles .role-card .start,
+html[data-skin] #roles .role-card .primary {
+  height: 40px !important; min-height: 40px !important; border-radius: 999px;
+  background: var(--accent) !important; color: #fff !important;
+  font-size: var(--fs-body) !important;
+}
+html[data-skin] #roles .role-card .flat,
+html[data-skin] #roles .role-card .edit {
+  height: 40px !important; min-height: 40px !important; border-radius: 999px;
+  background: color-mix(in srgb, var(--sub) 10%, transparent) !important;
+  color: var(--text) !important; font-size: var(--fs-body) !important;
+}
+
+/* ---- 5) 登录页：跟应用其他表单同一套（44px 输入、分隔线、淡底分段、44px 主按钮） ---- */
+.setup-card { padding: 22px 18px 16px !important; border-radius: var(--r-card, 20px) !important; }
+html[data-skin] .setup .tabs {
+  background: color-mix(in srgb, var(--sub) 10%, transparent) !important;
+  border-radius: 999px !important; padding: 4px !important; gap: 4px;
+}
+html[data-skin] .setup .tab {
+  border-radius: 999px !important; min-height: 38px; font-size: var(--fs-body) !important;
+  background: transparent !important; box-shadow: none !important; color: var(--sub) !important;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+html[data-skin] .setup .tab.on {
+  background: color-mix(in srgb, var(--accent, #3390ec) 20%, transparent) !important;
+  color: var(--text) !important; font-weight: 600; box-shadow: none !important;
+}
+html[data-skin] .setup label.field > span { font-size: var(--fs-sub) !important; color: var(--sub) !important; margin-bottom: 6px; display: block; }
+html[data-skin] .setup label.field { margin-bottom: 12px !important; }
+html[data-skin] .setup label.field input,
+html[data-skin] .setup input[type="text"],
+html[data-skin] .setup input[type="password"] {
+  height: 44px !important; border-radius: var(--r-chip, 12px) !important;
+  border: 1px solid color-mix(in srgb, var(--sub) 18%, transparent) !important;
+  background: #fff !important; padding: 0 14px !important;
+  font-size: var(--fs-body) !important;
+}
+html[data-skin][data-theme="dark"] .setup label.field input,
+html[data-skin][data-theme="dark"] .setup input[type="text"],
+html[data-skin][data-theme="dark"] .setup input[type="password"] { background: rgba(255,255,255,.06) !important; }
+html[data-skin] .setup .primary {
+  height: 44px !important; min-height: 44px; border-radius: 999px !important;
+  font-size: var(--fs-row) !important; margin-top: 6px !important;
+}
+html[data-skin] .setup .ghost, html[data-skin] .setup .link-btn {
+  height: 40px !important; min-height: 40px; border: 0 !important; background: transparent !important;
+  color: var(--accent, #3390ec) !important; font-size: var(--fs-sub) !important;
+}
+/* 登录页不能同时露出底下的底栏 */
+body.need-login #tabbar { display: none !important; }
+body.need-login #chats, body.need-login #contacts, body.need-login #roles, body.need-login #mePage { visibility: hidden !important; }
+
+/* 登录页的分段控件用的是位移药丸(.seg-pill)：把药丸和文字都换成同一套淡底深字 */
+html[data-skin] .setup .tabs.has-pill > .seg-pill {
+  background: color-mix(in srgb, var(--accent, #3390ec) 20%, transparent) !important;
+  box-shadow: none !important; border: 0 !important;
+}
+html[data-skin] .setup .tabs.has-pill > .tab.on {
+  background: transparent !important; box-shadow: none !important; color: var(--text) !important;
+}
+html[data-skin] .setup #btnForgot,
+html[data-skin] .setup .flat {
+  height: 40px !important; min-height: 40px; border: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  color: var(--accent, #3390ec) !important; font-size: var(--fs-sub) !important;
+}
+
+/* 手风琴展开的内容区不要单独铺白底：一张面板从头到尾保持同一种材质 */
+html[data-skin] .me-panel .me-sec-body,
+html[data-skin] .me-sec-body { background: transparent !important; box-shadow: none !important; }
+
+/* 模块页的三个页签：跟其他分段控件一样淡底深字,不再实心蓝块 */
+html[data-skin] .mod-tab.on {
+  background: color-mix(in srgb, var(--accent, #3390ec) 20%, transparent) !important;
+  color: var(--text) !important; font-weight: 600;
+}
+html[data-skin] .mod-tab { min-height: 38px; font-size: var(--fs-sub); }
+
+/* 面板里的每一行都不该自带玻璃卡：行只留分隔线,材质归面板 */
+html[data-skin] .me-sec-body .me-row,
+html[data-skin] .me-panel .me-row {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--sub) 15%, transparent) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding-left: 18px !important; padding-right: 14px !important;
+  min-height: 52px;
+}
+html[data-skin] .me-sec-body .me-row:last-child,
+html[data-skin] .me-panel .me-row:last-child { border-bottom: 0 !important; }
+
+/* 展开区里各行的上下留白对齐：行高一致,别再有大段空隙 */
+html[data-skin] .me-sec-body { padding: 0 !important; }
+html[data-skin] .me-sec-body .bg-dim-row,
+html[data-skin] .me-sec-body .me-row { margin-top: 0 !important; margin-bottom: 0 !important; }
+html[data-skin] .me-sec-body .bg-dim-row { padding: 0 18px !important; min-height: 52px; display: flex; align-items: center; }
+
+/* 角色卡的 开始 / 编辑：跟其他胶囊按钮一致（开始=实心主色,编辑=淡底） */
+html[data-skin] .role-actions .role-btn {
+  height: 40px !important; min-height: 40px !important; border-radius: 999px !important;
+  border: 0 !important; font-size: var(--fs-body) !important;
+}
+html[data-skin] .role-actions .role-btn.primary-sm {
+  background: var(--accent) !important; color: #fff !important; font-weight: 600 !important;
+}
+html[data-skin] .role-actions .role-btn:not(.primary-sm) {
+  background: color-mix(in srgb, var(--sub) 10%, transparent) !important;
+  color: var(--text) !important;
+}

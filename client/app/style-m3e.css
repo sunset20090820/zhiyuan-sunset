@@ -2574,3 +2574,15 @@ html[data-skin] .icon-btn.has-mico .mico { font-size: 0; }
 }
 html[data-skin] .srv-eye.has-mico { font-size: 0; }
 html[data-skin] .srv-eye .mico { width: 18px; height: 18px; -webkit-mask-size: 18px 18px; mask-size: 18px 18px; }
+
+/* =====================================================================
+   13.86：整页浮层（.plain-page：模块、存储、导出、导入…）必须是实底。
+   浮层的 --pop-a 92% 在整页上用会透出下层界面——文字虽然只有 8%，
+   但在手机上看得清清楚楚，像界面没盖住。整页不需要透视，直接给实底。
+   ===================================================================== */
+html[data-skin] .plain-page {
+  background-color: rgba(252, 251, 255, 1) !important;
+}
+html[data-skin][data-theme="dark"] .plain-page {
+  background-color: rgb(24, 27, 38) !important;
+}

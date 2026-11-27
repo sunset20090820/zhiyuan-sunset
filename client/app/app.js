@@ -9731,6 +9731,19 @@
 
   function boot() {
     motionRead();                                  // 时长 token + 系统「减少动效」
+    // 登录页可见时把底栏和主界面藏起来：两者同时露出会让人以为登录页是个弹窗
+    try {
+      var st0 = $('#setup');
+      if (st0) {
+        var syncLogin = function () {
+          try { document.body.classList.toggle('need-login', !st0.classList.contains('hidden')); } catch (e) {}
+        };
+        syncLogin();
+        if (window.MutationObserver) {
+          new MutationObserver(syncLogin).observe(st0, { attributes: true, attributeFilter: ['class'] });
+        }
+      }
+    } catch (e) {}
     try {
       if (document.addEventListener && !window.__visBound) {
         window.__visBound = true;
