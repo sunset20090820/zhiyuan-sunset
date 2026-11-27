@@ -112,7 +112,15 @@
       // 发一条能到服务端并被所有装了同模块的人收到的消息
       broadcast: function (body) { return api.send({ t: 'mod_relay', mod: id, body: body || {} }); },
       on: function (fn) { ctx.__onMsg = fn; },
-      html: function (s) { host.innerHTML = s; return host; }
+      html: function (s) { host.innerHTML = s; return host; },
+      // 抓网页（走原生 HTTP，绕开 WebView 的跨域/编码问题）
+      http: {
+        get: function (url, opts, cb) {
+          if (typeof opts === 'function') { cb = opts; opts = {}; }
+          if (api.http) api.http(url, opts || {}, cb);
+          else if (cb) cb(0, '', '宿主没有提供网络能力');
+        }
+      }
     };
     return ctx;
   }

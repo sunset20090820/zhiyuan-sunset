@@ -599,6 +599,33 @@
     } catch (e) {}
   }
 
+  var httpWait = {}, httpSeq = 0;
+  window.__httpDone = function (rid, status, text, err) {
+    var cb = httpWait[rid];
+    if (!cb) return;
+    delete httpWait[rid];
+    try { cb(status || 0, text || '', err || ''); } catch (e) {}
+  };
+  function httpFetch(url, opts, cb) {
+    opts = opts || {};
+    var rid = 'h' + (++httpSeq);
+    if (cb) httpWait[rid] = cb;
+    var hj = opts.headers ? (typeof opts.headers === 'string' ? opts.headers : JSON.stringify(opts.headers)) : '';
+    try {
+      if (window.PaperNative && window.PaperNative.httpGetEx) {
+        window.PaperNative.httpGetEx(rid, url, hj, opts.method || 'GET', opts.body || '', opts.charset || '');
+      } else if (window.PaperNative && window.PaperNative.httpGet) {
+        window.PaperNative.httpGet(rid, url, hj);
+      } else {
+        delete httpWait[rid];
+        if (cb) cb(0, '', '这台设备不支持网络请求');
+      }
+    } catch (e) {
+      delete httpWait[rid];
+      if (cb) cb(0, '', String(e && e.message || e));
+    }
+  }
+  window.__zyHttp = httpFetch;
   function wsSend(obj) {
     try {
       if (obj && obj.t === 'msg') noteSend('server', 'room=' + (obj.room || '(空)'), obj.text);
@@ -9571,6 +9598,7 @@
         viewImage: function (src) { openViewer(src); },
         notify: function (t, x) { try { nativeNotify(t, x); } catch (e) {} },
         confirmTap: function (key) { return confirmTap(key, '再点一次确定'); },
+        http: httpFetch,
         hideTab: function (on) {
           var bar = $('#tabbar');
           if (bar) bar.classList.toggle('hidden', !!on);

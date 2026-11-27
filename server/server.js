@@ -80,7 +80,7 @@ const MOMENT_MAX = 600;          // 最多保留多少条动态
    注意：第一期不执行服务端模块的 JS —— 那等于把服务器交给上传者。 */
 const MOD_DIR = path.join(__dirname, 'data', 'modules');
 const MOD_INDEX = path.join(MOD_DIR, 'index.json');
-const MOD_MAX_CODE = 200 * 1024;   // 单个模块代码上限
+const MOD_MAX_CODE = 3 * 1024 * 1024;   // 单个模块代码上限（带内置书源的阅读模块约 1MB）
 const MOD_MAX_KV = 200;            // 每个模块每个用户最多多少键
 const MOD_MAX_KV_BYTES = 64 * 1024;
 const MOD_PERMS = ['store', 'ui', 'notify', 'image'];
@@ -926,7 +926,7 @@ function handleMessage(c, buf, opcode) {
     if (!man) { send(c, { t: 'error', message: '模块描述缺失' }); return; }
     const id = String(man.id || '').toLowerCase();
     if (!/^[a-z][a-z0-9_-]{2,24}$/.test(id)) { send(c, { t: 'error', message: '模块 id 只能用小写字母/数字/-_，3–25 位' }); return; }
-    if (code.length > MOD_MAX_CODE) { send(c, { t: 'error', message: '模块代码太大（上限 200KB）' }); return; }
+    if (code.length > MOD_MAX_CODE) { send(c, { t: 'error', message: '模块代码太大（上限 3MB）' }); return; }
     if (!code.trim()) { send(c, { t: 'error', message: '模块代码是空的' }); return; }
     const myUid = Number(acc.uid) || 0;
     const dev = isDevAccount(acc);

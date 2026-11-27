@@ -923,6 +923,146 @@ public class MainActivity extends Activity {
             } catch (Exception e) { return ""; }
         }
 
+        /* ---------------- 书源抓取：原生 HTTP（绕开 WebView 的跨域与编码问题） ---------------- */
+        private static final int HTTP_MAX_BYTES = 4 * 1024 * 1024;
+
+        private String decodeBody(byte[] bytes, String contentType, String encoding, String forceCharset) {
+            if (bytes == null) return "";
+            byte[] data = bytes;
+            String enc = encoding == null ? "" : encoding.toLowerCase();
+            if (enc.indexOf("gzip") >= 0) {
+                try {
+                    java.util.zip.GZIPInputStream gz = new java.util.zip.GZIPInputStream(
+                        new java.io.ByteArrayInputStream(bytes));
+                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = gz.read(buf)) > 0) out.write(buf, 0, n);
+                    gz.close();
+                    data = out.toByteArray();
+                } catch (Exception e) { }
+            }
+            String charset = (forceCharset != null && forceCharset.trim().length() > 0)
+                ? forceCharset.trim() : null;
+            if (charset == null) try {
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("charset=([\\w-]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(contentType == null ? "" : contentType);
+                if (m.find()) charset = m.group(1);
+            } catch (Exception e) { }
+            if (charset == null) {
+                String head = new String(data, 0, Math.min(2048, data.length),
+                        java.nio.charset.StandardCharsets.ISO_8859_1);
+                try {
+                    java.util.regex.Matcher m2 = java.util.regex.Pattern
+                        .compile("charset\\s*=\\s*[\"']?([\\w-]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                        .matcher(head);
+                    if (m2.find()) charset = m2.group(1);
+                } catch (Exception e) { }
+            }
+            if (charset != null) {
+                String cs = charset.toLowerCase().replace("gb2312", "gbk").replace("gb18030", "gbk");
+                try { return new String(data, cs); } catch (Exception e) { }
+            }
+            String utf8 = new String(data, java.nio.charset.StandardCharsets.UTF_8);
+            if (utf8.indexOf('\uFFFD') < 0) return utf8;
+            try { return new String(data, "GBK"); } catch (Exception e) { return utf8; }
+        }
+
+        /** 抓一个网页/接口：rid 由 JS 生成，回来了走 window.__httpDone(rid,status,text,err) */
+        @JavascriptInterface
+        public void httpGet(final String rid, final String url, final String headersJson) {
+            httpGetEx(rid, url, headersJson, "GET", "", "");
+        }
+
+        /** 带方法/请求体/编码的版本：书源搜索里有不少是 POST + GBK */
+        @JavascriptInterface
+        public void httpGetEx(final String rid, final String url, final String headersJson,
+                              final String method, final String body, final String charset) {
+            final String id = rid == null ? "" : rid;
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    int status = 0;
+                    String text = "", err = "";
+                    java.net.HttpURLConnection conn = null;
+                    try {
+                        java.net.URL u = new java.net.URL(url);
+                        conn = (java.net.HttpURLConnection) u.openConnection();
+                        conn.setConnectTimeout(12000);
+                        conn.setReadTimeout(20000);
+                        conn.setInstanceFollowRedirects(true);
+                        conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                        conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml,application/json,text/plain,*/*");
+                        conn.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
+                        conn.setRequestProperty("Accept-Encoding", "gzip");
+                        boolean isPost = method != null && method.toUpperCase().equals("POST");
+                        if (isPost) {
+                            conn.setRequestMethod("POST");
+                            conn.setDoOutput(true);
+                            byte[] bs = (body == null ? "" : body).getBytes(
+                                charset != null && charset.length() > 0
+                                    ? (charset.toLowerCase().replace("gb2312", "gbk")) : "UTF-8");
+                            conn.setFixedLengthStreamingMode(bs.length);
+                        }
+                        if (headersJson != null && headersJson.length() > 2) {
+                            try {
+                                org.json.JSONObject h = new org.json.JSONObject(headersJson);
+                                java.util.Iterator<String> it = h.keys();
+                                while (it.hasNext()) {
+                                    String k = it.next();
+                                    try { conn.setRequestProperty(k, h.optString(k)); } catch (Exception e) { }
+                                }
+                            } catch (Exception e) { }
+                        }
+                        if (isPost) {
+                            try {
+                                java.io.OutputStream os = conn.getOutputStream();
+                                os.write((body == null ? "" : body).getBytes(
+                                    charset != null && charset.length() > 0
+                                        ? (charset.toLowerCase().replace("gb2312", "gbk")) : "UTF-8"));
+                                os.flush(); os.close();
+                            } catch (Exception e) { }
+                        }
+                        status = conn.getResponseCode();
+                        java.io.InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                        if (in != null) {
+                            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                            byte[] buf = new byte[8192];
+                            int n;
+                            while ((n = in.read(buf)) > 0) {
+                                bos.write(buf, 0, n);
+                                if (bos.size() >= HTTP_MAX_BYTES) break;
+                            }
+                            try { in.close(); } catch (Exception e) { }
+                            text = decodeBody(bos.toByteArray(), conn.getContentType(), conn.getContentEncoding(), charset);
+                        }
+                    } catch (Exception e) {
+                        err = String.valueOf(e.getMessage());
+                    } finally {
+                        try { if (conn != null) conn.disconnect(); } catch (Exception e) { }
+                    }
+                    final String fText = text, fErr = err;
+                    final int fStatus = status;
+                    try {
+                        act.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    if (act.web == null) return;
+                                    String js = "try{window.__httpDone&&window.__httpDone("
+                                        + org.json.JSONObject.quote(id) + ","
+                                        + fStatus + ","
+                                        + org.json.JSONObject.quote(fText) + ","
+                                        + org.json.JSONObject.quote(fErr) + ")}catch(e){}";
+                                    act.web.evaluateJavascript(js, null);
+                                } catch (Exception e) { }
+                            }
+                        });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public String agentStatus() {
             return act.agentStatusJson();
