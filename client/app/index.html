@@ -103,7 +103,7 @@
 <main id="chats" class="screen">
   <header class="topbar">
     <div class="brand">纸鸢 <span id="connDot" class="dot"></span></div>
-    <button id="btnMe" class="icon-btn" aria-label="我">☰</button>
+    <button id="btnMe" class="icon-btn has-mico" aria-label="我"><span class="mico" data-ico="menu" aria-hidden="true"></span></button>
   </header>
   <div id="banner" class="banner hidden">未连接服务器 · 重试中…</div>
   <ul id="roomList" class="list"></ul>
@@ -463,7 +463,7 @@
   <header class="topbar">
     <button id="storageBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand">存储管理</div>
-    <button id="storageAll" class="icon-btn" type="button" aria-label="全部清空">🗑</button>
+    <button id="storageAll" class="icon-btn has-mico" type="button" aria-label="全部清空"><span class="mico" data-ico="trash" aria-hidden="true"></span></button>
   </header>
     <p class="hint" id="storageTip"></p>
   <div class="storage-body">
@@ -640,7 +640,7 @@
       <div class="me-sec-body">
       <label class="field"><span>昵称</span>
         <input id="setNick" maxlength="16" autocomplete="off"></label>
-      <label class="field"><span>服务器 <button id="setServerEye" class="srv-eye" type="button" aria-label="显示服务器地址">👁</button></span>
+      <label class="field"><span>服务器 <button id="setServerEye" class="srv-eye has-mico" type="button" aria-label="显示服务器地址"><span class="mico" data-ico="eye" aria-hidden="true"></span></button></span>
         <input id="setServer" maxlength="120" autocomplete="off" spellcheck="false" placeholder="ws://你的服务器:8080"></label>
       <p class="hint-sub" id="setServerHint">地址默认不显示，免得截图或分享时把服务器暴露出去；直接在这里输入新地址就能换服。</p>
       <button id="btnSave" class="primary" type="button">保存并重连</button>
@@ -660,7 +660,7 @@
 <main id="feed" class="screen hidden">
   <header class="topbar">
     <div class="brand">广场</div>
-    <button id="feedRefresh" class="icon-btn" type="button" aria-label="刷新">↻</button>
+    <button id="feedRefresh" class="icon-btn has-mico" type="button" aria-label="刷新"><span class="mico" data-ico="refresh" aria-hidden="true"></span></button>
   </header>
   <div class="feed-tabs">
     <button class="feed-tab on" type="button" data-ftab="mom">动态</button>
@@ -693,7 +693,7 @@
   <header class="topbar">
     <button id="reportBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand" id="reportTitle">举报台</div>
-    <button id="reportReload" class="icon-btn" type="button" aria-label="刷新">↻</button>
+    <button id="reportReload" class="icon-btn has-mico" type="button" aria-label="刷新"><span class="mico" data-ico="refresh" aria-hidden="true"></span></button>
   </header>
   <div class="me-body">
     <p class="hint" id="reportTip" style="text-align:left">别人举报的动态都在这里。删帖或不删都会把理由发给对方；删帖时被举报人也会收到理由。</p>
@@ -739,7 +739,7 @@
 <main id="roles" class="screen roles-screen hidden">
   <header class="topbar">
     <div class="brand">扮演</div>
-    <button id="roleNew" class="icon-btn" type="button" aria-label="新建角色">＋</button>
+    <button id="roleNew" class="icon-btn has-mico" type="button" aria-label="新建角色"><span class="mico" data-ico="plus" aria-hidden="true"></span></button>
   </header>
   <div class="me-body">
         <p class="hint" style="text-align:center">剧本存在本机，回话用你自己的模型接口</p>
@@ -974,7 +974,7 @@
   <header class="topbar">
     <button id="riBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand">导入</div>
-    <button id="riHelp" class="icon-btn" type="button" aria-label="说明">?</button>
+    <button id="riHelp" class="icon-btn has-mico" type="button" aria-label="说明"><span class="mico" data-ico="help" aria-hidden="true"></span></button>
   </header>
   <div class="me-body">
     <div class="imp-sec">
@@ -1219,7 +1219,7 @@
   <header class="topbar">
     <button id="modBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
     <div class="brand">模块</div>
-    <button id="modRefresh" class="icon-btn" type="button" aria-label="刷新">↻</button>
+    <button id="modRefresh" class="icon-btn has-mico" type="button" aria-label="刷新"><span class="mico" data-ico="refresh" aria-hidden="true"></span></button>
   </header>
   <div class="mod-tabs" id="modTabs">
     <button class="mod-tab on" type="button" data-mod-tab="mine">我的模块</button>

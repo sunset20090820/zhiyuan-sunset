@@ -118,7 +118,7 @@ html[data-skin="m3e"] .icon-btn {
   width: 48px; height: 48px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--m3e-full);
-  font-size: 20px;
+  font-size: 22px;
   color: var(--m3e-on-variant);
   transition: background-color var(--m3e-fast) var(--m3e-emph), transform var(--m3e-fast) var(--m3e-spring);
 }
@@ -127,7 +127,7 @@ html[data-skin="m3e"] .icon-btn:active {
   color: var(--m3e-on-surface);
   transform: scale(.94);
 }
-html[data-skin="m3e"] .back { font-size: 26px; color: var(--m3e-on-surface); }
+html[data-skin="m3e"] .back { font-size: 22px; color: var(--m3e-on-surface); }
 
 /* ---------------------------------------------------------
    2) 会话 / 联系人列表：Android 16 的分组圆角列表
@@ -147,7 +147,7 @@ html[data-skin="m3e"] #friendList {
 html[data-skin="m3e"] #roomList .room,
 html[data-skin="m3e"] #friendList .room {
   border: 0 !important;
-  border-radius: 20px;
+  border-radius: var(--r-card, 20px);
   margin: 0;
   padding: 10px 44px 10px 10px;
   box-shadow: none !important;
@@ -183,7 +183,7 @@ html[data-skin="m3e"] .room .ava {
   width: 48px; height: 48px;
   min-width: 48px; max-width: 48px;
   flex: 0 0 48px;
-  font-size: 21px;
+  font-size: 22px;
   border: 0;
   border-radius: var(--m3e-full);
   box-shadow: none;
@@ -192,7 +192,7 @@ html[data-skin="m3e"] .room .ava {
   outline: none;
 }
 html[data-skin="m3e"] .room-name { font-size: 16px; font-weight: 500; }
-html[data-skin="m3e"] .room-time { font-size: 12px; color: var(--m3e-on-variant); }
+html[data-skin="m3e"] .room-time { font-size: 12.5px; color: var(--m3e-on-variant); }
 html[data-skin="m3e"] .room-last { font-size: 14px; color: var(--m3e-on-variant); margin-top: 2px; }
 html[data-skin="m3e"] .room-line2 { margin-top: 2px; }
 html[data-skin="m3e"] .badge {
@@ -202,7 +202,7 @@ html[data-skin="m3e"] .badge {
   background: var(--m3e-primary) !important;
   background-image: none !important;
   color: var(--m3e-on-primary) !important;
-  font-size: 11.5px; font-weight: 500;
+  font-size: 11px; font-weight: 500;
   box-shadow: none;
   animation: none;
 }
@@ -229,25 +229,25 @@ html[data-skin="m3e"] .chat-top {
 }
 html[data-skin="m3e"] .chat-top .ava { width: 40px; height: 40px; font-size: 18px; }
 html[data-skin="m3e"] .chat-name { font-size: 16px; font-weight: 500; }
-html[data-skin="m3e"] .chat-sub { font-size: 12px; color: var(--m3e-on-variant); }
+html[data-skin="m3e"] .chat-sub { font-size: 12.5px; color: var(--m3e-on-variant); }
 
 html[data-skin="m3e"] .msgs { padding: 8px 12px 10px; gap: 2px; }
 
 /* 气泡：选择器要比 style-v48 里的 .msg.last:not(.out) .bubble 更深 */
 html[data-skin="m3e"] .msgs .msg .bubble {
   padding: 9px 13px 7px;
-  border-radius: 20px;
+  border-radius: var(--r-card, 20px);
   border-bottom-left-radius: 6px;
   border-bottom-right-radius: 20px;
   background: var(--m3e-surface-3);
   background-image: none;
   color: var(--m3e-on-surface);
   box-shadow: none;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.42;
 }
 html[data-skin="m3e"] .msgs .msg.tail .bubble,
-html[data-skin="m3e"] .msgs .msg.last .bubble { border-radius: 20px; }
+html[data-skin="m3e"] .msgs .msg.last .bubble { border-radius: var(--r-card, 20px); }
 html[data-skin="m3e"] .msgs .msg.last:not(.out) .bubble { border-bottom-left-radius: 6px; }
 html[data-skin="m3e"] .msgs .msg.out .bubble {
   background: var(--m3e-primary);
@@ -262,9 +262,9 @@ html[data-skin="m3e"] .msgs .msg.out.last .bubble { border-bottom-right-radius: 
 html[data-skin="m3e"] .msgs .msg.out .bubble .who { color: var(--out-who, rgba(255, 255, 255, .92)); }
 html[data-skin="m3e"] .msgs .msg:not(.out) .bubble .who { color: var(--m3e-on-primary-container); }
 html[data-skin="m3e"] .msg:active .bubble { transform: scale(.985); }
-html[data-skin="m3e"] .msg .mini-ava { width: 28px; height: 28px; font-size: 12px; margin-bottom: 2px; }
-html[data-skin="m3e"] .who { font-size: 12px; font-weight: 500; color: var(--m3e-on-primary-container); }
-html[data-skin="m3e"] .meta { font-size: 10.5px; opacity: .7; }
+html[data-skin="m3e"] .msg .mini-ava { width: 28px; height: 28px; font-size: 12.5px; margin-bottom: 2px; }
+html[data-skin="m3e"] .who { font-size: 12.5px; font-weight: 500; color: var(--m3e-on-primary-container); }
+html[data-skin="m3e"] .meta { font-size: 11px; opacity: .7; }
 html[data-skin="m3e"] .bubble .caption { font-size: 12.5px; }
 
 html[data-skin="m3e"] .day,
@@ -272,7 +272,7 @@ html[data-skin="m3e"] .msgs .day {
   background: var(--m3e-secondary-container);
   background-image: none;
   color: var(--m3e-on-secondary-container);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: .2px;
   padding: 4px 12px;
@@ -299,7 +299,7 @@ html[data-skin="m3e"] .composer textarea {
   border: 0;
   border-radius: var(--m3e-lg);
   padding: 12px 16px;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 20px;
   color: var(--m3e-on-surface);
   transition: background-color var(--m3e-fast) var(--m3e-emph), box-shadow var(--m3e-fast) var(--m3e-emph);
@@ -405,7 +405,7 @@ html[data-skin="m3e"] .tab-item {
   flex-direction: column;
   gap: 4px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--m3e-on-variant);
   border-radius: var(--m3e-md);
@@ -416,7 +416,7 @@ html[data-skin="m3e"] .tab-item .tab-ico {
   flex: 0 0 32px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--m3e-full);
-  font-size: 19px;
+  font-size: 18px;
   filter: none;
   opacity: 1;
   background: transparent;
@@ -474,7 +474,7 @@ html[data-skin="m3e"] .action-grip {
 html[data-skin="m3e"] .action-item {
   border-radius: var(--m3e-full);
   padding: 14px 16px;
-  font-size: 15px;
+  font-size: 14px;
   min-height: 56px;
   transition: background-color var(--m3e-fast) var(--m3e-emph);
 }
@@ -491,10 +491,10 @@ html[data-skin="m3e"] .action-preview {
   background: var(--m3e-surface-2);
   color: var(--m3e-on-variant);
 }
-html[data-skin="m3e"] .remark-title { font-size: 20px; font-weight: 500; padding: 0 8px; }
-html[data-skin="m3e"] .remark-sub { font-size: 13px; color: var(--m3e-on-variant); padding: 0 8px; }
+html[data-skin="m3e"] .remark-title { font-size: 22px; font-weight: 500; padding: 0 8px; }
+html[data-skin="m3e"] .remark-sub { font-size: 12.5px; color: var(--m3e-on-variant); padding: 0 8px; }
 html[data-skin="m3e"] .peer-ava { width: 48px; height: 48px; }
-html[data-skin="m3e"] .peer-meta strong { font-size: 17px; font-weight: 500; }
+html[data-skin="m3e"] .peer-meta strong { font-size: 16px; font-weight: 500; }
 
 /* ---------------------------------------------------------
    6) 「我的」页 / 设置：分组卡片 + 填充式输入框
@@ -538,7 +538,7 @@ html[data-skin="m3e"] #mePage .me-row,
 html[data-skin="m3e"] .me-row {
   min-height: 56px;
   padding: 14px 18px;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--m3e-on-surface);
   background: transparent;
   border-bottom: 0;
@@ -559,16 +559,16 @@ html[data-skin="m3e"] .logout-chip {
   background: var(--m3e-secondary-container);
   color: var(--m3e-on-secondary-container);
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: 12.5px;
 }
-html[data-skin="m3e"] .hint { color: var(--m3e-on-variant); font-size: 12px; }
+html[data-skin="m3e"] .hint { color: var(--m3e-on-variant); font-size: 12.5px; }
 html[data-skin="m3e"] .contact-search { background: transparent; padding: 4px 16px 12px; }
 html[data-skin="m3e"] .contact-search input {
   background: var(--m3e-surface-2);
   border: 0;
   border-radius: var(--m3e-full);
   padding: 12px 18px;
-  font-size: 15px;
+  font-size: 14px;
 }
 html[data-skin="m3e"] .contact-search button {
   border-radius: var(--m3e-full);
@@ -593,7 +593,7 @@ html[data-skin="m3e"] .mini-btn {
   background: var(--m3e-secondary-container);
   color: var(--m3e-on-secondary-container);
   padding: 8px 16px;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 html[data-skin="m3e"] .mini-btn.ok {
   background: var(--m3e-primary);
@@ -609,7 +609,7 @@ html[data-skin="m3e"] .primary {
   background: var(--m3e-primary);
   background-image: none;
   color: var(--m3e-on-primary);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: .1px;
   box-shadow: none;
@@ -637,7 +637,7 @@ html[data-skin="m3e"] .remark-input {
   border: 0;
   border-radius: var(--m3e-md);
   padding: 13px 16px;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--m3e-on-surface);
   transition: background-color var(--m3e-fast) var(--m3e-emph), box-shadow var(--m3e-fast) var(--m3e-emph);
 }
@@ -647,7 +647,7 @@ html[data-skin="m3e"] .remark-input:focus {
   border-color: transparent;
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--m3e-primary) 60%, transparent);
 }
-html[data-skin="m3e"] .field > span { font-size: 12px; color: var(--m3e-on-variant); margin-bottom: 6px; }
+html[data-skin="m3e"] .field > span { font-size: 12.5px; color: var(--m3e-on-variant); margin-bottom: 6px; }
 
 /* 分段控件 */
 html[data-skin="m3e"] .seg {
@@ -658,7 +658,7 @@ html[data-skin="m3e"] .seg {
 }
 html[data-skin="m3e"] .seg-item {
   border-radius: var(--m3e-full);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--m3e-on-variant);
   padding: 9px 12px;
@@ -699,7 +699,7 @@ html[data-skin="m3e"] .beauty-block {
   border-radius: var(--m3e-lg);
   padding: 14px;
 }
-html[data-skin="m3e"] .beauty-title { font-size: 12px; font-weight: 500; color: var(--m3e-on-variant); letter-spacing: .3px; }
+html[data-skin="m3e"] .beauty-title { font-size: 12.5px; font-weight: 500; color: var(--m3e-on-variant); letter-spacing: .3px; }
 html[data-skin="m3e"] .accent-row .accent-chip { border-radius: var(--m3e-full); height: 36px; }
 html[data-skin="m3e"] .accent-chip.on { box-shadow: 0 0 0 3px var(--m3e-surface), 0 0 0 5px var(--m3e-primary); border-color: transparent; }
 html[data-skin="m3e"] .bg-cell { border-radius: var(--m3e-md); }
@@ -762,8 +762,8 @@ html[data-skin="m3e"] .setup-card {
   padding: 24px 20px;
 }
 html[data-skin="m3e"] .setup h1 { font-size: 28px; font-weight: 500; letter-spacing: 0; }
-html[data-skin="m3e"] .setup-sub { color: var(--m3e-on-variant); font-size: 13px; }
-html[data-skin="m3e"] .setup .plane { filter: none; animation: none; font-size: 36px; }
+html[data-skin="m3e"] .setup-sub { color: var(--m3e-on-variant); font-size: 12.5px; }
+html[data-skin="m3e"] .setup .plane { filter: none; animation: none; font-size: 28px; }
 html[data-skin="m3e"] .tabs .tab.on { color: var(--m3e-on-surface); }
 
 /* ---------------------------------------------------------
@@ -1694,7 +1694,7 @@ html[data-skin] .chat-top.compact .ava {
   transform: scale(.8);
 }
 html[data-skin] .chat-top.compact .chat-sub { opacity: 0; transform: translateY(-4px); }
-html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
+html[data-skin] .chat-top.compact .chat-name { font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-skin] .msgs { transform: none !important; transition: none !important; }
@@ -1710,12 +1710,12 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 #aiSheet .ai-field { padding: 10px 16px 2px; }
 #aiSheet .ai-rowhead {
   display: flex; align-items: center; gap: 10px;
-  font-size: 13.5px; color: var(--sub); margin-bottom: 6px;
+  font-size: 14px; color: var(--sub); margin-bottom: 6px;
 }
 #aiSheet .ai-inputwrap { display: flex; align-items: center; gap: 8px; }
 #aiSheet .ai-input {
   flex: 1 1 auto; width: auto; min-width: 0; min-height: 44px;
-  padding: 11px 13px; border-radius: 13px;
+  padding: 11px 13px; border-radius: var(--r-chip, 12px);
   border: 1px solid var(--line); background: var(--bg-soft); color: var(--text);
   font-size: 14px; line-height: 1.35; text-align: left;
   text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
@@ -1723,9 +1723,9 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 #aiSheet .ai-input[name] { text-align: left; }
 #aiSheet .ai-expand {
   flex: 0 0 auto; width: 44px; height: 44px; padding: 0;
-  border-radius: 13px; border: 1px solid var(--line);
+  border-radius: var(--r-chip, 12px); border: 1px solid var(--line);
   background: var(--bg-soft); color: var(--sub);
-  font-size: 17px; line-height: 1;
+  font-size: 16px; line-height: 1;
 }
 #aiSheet .ai-expand:active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 #aiSheet .hint { margin: 6px 16px 12px; }
@@ -1735,7 +1735,7 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 #aiExpand .ai-expand-text {
   display: block; width: calc(100% - 32px); margin: 6px 16px 12px;
   min-height: 108px; max-height: 46vh;
-  padding: 12px 14px; border-radius: 14px;
+  padding: 12px 14px; border-radius: var(--r-chip, 12px);
   border: 1px solid var(--line); background: var(--bg-soft); color: var(--text);
   font-size: 14px; line-height: 1.5; font-family: inherit;
   resize: vertical; word-break: break-all; overflow-y: auto; text-align: left;
@@ -1745,9 +1745,9 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 /* AI 助手：模型列表（勾选 + 切换） */
 #aiSheet .ai-fetch {
   flex: 0 0 auto; height: 44px; padding: 0 14px; margin: 0;
-  border-radius: 13px; border: 1px solid var(--line);
+  border-radius: var(--r-chip, 12px); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-soft));
-  color: var(--text); font-size: 13.5px;
+  color: var(--text); font-size: 14px;
 }
 #aiSheet .ai-fetch:disabled { opacity: .55; }
 #aiSheet .ai-model-hint { margin: 8px 16px 4px; }
@@ -1755,9 +1755,9 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 #aiSheet .ai-model-empty { margin: 4px 0 8px; font-size: 12.5px; color: var(--sub); }
 #aiSheet .ai-model-row {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 8px 10px; margin-bottom: 6px; border-radius: 12px;
+  padding: 8px 10px; margin-bottom: 6px; border-radius: var(--r-chip, 12px);
   border: 1px solid var(--line); background: var(--bg-soft);
-  color: var(--text); font-size: 13.5px; text-align: left;
+  color: var(--text); font-size: 14px; text-align: left;
   word-break: break-all;
 }
 #aiSheet .ai-model-hit {
@@ -1766,23 +1766,23 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
   font-size: inherit; text-align: left;
 }
 #aiSheet .ai-model-use {
-  flex: 0 0 auto; padding: 5px 10px; border-radius: 10px; border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-size: 12px;
+  flex: 0 0 auto; padding: 5px 10px; border-radius: var(--r-chip, 12px); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-size: 12.5px;
 }
 #aiSheet .ai-model-row.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-soft)); }
 #aiSheet .ai-model-row.cur { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
 #aiSheet .ai-model-box {
   flex: 0 0 auto; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line);
-  display: grid; place-items: center; font-size: 12px; color: var(--accent-ink);
+  display: grid; place-items: center; font-size: 12.5px; color: var(--accent-ink);
 }
 #aiSheet .ai-model-row.on .ai-model-box { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 #aiSheet .ai-model-name { flex: 1 1 auto; min-width: 0; }
-#aiSheet .ai-model-badge { flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#aiSheet .ai-model-badge { flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: var(--r-chip, 12px); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 
 /* 聊天页顶栏：AI 会话的模型切换胶囊 */
 .ai-model-chip {
   display: inline-block; margin-top: 3px; padding: 2px 9px; max-width: 100%;
-  border-radius: 10px; border: 1px solid var(--line);
+  border-radius: var(--r-chip, 12px); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--sub); font-size: 11px; line-height: 1.5;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1791,12 +1791,12 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 
 /* AI 助手：测试连接 */
 #aiSheet .ai-test-row { display: flex; align-items: center; gap: 10px; margin: 6px 16px 2px; }
-#aiSheet .ai-test-tip { font-size: 12px; color: var(--sub); }
+#aiSheet .ai-test-tip { font-size: 12.5px; color: var(--sub); }
 #aiSheet .ai-test-out {
-  margin: 6px 16px 10px; padding: 10px 12px; border-radius: 12px;
+  margin: 6px 16px 10px; padding: 10px 12px; border-radius: var(--r-chip, 12px);
   background: color-mix(in srgb, var(--text) 6%, var(--bg-soft));
   border: 1px solid var(--line);
-  font-size: 12px; line-height: 1.55; color: var(--sub);
+  font-size: 12.5px; line-height: 1.55; color: var(--sub);
   white-space: pre-wrap; word-break: break-all; max-height: 32vh; overflow-y: auto;
 }
 #aiSheet .ai-test-out.hidden { display: none; }
@@ -1805,7 +1805,7 @@ html[data-skin] .chat-top.compact .chat-name { font-size: 14.5px; }
 #aiSheet .ai-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 16px 2px; }
 #aiSheet .ai-preset {
   padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--bg-soft); color: var(--sub); font-size: 12px;
+  background: var(--bg-soft); color: var(--sub); font-size: 12.5px;
 }
 
 /* AI 助手：模型列表筛选框 */
@@ -1829,21 +1829,21 @@ html[data-skin] #roomList .room .ava { margin-right: 1px; }
 #aiSheet .ai-ava {
   flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
   border: 1px solid var(--line); background: var(--bg-soft);
-  font-size: 24px; line-height: 1; display: grid; place-items: center; overflow: hidden;
+  font-size: 22px; line-height: 1; display: grid; place-items: center; overflow: hidden;
   padding: 0;
 }
 #aiSheet .ai-ava.has-img { background: transparent; }
 #aiSheet .ai-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
 #aiSheet .ai-idmeta { min-width: 0; }
-#aiSheet .ai-idname { font-size: 15px; font-weight: 600; }
+#aiSheet .ai-idname { font-size: 14px; font-weight: 600; }
 #aiSheet .ai-idmeta .hint { margin: 2px 0 0; }
 #aiSheet .ai-test-row { flex-wrap: wrap; row-gap: 8px; }
 
 /* AI 助手：思考强度 */
 #aiSheet .ai-effort { display: flex; gap: 8px; margin: 2px 16px 6px; }
 #aiSheet .ai-eff {
-  flex: 1 1 0; padding: 9px 0; border-radius: 12px; border: 1px solid var(--line);
-  background: var(--bg-soft); color: var(--sub); font-size: 13px;
+  flex: 1 1 0; padding: 9px 0; border-radius: var(--r-chip, 12px); border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--sub); font-size: 12.5px;
 }
 #aiSheet .ai-eff.on {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
@@ -2038,16 +2038,16 @@ html[data-skin].no-glass .msgs .msg.out .bubble { background: var(--accent) !imp
     padding: 8px 6px calc(var(--safe-bottom) + 8px);
   }
   html[data-skin="m3e"] .tab-item { font-size: 11px; padding: 2px 6px; gap: 2px; }
-  html[data-skin="m3e"] .tab-item .tab-ico { width: 56px; height: 28px; flex: 0 0 28px; font-size: 17px; }
+  html[data-skin="m3e"] .tab-item .tab-ico { width: 56px; height: 28px; flex: 0 0 28px; font-size: 16px; }
   html[data-skin] .topbar { min-height: 56px; padding: 6px 10px; }
   html[data-skin] .topbar .bar-title, html[data-skin] .topbar-title { font-size: 16px; }
   html[data-skin] .chat-top { min-height: 56px; padding: 6px 8px; }
-  html[data-skin] .chat-name { font-size: 14.5px; }
-  html[data-skin] .chat-sub { font-size: 10.5px; }
+  html[data-skin] .chat-name { font-size: 14px; }
+  html[data-skin] .chat-sub { font-size: 11px; }
   html[data-skin] #roomList .room { min-height: 66px; margin: 5px 8px !important; padding: 10px 12px !important; }
   html[data-skin] #roomList .room + .room { margin-top: 9px !important; }
   html[data-skin] #roomList .room .ava { width: 44px; height: 44px; }
-  html[data-skin] #roomList .room-name { font-size: 14.5px; }
+  html[data-skin] #roomList .room-name { font-size: 14px; }
   html[data-skin] #roomList .room-last { font-size: 12.5px; }
   html[data-skin] .composer { padding: 6px 8px calc(var(--safe-bottom) + 8px); }
   html[data-skin] .msgs .msg .bubble { max-width: 78%; }
@@ -2067,13 +2067,13 @@ html[data-skin].no-glass .msgs .msg.out .bubble { background: var(--accent) !imp
   }
   #aiSheet .ai-model-list { max-height: 22vh; }
   #aiSheet .ai-test-out { max-height: 20vh; }
-  #aiSheet .ai-ava { width: 44px; height: 44px; font-size: 20px; }
+  #aiSheet .ai-ava { width: 44px; height: 44px; font-size: 22px; }
   #aiSheet .ai-idrow { margin: 2px 16px 8px; }
   #aiSheet .ai-eff { padding: 7px 0; font-size: 12.5px; }
   #aiSheet .ai-fetch { height: 38px; padding: 0 10px; font-size: 12.5px; }
   #aiSheet .ai-input { height: 38px; }
   #aiSheet .ai-rowhead { font-size: 12.5px; }
-  html[data-skin] .ai-model-chip { font-size: 10px; padding: 1px 7px; }
+  html[data-skin] .ai-model-chip { font-size: 11px; padding: 1px 7px; }
 }
 
 /* 更高的屏幕：AI 面板按钮也吸底，长列表滚起来按钮不会掉出去 */
@@ -2099,14 +2099,14 @@ html[data-skin] .tabbar .tab-item.on { background: transparent !important; box-s
 html[data-skin] .tabbar { overflow: hidden; }
 
 /* 「两页同步」小勾 */
-html[data-skin] .mini-check { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--sub); white-space: nowrap; }
+html[data-skin] .mini-check { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--sub); white-space: nowrap; }
 html[data-skin] .mini-check input { width: 14px; height: 14px; }
 
 /* ---------------------------------------------------------
    「我的」页分组折叠：按钮太多，收成 5 行标题，点开才展开
    --------------------------------------------------------- */
 html[data-skin] .me-sec {
-  border-radius: 15px;
+  border-radius: var(--r-card, 20px);
   background: var(--bg-soft);
   margin-bottom: 12px;
   overflow: hidden;
@@ -2120,7 +2120,7 @@ html[data-skin] .me-sec-head {
   border: 0;
   background: transparent;
   color: var(--text);
-  font-size: 15px;
+  font-size: 14px;
   text-align: left;
 }
 html[data-skin] .me-sec-head .me-sec-arrow {
@@ -2136,15 +2136,15 @@ html[data-skin] .me-sec-body {
 }
 html[data-skin] .me-sec.open .me-sec-body { display: block; animation: m3e-row-in 220ms cubic-bezier(.2,.9,.25,1.1) both; }
 /* 分组里的行更紧凑一点，避免展开后过长 */
-html[data-skin] .me-sec .me-row { padding: 12px 16px; font-size: 14.5px; }
+html[data-skin] .me-sec .me-row { padding: 12px 16px; font-size: 14px; }
 html[data-skin] .me-sec .beauty-panel { margin: 0; }
 
 /* ===== 角色扮演：安卓 16 风格微调（13.32） ===== */
-html[data-skin] .role-card { border-radius: 20px; }
+html[data-skin] .role-card { border-radius: var(--r-card, 20px); }
 html[data-skin] .role-btn { border-radius: 999px; }
 html[data-skin] .role-btn.primary-sm { background: var(--m3-primary, #a8c7fa); color: #0b1a2b; }
-html[data-skin] .role-ava { border-radius: 16px; }
-html[data-skin] .demo-ta, html[data-skin] .demo-key { border-radius: 12px; }
+html[data-skin] .role-ava { border-radius: var(--r-card, 20px); }
+html[data-skin] .demo-ta, html[data-skin] .demo-key { border-radius: var(--r-chip, 12px); }
 /* 顶栏「浓度」按钮：m3e 下给一点实体感 */
 html[data-skin="m3e"] .tone-btn {
   height: 36px; padding: 0 12px; border-radius: var(--m3e-full);
@@ -2168,12 +2168,12 @@ html[data-skin][data-theme="dark"] .me-page,
 html[data-skin][data-theme="dark"] #blockPage { background-color: var(--m3e-surface, #17151d) !important; }
 
 /* 字号档位：盖掉 m3e 里写死的气泡字号 */
-html[data-fs] .msgs .msg .bubble { font-size: calc(15px * var(--fs, 1)) !important; line-height: 1.45; }
-html[data-fs] .msgs .msg .bubble .who { font-size: calc(12px * var(--fs, 1)) !important; }
-html[data-fs] .msgs .msg .meta { font-size: calc(10.5px * var(--fs, 1)) !important; }
-html[data-fs] .room-name { font-size: calc(15px * var(--fs, 1)) !important; }
+html[data-fs] .msgs .msg .bubble { font-size: calc(14px * var(--fs, 1)) !important; line-height: 1.45; }
+html[data-fs] .msgs .msg .bubble .who { font-size: calc(12.5px * var(--fs, 1)) !important; }
+html[data-fs] .msgs .msg .meta { font-size: calc(11px * var(--fs, 1)) !important; }
+html[data-fs] .room-name { font-size: calc(14px * var(--fs, 1)) !important; }
 html[data-fs] .chat-name { font-size: calc(16px * var(--fs, 1)) !important; }
-html[data-fs] .chat-sub { font-size: calc(11.5px * var(--fs, 1)) !important; }
+html[data-fs] .chat-sub { font-size: calc(11px * var(--fs, 1)) !important; }
 
 /* 子页面入场：基础皮肤把 .me-page 的动画关掉了，这里单独给「不是主 tab」的整页加回来 */
 html[data-skin] .me-page:not(.hidden) {
@@ -2187,8 +2187,8 @@ html[data-skin] .me-page:not(.hidden) {
 html[data-fs] .field span { font-size: calc(12.5px * var(--fs, 1)) !important; }
 html[data-fs] .field input,
 html[data-fs] .field textarea,
-html[data-fs] .field-select { font-size: calc(15px * var(--fs, 1)) !important; }
-html[data-fs] .seg-item { font-size: calc(13px * var(--fs, 1)) !important; }
+html[data-fs] .field-select { font-size: calc(14px * var(--fs, 1)) !important; }
+html[data-fs] .seg-item { font-size: calc(12.5px * var(--fs, 1)) !important; }
 html[data-fs] .ai-fetch, html[data-fs] .primary, html[data-fs] .flat { font-size: calc(14px * var(--fs, 1)) !important; }
 
 /* 深色模式下这几块新组件别糊 */
@@ -2327,7 +2327,7 @@ html[data-skin] .ai-model-chip {
 
 /* 滑杆旁的数值 */
 .gp-val { font-style: normal; font-weight: 600; color: var(--tg-blue); font-variant-numeric: tabular-nums;
-  margin-left: 2px; font-size: 11.5px; }
+  margin-left: 2px; font-size: 11px; }
 
 /* 有底图时，顶栏/底栏/提示文字加一点描边阴影，压在艳色照片上也认得出 */
 html[data-wall] .topbar .brand,
@@ -2425,7 +2425,7 @@ html[data-skin="m3e"] .seg { flex-wrap: nowrap; }
 html[data-skin="m3e"] .bg-dim-row > .seg,
 html[data-skin="m3e"] #fsSeg { flex: 1 1 auto; min-width: 0; }
 html[data-skin="m3e"] #fsSeg .seg-item {
-  padding: 8px 2px; font-size: 12px !important; letter-spacing: -.2px;
+  padding: 8px 2px; font-size: 12.5px !important; letter-spacing: -.2px;
 }
 @media (max-width: 360px) {
   html[data-skin="m3e"] #fsSeg .seg-item { font-size: 11px !important; }
@@ -2443,7 +2443,7 @@ html[data-skin="m3e"] #fsSeg .seg-item {
 }
 .ptr-hint.on { opacity: 1; }
 .ptr-hint > span {
-  padding: 5px 14px; border-radius: 99px; font-size: 12px;
+  padding: 5px 14px; border-radius: 99px; font-size: 12.5px;
   color: var(--tg-sub); background: color-mix(in srgb, var(--m3e-surface) 82%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   box-shadow: 0 4px 14px rgba(30, 34, 60, .12);
@@ -2477,7 +2477,7 @@ html[data-skin] .mo-more { border-color: var(--m3e-outline); color: var(--m3e-on
 html[data-skin] .mo-text { background: color-mix(in srgb, var(--m3e-surface-2) 78%, transparent); border-color: var(--m3e-outline); }
 /* 五格底栏：图标胶囊略窄一点，别挤 */
 html[data-skin="m3e"] .tabbar { padding-left: 4px; padding-right: 4px; }
-html[data-skin="m3e"] .tab-item { padding: 4px 4px; font-size: 11.5px; }
+html[data-skin="m3e"] .tab-item { padding: 4px 4px; font-size: 11px; }
 html[data-skin="m3e"] .tab-item .tab-ico { width: 52px; }
 /* 广场 tab 图标（地球） */
 html[data-skin="m3e"] .tabbar .tab-item[data-tab="feed"] .tab-ico {
@@ -2540,3 +2540,37 @@ html[data-skin="m3e"] .seg-item.on {
   font-weight: 600;
   box-shadow: none !important;
 }
+
+/* =====================================================================
+   顶栏按钮图标统一（原来 🗑 ↻ ☰ ＋ ? 👁 是文字/emoji,各机型长得不一样）
+   ===================================================================== */
+html[data-skin] .icon-btn > .mico { width: 24px; height: 24px; -webkit-mask-size: 24px 24px; mask-size: 24px 24px; opacity: .9; }
+/* 只对"里面换了 .mico"的按钮收字号,别的按钮(＋、?…)不受影响 */
+html[data-skin] .icon-btn.has-mico { font-size: 0; }
+html[data-skin] .icon-btn.has-mico .mico { font-size: 0; }
+.mico[data-ico="refresh"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.2 12a8.2 8.2 0 1 1-2.5-5.9M20.4 4.2v5.4h-5.4'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.2 12a8.2 8.2 0 1 1-2.5-5.9M20.4 4.2v5.4h-5.4'/%3E%3C/svg%3E");
+}
+.mico[data-ico="plus"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M12 5.2v13.6M5.2 12h13.6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M12 5.2v13.6M5.2 12h13.6'/%3E%3C/svg%3E");
+}
+.mico[data-ico="menu"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M4.2 7.2h15.6M4.2 12h15.6M4.2 16.8h15.6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M4.2 7.2h15.6M4.2 12h15.6M4.2 16.8h15.6'/%3E%3C/svg%3E");
+}
+.mico[data-ico="trash"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.4 7.4h13.2M9.4 7.4V5.6h5.2v1.8M7.2 7.4l.9 11.6h7.8l.9-11.6M10.6 10.8v5.2M13.4 10.8v5.2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.4 7.4h13.2M9.4 7.4V5.6h5.2v1.8M7.2 7.4l.9 11.6h7.8l.9-11.6M10.6 10.8v5.2M13.4 10.8v5.2'/%3E%3C/svg%3E");
+}
+.mico[data-ico="eye"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 12S6.1 6.6 12 6.6 21.4 12 21.4 12 17.9 17.4 12 17.4 2.6 12 2.6 12z'/%3E%3Ccircle cx='12' cy='12' r='2.7'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 12S6.1 6.6 12 6.6 21.4 12 21.4 12 17.9 17.4 12 17.4 2.6 12 2.6 12z'/%3E%3Ccircle cx='12' cy='12' r='2.7'/%3E%3C/svg%3E");
+}
+.mico[data-ico="help"] {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.6'/%3E%3Cpath d='M9.7 9.3a2.4 2.4 0 1 1 3.5 2.2c-.8.4-1.2 1-1.2 1.9'/%3E%3Cpath d='M12 16.6v.1'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.6'/%3E%3Cpath d='M9.7 9.3a2.4 2.4 0 1 1 3.5 2.2c-.8.4-1.2 1-1.2 1.9'/%3E%3Cpath d='M12 16.6v.1'/%3E%3C/svg%3E");
+}
+html[data-skin] .srv-eye.has-mico { font-size: 0; }
+html[data-skin] .srv-eye .mico { width: 18px; height: 18px; -webkit-mask-size: 18px 18px; mask-size: 18px 18px; }
