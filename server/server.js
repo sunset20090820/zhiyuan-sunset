@@ -165,6 +165,73 @@ function momentPublic(m) {
 }
 function broadcastAll(obj) { for (const c of clients) send(c, obj); }
 
+
+/* ------------------------- 举报 ------------------------- */
+const REPORT_FILE = path.join(DATA_DIR, 'reports.json');
+let reports = [];
+try { reports = JSON.parse(fs.readFileSync(REPORT_FILE, 'utf8')) || []; } catch (e) { reports = []; }
+if (!Array.isArray(reports)) reports = [];
+const REPORT_MAX = 400;
+function saveReports() {
+  try {
+    const cut = reports.length > REPORT_MAX ? reports.slice(reports.length - REPORT_MAX) : reports;
+    reports = cut;
+    fs.writeFileSync(REPORT_FILE, JSON.stringify(cut, null, 1));
+  } catch (e) { console.log('[reports] 保存失败', e.message); }
+}
+function reportPublic(r) {
+  return {
+    id: r.id, ts: r.ts, status: r.status || 'open',
+    momentId: r.momentId, reason: r.reason || '',
+    reporterUid: r.reporterUid || 0, reporterName: r.reporterName || '',
+    targetUid: r.targetUid || 0, targetName: r.targetName || '',
+    snap: r.snap || {}, handledBy: r.handledBy || 0, handledTs: r.handledTs || 0,
+    handleReason: r.handleReason || '', removed: !!r.removed
+  };
+}
+// 通知:在线就立刻推,离线先存着,下次登录 report_mine 取走
+function pushNotice(uidNum, text) {
+  const u = Number(uidNum) || 0;
+  if (!u) return;
+  let online = false;
+  for (const cl of clients) {
+    const acc = cl.account && accounts[cl.account];
+    if (acc && Number(acc.uid) === u) { send(cl, { t: 'report_notice', text: text, ts: now() }); online = true; }
+  }
+  if (!online) {
+    pendingNotices.push({ uid: u, text: text, ts: now() });
+    if (pendingNotices.length > 400) pendingNotices = pendingNotices.slice(pendingNotices.length - 400);
+    saveNotices();
+  }
+}
+const NOTICE_FILE = path.join(DATA_DIR, 'notices.json');
+let pendingNotices = [];
+try { pendingNotices = JSON.parse(fs.readFileSync(NOTICE_FILE, 'utf8')) || []; } catch (e) { pendingNotices = []; }
+function saveNotices() {
+  try { fs.writeFileSync(NOTICE_FILE, JSON.stringify(pendingNotices, null, 1)); } catch (e) {}
+}
+
+/* ------------------------- 人设广场 ------------------------- */
+const CARDS_DIR = path.join(DATA_DIR, 'cards');
+const CARD_FILE = path.join(DATA_DIR, 'cards.json');
+let cards = [];
+try { cards = JSON.parse(fs.readFileSync(CARD_FILE, 'utf8')) || []; } catch (e) { cards = []; }
+if (!Array.isArray(cards)) cards = [];
+const CARD_MAX = 200;
+const CARD_PAYLOAD_MAX = 700 * 1024;
+function saveCards() {
+  try {
+    const cut = cards.length > CARD_MAX ? cards.slice(cards.length - CARD_MAX) : cards;
+    cards = cut;
+    fs.writeFileSync(CARD_FILE, JSON.stringify(cut, null, 1));
+  } catch (e) { console.log('[cards] 保存失败', e.message); }
+}
+function cardPublic(c) {
+  return { id: c.id, uid: c.uid, name: c.name || '', title: c.title || '', kind: c.kind || 'card',
+    note: c.note || '', ext: c.ext || 'json', size: c.size || 0, ts: c.ts || 0, dl: c.dl || 0,
+    cover: c.cover || '' };
+}
+
 const FB_FILE = path.join(DATA_DIR, 'feedback.json');
 let feedback = [];
 try { feedback = JSON.parse(fs.readFileSync(FB_FILE, 'utf8')) || []; } catch (e) { feedback = []; }
@@ -1123,6 +1190,160 @@ function handleMessage(c, buf, opcode) {
     saveMomentsSoon();
     broadcastAll({ t: 'moment_del', id: id });
     send(c, { t: 'moment_del_ok', id: id });
+    return;
+  }
+
+  // ---------- 举报 ----------
+  if (d.t === 'moment_report') {
+    if (!rateOk(c, 'report', 5, 60000)) { tooFast(c, '举报太频繁了'); return; }
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'error', message: '先登录' }); return; }
+    const myUid = Number(acc.uid) || 0;
+    const mid = String(d.id || '');
+    const m = moments.filter(x => x.id === mid)[0];
+    if (!m) { send(c, { t: 'report_result', ok: false, err: '这条动态已经不在了' }); return; }
+    if (Number(m.uid) === myUid) { send(c, { t: 'report_result', ok: false, err: '不能举报自己的动态' }); return; }
+    const openExisting = reports.filter(r => r && !r.noticeOnly && r.status === 'open' && r.momentId === mid && Number(r.reporterUid) === myUid)[0];
+    if (openExisting) { send(c, { t: 'report_result', ok: true, id: openExisting.id, dup: true }); return; }
+    const rep = {
+      id: uid(), ts: now(), status: 'open', momentId: mid,
+      reason: clean(d.reason, 200) || '未写理由',
+      reporterUid: myUid, reporterName: c.name || acc.nick || '',
+      targetUid: Number(m.uid) || 0, targetName: m.name || '',
+      snap: { text: m.text || '', img: m.img || '', w: m.w || 0, h: m.h || 0, ts: m.ts || 0, name: m.name || '' },
+      handledBy: 0, handledTs: 0, handleReason: '', removed: false
+    };
+    reports.push(rep);
+    saveReports();
+    const out = { t: 'report_new', item: reportPublic(rep) };
+    for (const dc of devClients()) send(dc, out);
+    send(c, { t: 'report_result', ok: true, id: rep.id });
+    console.log('[report]', rep.reporterName, '→', rep.targetName, rep.reason);
+    return;
+  }
+  if (d.t === 'report_list') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!isDevAccount(acc)) { send(c, { t: 'report_list', items: [], mine: [] }); return; }
+    const items = reports.filter(r => r && !r.noticeOnly).slice(-80).reverse().map(reportPublic);
+    send(c, { t: 'report_list', items: items });
+    return;
+  }
+  if (d.t === 'report_act') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!isDevAccount(acc)) { send(c, { t: 'error', message: '只有管理员能处理举报' }); return; }
+    const rid = String(d.rid || '');
+    const rep = reports.filter(r => r && r.id === rid)[0];
+    if (!rep || rep.noticeOnly) { send(c, { t: 'report_result', ok: false, err: '没有这条举报' }); return; }
+    if (rep.status !== 'open') { send(c, { t: 'report_result', ok: false, err: '这条已经处理过了' }); return; }
+    const reason = clean(d.reason, 200) || '违反社区规范';
+    const remove = !!d.remove;
+    rep.status = remove ? 'removed' : 'kept';
+    rep.removed = remove;
+    rep.handledBy = Number(acc.uid) || 0;
+    rep.handledTs = now();
+    rep.handleReason = reason;
+    if (remove) {
+      const idx = moments.findIndex(x => x.id === rep.momentId);
+      if (idx >= 0) { moments.splice(idx, 1); saveMomentsSoon(); broadcastAll({ t: 'moment_del', id: rep.momentId }); }
+    }
+    saveReports();
+    // 处理结果：删帖 → 双方都通知；不删 → 只通知举报人
+    if (rep.targetUid) {
+      pushNotice(rep.targetUid, remove
+        ? ('你在广场的动态已被管理员删除。理由：' + reason)
+        : ('你在广场的动态被举报了，管理员核实后保留。说明：' + reason));
+    }
+    if (rep.reporterUid) {
+      pushNotice(rep.reporterUid, remove
+        ? ('你举报的动态已删除。处理理由：' + reason)
+        : ('你举报的动态经核实后保留，未删除。说明：' + reason));
+    }
+    const out = { t: 'report_done', item: reportPublic(rep) };
+    for (const dc of devClients()) send(dc, out);
+    send(c, { t: 'report_result', ok: true, id: rep.id, removed: remove });
+    console.log('[report] 处理', rep.id, remove ? '删帖' : '保留', reason);
+    return;
+  }
+  if (d.t === 'report_mine') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const myUid = acc ? Number(acc.uid) || 0 : 0;
+    const mine = myUid ? reports.filter(r => r && !r.noticeOnly && Number(r.reporterUid) === myUid).slice(-40).reverse().map(reportPublic) : [];
+    const notes = [];
+    if (myUid) {
+      for (let i = pendingNotices.length - 1; i >= 0; i--) {
+        if (Number(pendingNotices[i].uid) === myUid) { notes.push(pendingNotices[i]); pendingNotices.splice(i, 1); }
+      }
+      if (notes.length) saveNotices();
+    }
+    send(c, { t: 'report_mine', items: mine, notices: notes });
+    return;
+  }
+  // ---------- 人设广场 ----------
+  if (d.t === 'card_list') {
+    const before = Number(d.before) || 0;
+    const limit = Math.max(1, Math.min(30, Number(d.limit) || 12));
+    let arr = cards;
+    if (before > 0) arr = arr.filter(x => (x.ts || 0) < before);
+    const items = arr.slice(Math.max(0, arr.length - limit)).reverse().map(cardPublic);
+    send(c, { t: 'card_list', items: items, more: arr.length > limit });
+    return;
+  }
+  if (d.t === 'card_post') {
+    if (!rateOk(c, 'card', 1, 20000)) { tooFast(c, '发得太勤了'); return; }
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    if (!acc) { send(c, { t: 'card_result', ok: false, err: '先登录' }); return; }
+    const kind = d.kind === 'pack' ? 'pack' : 'card';
+    const title = clean(d.title, 40) || '未命名人设';
+    const note = clean(d.note, 300);
+    const ext = /^[a-z0-9]{2,5}$/i.test(String(d.ext || '')) ? String(d.ext).toLowerCase() : (kind === 'pack' ? 'txt' : 'json');
+    const raw = String(d.data || '');
+    const m = /^[A-Za-z0-9+/=\s]+$/.test(raw) ? raw : '';
+    if (!m) { send(c, { t: 'card_result', ok: false, err: '内容格式不对' }); return; }
+    const buf = Buffer.from(m.replace(/\s+/g, ''), 'base64');
+    if (!buf.length) { send(c, { t: 'card_result', ok: false, err: '内容是空的' }); return; }
+    if (buf.length > CARD_PAYLOAD_MAX) { send(c, { t: 'card_result', ok: false, err: '文件太大（上限 700KB）' }); return; }
+    const id = uid();
+    try {
+      fs.mkdirSync(CARDS_DIR, { recursive: true });
+      fs.writeFileSync(path.join(CARDS_DIR, id + '.' + ext), buf);
+    } catch (e) { send(c, { t: 'card_result', ok: false, err: '存不下：' + e.message }); return; }
+    const rec = {
+      id: id, uid: Number(acc.uid) || 0, name: c.name || acc.nick || '',
+      title: title, kind: kind, note: note, ext: ext, size: buf.length, ts: now(), dl: 0,
+      cover: clean(d.cover, 200) || ''
+    };
+    cards.push(rec);
+    saveCards();
+    broadcastAll({ t: 'card_new', item: cardPublic(rec) });
+    send(c, { t: 'card_posted', id: id });
+    console.log('[card]', kind, title, buf.length, 'bytes');
+    return;
+  }
+  if (d.t === 'card_get') {
+    const id = String(d.id || '');
+    const rec = cards.filter(x => x.id === id)[0];
+    if (!rec) { send(c, { t: 'card_one', ok: false, err: '这个人设已经不在了' }); return; }
+    let b64 = '';
+    try { b64 = fs.readFileSync(path.join(CARDS_DIR, id + '.' + rec.ext)).toString('base64'); } catch (e) { b64 = ''; }
+    if (!b64) { send(c, { t: 'card_one', ok: false, err: '文件丢了' }); return; }
+    rec.dl = (rec.dl || 0) + 1;
+    saveCards();
+    send(c, { t: 'card_one', ok: true, item: cardPublic(rec), data: b64 });
+    return;
+  }
+  if (d.t === 'card_del') {
+    const acc = c.account && accounts[c.account] ? accounts[c.account] : null;
+    const myUid = acc ? Number(acc.uid) || 0 : 0;
+    const id = String(d.id || '');
+    const idx = cards.findIndex(x => x.id === id);
+    if (idx < 0) { send(c, { t: 'card_result', ok: true, removed: id }); return; }
+    const rec = cards[idx];
+    if (!isDevAccount(acc) && Number(rec.uid) !== myUid) { send(c, { t: 'card_result', ok: false, err: '只能删自己发的' }); return; }
+    cards.splice(idx, 1);
+    saveCards();
+    try { fs.unlinkSync(path.join(CARDS_DIR, id + '.' + rec.ext)); } catch (e) {}
+    broadcastAll({ t: 'card_del', id: id });
+    send(c, { t: 'card_result', ok: true, removed: id });
     return;
   }
   if (d.t === 'fb_list') {

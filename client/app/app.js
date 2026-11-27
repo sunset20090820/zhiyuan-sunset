@@ -9,6 +9,8 @@
   var lastSendPath = '';
   var FEEDBACK_PEER = 'feedback';
   var FEEDBACK_RID = 'dm:feedback';
+  var REPORT_PEER = 'reports';        // 管理员专用「举报台」会话
+  var REPORT_RID = 'dm:reports';
   var DEV_UID = 'uid:100002';
   var isDeveloper = false;   // 自己是开发者：会话列表里有反馈箱，能收到所有人的反馈
   var bannedNow = false;     // 被封禁：不自动重连，停在封禁页
@@ -845,6 +847,7 @@
         else { wsSend({ t: 'fb_mine' }); }        // 拿回开发者对我的反馈的回复（离线也补）
       } catch (e) {}
       try { flushFeedback(); } catch (e) {}
+      pullMyReports();
       toast((d.action === 'register' ? '注册成功，' : d.action === 'reset' ? '密码已重置，' : '登录成功，') + '欢迎 ' + S.nick);
       return;
     }
@@ -922,7 +925,7 @@
       return;
     }
     if (d.t === 'people') { S.people = d.list || []; learnAvatars(S.people); return; }
-    if (/^moment_/.test(String(d.t || ''))) { try { if (window.MOM) MOM.onMessage(d); } catch (e) {} return; }
+    if (/^(moment_|report_|card_)/.test(String(d.t || ''))) { try { if (window.MOM) MOM.onMessage(d); } catch (e) {} return; }
     if (/^mod_/.test(String(d.t || ''))) { try { if (window.PL) PL.onMessage(d); } catch (e) {} return; }
     if (d.t === 'uid') { S.uid = d.uid || 0; try { if (window.MOM) MOM.setUid(S.uid); } catch (e) {} if (S.tab === 'me') fillMe(); return; }
     if (d.t === 'contacts') {
@@ -1348,6 +1351,7 @@
     if (peerId === AI_PEER) return AI_RID;
     if (peerId === LOCAL_PEER) return LOCAL_RID;
     if (peerId === FEEDBACK_PEER) return FEEDBACK_RID;
+    if (peerId === REPORT_PEER) return REPORT_RID;
     if (peerId === DEV_UID) return FEEDBACK_RID;      // 开发者回信就落在反馈箱里
     var d = (S.dms && S.dms[peerId]) || {};
     return d.roomId || ('dm:' + peerId);
@@ -1398,9 +1402,11 @@
       if (!d) { delete S.dms[peerId]; changed = true; return; }
       var want = dmRoomOf(peerId);
       var isAi = (peerId === AI_PEER) || d.ai === true;
-      var isFb = (peerId === FEEDBACK_PEER) || d.feedback === true;   // 反馈箱不是本地用户，别被 local 标记带偏
-      var isLocal = !isFb && ((peerId === LOCAL_PEER) || (d.local === true && !isAi));
+      var isFb = (peerId === FEEDBACK_PEER) || (d.feedback === true && d.reports !== true);   // 反馈箱不是本地用户，别被 local 标记带偏
+      var isRep = (peerId === REPORT_PEER) || d.reports === true;
+      var isLocal = !isFb && !isRep && ((peerId === LOCAL_PEER) || (d.local === true && !isAi));
       if (isAi) { want = AI_RID; }
+      else if (isRep) { want = REPORT_RID; }
       else if (isFb) { want = FEEDBACK_RID; }
       else if (isLocal) { want = LOCAL_RID; }
       var old = d.roomId;
@@ -1415,6 +1421,11 @@
       if ((isAi || isLocal) && d.local !== true) { d.local = true; changed = true; }
       if (isFb) {
         if (d.feedback !== true) { d.feedback = true; changed = true; }
+        if (d.local === true) { d.local = false; changed = true; }
+      }
+      if (isRep) {
+        if (d.reports !== true) { d.reports = true; changed = true; }
+        if (d.feedback === true) { d.feedback = false; changed = true; }
         if (d.local === true) { d.local = false; changed = true; }
       }
       if (old && old !== want) {
@@ -1471,6 +1482,25 @@
       var d2 = S.dms[peerId];
       if (d2 && dmRoomOf(peerId) === FEEDBACK_RID) { delete S.dms[peerId]; changed = true; }
     });
+    // 举报台:同一个「只给开发者」的处理
+    Object.keys(S.dms).forEach(function (peerId) {
+      if (peerId === REPORT_PEER || peerId === FEEDBACK_PEER) return;
+      var dr = S.dms[peerId];
+      if (dr && dr.roomId === REPORT_RID) { delete S.dms[peerId]; changed = true; }
+    });
+    if (isDeveloper) {
+      var rp = S.dms[REPORT_PEER];
+      if (!rp) { S.dms[REPORT_PEER] = { name: '举报台', roomId: REPORT_RID, local: false, reports: true }; changed = true; }
+      else {
+        if (rp.roomId !== REPORT_RID) { rp.roomId = REPORT_RID; changed = true; }
+        if (rp.reports !== true) { rp.reports = true; changed = true; }
+        if (rp.local === true) { rp.local = false; changed = true; }
+      }
+    } else if (S.dms[REPORT_PEER]) {
+      delete S.dms[REPORT_PEER];
+      changed = true;
+    }
+
     // 反馈箱只给开发者：普通用户不该在会话列表里看到它（他们从「我的 → 反馈箱」写）
     if (isDeveloper) {
       if (!S.dms[FEEDBACK_PEER]) {
@@ -1790,6 +1820,8 @@
     if ($('#regServer')) $('#regServer').value = S.server || guessServer();
   }
   function syncDevRow() {
+    var mr = $('#btnMyReports');
+    if (mr) mr.classList.toggle('hidden', !(S.auth && S.token));
     var row = $('#btnDevUsers');
     if (!row) return;
     var dev = isDeveloper;
@@ -1879,6 +1911,33 @@
     try { wsSend({ t: 'fb_mine' }); } catch (e) {}
     $('#fbText').value = '';
     renderFbHistory();
+  }
+  function openReportPage() {
+    hideTabShell();
+    var pageEl = $('#reportPage');
+    if (!pageEl) return;
+    pageEl.classList.remove('hidden');
+    var t = $('#reportTitle'); if (t) t.textContent = '举报台';
+    var tip = $('#reportTip'); if (tip) tip.textContent = '别人举报的动态都在这里。删帖或不删都会把理由发给对方；删帖时被举报人也会收到理由。';
+    try { wsSend({ t: 'report_list' }); } catch (e) {}
+    if (window.MOM && MOM.renderReports) MOM.renderReports(null, 'dev');
+  }
+  function openMyReports() {
+    hideTabShell();
+    var pageEl = $('#reportPage');
+    if (!pageEl) return;
+    pageEl.classList.remove('hidden');
+    var t = $('#reportTitle'); if (t) t.textContent = '我的举报';
+    var tip = $('#reportTip'); if (tip) tip.textContent = '你举报过的动态和处理结果都在这里。管理员删帖或保留，理由都会发给你。';
+    if (window.MOM && MOM.openMine) MOM.openMine();
+  }
+  function closeReportPage() {
+    var pageEl = $('#reportPage');
+    if (pageEl) pageEl.classList.add('hidden');
+    backToMe();
+  }
+  function pullMyReports() {
+    try { wsSend({ t: 'report_mine' }); } catch (e) {}
   }
   function syncFbBadge() {
     var btn = $('#btnFeedback');
@@ -2894,6 +2953,7 @@
   function isDM(id) { return !!id && id.indexOf('dm:') === 0; }
   function openRoom(rid) {
     try { aiNormalize(); } catch (e) {}
+    if (rid === REPORT_RID) { try { openReportPage(); } catch (e) {} return; }
     if (aiIsRoom(rid) && rid !== AI_RID) rid = AI_RID;
     if (rid && rid.indexOf('dm:') === 0) {
       var pid = dmPeerOf(rid);
@@ -2943,7 +3003,7 @@
     } else if (isDM(rid)) {
       var peerId = dmPeerOf(rid);
       // 本地用户是纯本机会话，不能把它的对端告诉服务器
-      if (peerId && peerId !== LOCAL_PEER && peerId !== FEEDBACK_PEER && peerId !== AI_PEER) {
+      if (peerId && peerId !== LOCAL_PEER && peerId !== FEEDBACK_PEER && peerId !== AI_PEER && peerId !== REPORT_PEER) {
         wsSend({ t: 'pm_open', with: peerId, withName: room(rid).name });
       }
     } else {
@@ -8227,7 +8287,7 @@
   }
 
   /* ---------------- 图片放大查看 ---------------- */
-  var viewScale = 1, viewX = 0, viewY = 0, pinch = null, dragStart = null, lastTap = 0;
+  var viewScale = 1, viewX = 0, viewY = 0, pinch = null, dragStart = null, lastTap = 0, viewSrc = '';
   function applyView(animated) {
     var img = $('#viewerImg');
     img.classList.toggle('zooming', !!animated);
@@ -8235,11 +8295,51 @@
   }
   function openViewer(src) {
     if (!src) return;
+    viewSrc = src || '';
     viewScale = 1; viewX = 0; viewY = 0;
     $('#viewerImg').src = src;
     $('#imgViewer').classList.remove('hidden');
     applyView(false);
-    $('#viewerHint').textContent = '双指缩放 · 双击放大';
+    $('#viewerHint').textContent = '双指缩放 · 双击放大 · 长按保存';
+  }
+  // 长按图片:交给原生下载到 Download/DSH-Go/纸鸢图片
+  function saveViewerImage() {
+    var src = viewSrc || '';
+    if (!src) return;
+    var PN = window.PaperNative;
+    if (!PN || !PN.downUrl) { toast('这个版本不支持保存,先更新一下'); return; }
+    var name = 'zy_' + Date.now() + (/^data:image\/png/.test(src) ? '.png' : '.jpg');
+    var url = src;
+    if (src.indexOf('data:') === 0) {
+      var m = /^data:([^;]+);base64,(.*)$/.exec(src);
+      if (!m) { toast('图片格式不对'); return; }
+      if (PN.exportBytes) { PN.exportBytes(name, m[2], m[1]); toast('正在保存…'); }
+      return;
+    }
+    toast('正在保存…');
+    try { PN.downUrl(name, url); } catch (e) { toast('保存失败'); }
+  }
+  function bindViewerLongPress(img) {
+    if (!img || img.__lpBound) return;
+    img.__lpBound = true;
+    var timer = null, sx = 0, sy = 0;
+    function cancel() { if (timer) { clearTimeout(timer); timer = null; } }
+    img.addEventListener('touchstart', function (e) {
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      sx = t.clientX; sy = t.clientY;
+      cancel();
+      timer = setTimeout(function () { timer = null; saveViewerImage(); }, 550);
+    }, { passive: true });
+    img.addEventListener('touchmove', function (e) {
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) cancel();
+    }, { passive: true });
+    img.addEventListener('touchend', cancel);
+    img.addEventListener('touchcancel', cancel);
+    // 桌面/鼠标也能存
+    img.addEventListener('contextmenu', function (e) { e.preventDefault(); saveViewerImage(); });
   }
   function closeViewer() {
     $('#imgViewer').classList.add('hidden');
@@ -8255,6 +8355,7 @@
   }
   function bindViewer() {
     var viewer = $('#imgViewer');
+    bindViewerLongPress($('#viewerImg'));
     on('#viewerClose', 'click', closeViewer);
     viewer.addEventListener('click', function (e) {
       if (e.target === viewer) closeViewer();
@@ -9760,6 +9861,9 @@
       if (isDeveloper) openFeedback(); else openFbPage();
     });
     on('#fbClose', 'click', function (e) { e.preventDefault(); backToMe(); });
+    on('#btnMyReports', 'click', function (e) { e.preventDefault(); openMyReports(); });
+    on('#reportBack', 'click', function (e) { e.preventDefault(); var pg = $('#reportPage'); if (pg) pg.classList.add('hidden'); backToMe(); });
+    on('#reportReload', 'click', function (e) { e.preventDefault(); try { wsSend({ t: 'report_list' }); } catch (err) {} });
     on('#btnDevUsers', 'click', function (e) { e.preventDefault(); openDevUsers(); });
     on('#duClose', 'click', function (e) { e.preventDefault(); $('#devUsers').classList.add('hidden'); showTab('me'); });
     on('#duFind', 'click', function (e) { e.preventDefault(); duFind(false); });

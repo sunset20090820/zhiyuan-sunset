@@ -3659,3 +3659,28 @@ html[data-pop-solid] .mod-item {
 #devUsers .hint { text-align: left; padding: 0 2px 12px; line-height: 1.7; }
 #devUsers .me-body { padding-bottom: 104px; }
 #devUsers .du-card { margin-top: 12px; }
+
+/* ===== 广场分页 / 举报 / 人设广场 ===== */
+.feed-tabs { display: flex; gap: 8px; padding: 8px 14px 2px; }
+.feed-tab { flex: 0 0 auto; border: 0; background: var(--bg-soft, rgba(0,0,0,.06)); color: inherit;
+  font-size: 13.5px; padding: 7px 16px; border-radius: 999px; }
+.feed-tab.on { background: var(--accent, #3390ec); color: #fff; }
+.rp-card-item { border: 1px solid var(--line, rgba(0,0,0,.08)); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.rp-card-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.rp-card-name { font-weight: 600; font-size: 14px; }
+.rp-card-meta { font-size: 11.5px; color: var(--tg-sub); }
+.rp-card-text { font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  background: var(--bg-soft, rgba(0,0,0,.04)); border-radius: 10px; padding: 10px; margin: 6px 0; }
+.rp-card-img { max-width: 100%; border-radius: 10px; margin: 6px 0; display: block; }
+.rp-acts { display: flex; gap: 8px; margin-top: 10px; }
+.rp-acts .primary, .rp-acts .flat { width: auto; flex: 1; font-size: 13px; }
+.feed-card { border: 1px solid var(--line, rgba(0,0,0,.08)); border-radius: 14px; padding: 12px; margin: 10px 14px; }
+.feed-card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.feed-card-note { font-size: 12.5px; color: var(--tg-sub); line-height: 1.6; margin-bottom: 8px; }
+.feed-card-foot { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--tg-sub); }
+.feed-card-foot .flat { width: auto; margin-left: auto; padding: 6px 14px; font-size: 12.5px; }
+.rp-badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bg-soft, rgba(0,0,0,.06)); }
+.mo-rep { margin-left: 2px; color: var(--tg-sub); font-size: 13px; }
+.rp-reason { width: 100%; box-sizing: border-box; min-height: 56px; margin-top: 8px;
+  border-radius: 10px; border: 1px solid var(--line, rgba(0,0,0,.12)); padding: 8px 10px;
+  font-size: 13px; background: var(--bg-soft, rgba(0,0,0,.03)); color: inherit; resize: none; }

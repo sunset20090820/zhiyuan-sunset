@@ -1175,7 +1175,59 @@ public class MainActivity extends Activity {
          * 导出二进制（PNG 人设图卡等）到「下载/DSH-Go/纸鸢备份/」。
          * 和 exportFile 同一条落盘路径，只是按 base64 还原字节、用指定 MIME。
          */
-        @JavascriptInterface
+        /* 长按图片下载:原生抓字节,不走 JS(二进制在 JS 里会坏) */
+        @android.webkit.JavascriptInterface
+        public void downUrl(final String name, final String url) {
+            final String nm = String.valueOf(name == null ? ("zy_" + System.currentTimeMillis() + ".jpg") : name);
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    java.net.HttpURLConnection conn = null;
+                    String err = "", mime = "image/jpeg", base64 = "";
+                    byte[] out = null;
+                    try {
+                        conn = (java.net.HttpURLConnection) new java.net.URL(String.valueOf(url)).openConnection();
+                        conn.setConnectTimeout(12000);
+                        conn.setReadTimeout(25000);
+                        conn.setInstanceFollowRedirects(true);
+                        conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                        conn.setRequestProperty("Referer", String.valueOf(url));
+                        int st = conn.getResponseCode();
+                        if (st >= 400) throw new Exception("HTTP " + st);
+                        String ct = conn.getContentType();
+                        if (ct != null && ct.indexOf("image/") == 0) mime = ct.split(";")[0].trim();
+                        java.io.InputStream in = conn.getInputStream();
+                        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                        byte[] buf = new byte[8192];
+                        int n;
+                        while ((n = in.read(buf)) > 0) {
+                            bos.write(buf, 0, n);
+                            if (bos.size() >= 12 * 1024 * 1024) break;
+                        }
+                        try { in.close(); } catch (Exception e) { }
+                        out = bos.toByteArray();
+                        if (out == null || out.length == 0) throw new Exception("空文件");
+                        base64 = android.util.Base64.encodeToString(out, android.util.Base64.NO_WRAP);
+                    } catch (Exception e) {
+                        err = String.valueOf(e.getMessage());
+                    } finally {
+                        try { if (conn != null) conn.disconnect(); } catch (Exception e) { }
+                    }
+                    if (base64.length() > 0) {
+                        exportBytes(nm, base64, mime);   // 沿用导出的落盘逻辑
+                        return;
+                    }
+                    final String fe = err;
+                    try {
+                        act.runOnUiThread(new Runnable() { @Override public void run() {
+                            try { act.web.evaluateJavascript("try{window.__exportResult&&window.__exportResult(false,"
+                                + org.json.JSONObject.quote("下载失败:" + fe) + ")}catch(e){}", null); } catch (Exception e) { }
+                        } });
+                    } catch (Exception e) { }
+                }
+            }).start();
+        }
+
         public void exportBytes(final String name, final String base64, final String mime) {
             new Thread(new Runnable() {
                 @Override public void run() {

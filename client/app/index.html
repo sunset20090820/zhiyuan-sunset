@@ -624,6 +624,7 @@
       <button class="me-sec-head" type="button" aria-expanded="false"><span class="me-ico">📮</span>反馈与关于<span class="me-sec-arrow">›</span></button>
       <div class="me-sec-body">
         <button id="btnFeedback" class="me-row" type="button"><span class="me-ico">📮</span>反馈箱<span class="me-arrow">›</span></button>
+        <button id="btnMyReports" class="me-row hidden" type="button"><span class="me-ico">⚑</span>我的举报<span class="me-arrow">›</span></button>
         <button id="btnDevUsers" class="me-row hidden" type="button"><span class="me-ico">🚫</span>用户管理<span class="me-arrow">›</span></button>
         <div class="me-row" style="flex-direction:column;align-items:flex-start;gap:4px">
           <span style="font-size:14px">登录状态诊断</span>
@@ -657,10 +658,63 @@
     <div class="brand">广场</div>
     <button id="feedRefresh" class="icon-btn" type="button" aria-label="刷新">↻</button>
   </header>
+  <div class="feed-tabs">
+    <button class="feed-tab on" type="button" data-ftab="mom">动态</button>
+    <button class="feed-tab" type="button" data-ftab="card">人设广场</button>
+  </div>
   <div id="feedList" class="feed-list"></div>
   <p class="hint" id="feedEmpty" style="display:none">广场还空着。发第一条吧。</p>
+  <div id="cardList" class="feed-list hidden"></div>
+  <p class="hint" id="cardEmpty" style="display:none">还没人分享人设。点右下角，把你的卡分享出来。</p>
   <button id="feedFab" class="fab" type="button" aria-label="发动态">✏</button>
 </main>
+
+<!-- ===== 举报理由 ===== -->
+<div id="reportSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="举报">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">举报这条动态</h3>
+    <p class="hint" id="reportWhat" style="text-align:left"></p>
+    <textarea id="reportReason" class="mo-text" maxlength="200" placeholder="写清楚哪里违规，例如：广告、辱骂、涉黄、冒充他人"></textarea>
+    <div class="mo-actions">
+      <button id="reportCancel" class="flat" type="button">取消</button>
+      <button id="reportSend" class="primary" type="button">提交举报</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 举报台（管理员） ===== -->
+<div id="reportPage" class="me-page hidden">
+  <header class="topbar">
+    <button id="reportBack" class="icon-btn back" type="button" aria-label="返回">‹</button>
+    <div class="brand" id="reportTitle">举报台</div>
+    <button id="reportReload" class="icon-btn" type="button" aria-label="刷新">↻</button>
+  </header>
+  <div class="me-body">
+    <p class="hint" id="reportTip" style="text-align:left">别人举报的动态都在这里。删帖或不删都会把理由发给对方；删帖时被举报人也会收到理由。</p>
+    <div id="reportList" class="rp-list"></div>
+  </div>
+</div>
+
+<!-- ===== 分享人设 ===== -->
+<div id="cardSheet" class="action-layer hidden">
+  <button class="action-scrim" type="button" aria-label="关闭"></button>
+  <div class="action-card" role="dialog" aria-modal="true" aria-label="分享人设">
+    <div class="action-grip"></div>
+    <h3 class="remark-title">分享到人设广场</h3>
+    <label class="field"><span>选一张我的人设卡</span>
+      <select id="cardPick"></select></label>
+    <label class="field"><span>标题（默认用卡名）</span>
+      <input id="cardTitle" maxlength="40" placeholder="例如：林晚 · 旧书店老板"></label>
+    <label class="field"><span>一句话说明</span>
+      <input id="cardNote" maxlength="120" placeholder="适合什么场景、什么玩法"></label>
+    <div class="mo-actions">
+      <button id="cardCancel" class="flat" type="button">取消</button>
+      <button id="cardShare" class="primary" type="button">分享</button>
+    </div>
+  </div>
+</div>
 
 <div id="momentSheet" class="action-layer hidden">
   <button class="action-scrim" type="button" aria-label="关闭"></button>
