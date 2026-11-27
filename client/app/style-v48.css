@@ -4191,3 +4191,40 @@ html[data-skin] .role-actions .role-btn:not(.primary-sm) {
   background: color-mix(in srgb, var(--sub) 10%, transparent) !important;
   color: var(--text) !important;
 }
+
+/* 模块市场：更新按钮和「有新版」标记（13.87） */
+html[data-skin] .mod-badge.new,
+.mod-badge.new {
+  background: color-mix(in srgb, var(--accent, #3390ec) 16%, transparent);
+  color: var(--accent, #3390ec);
+}
+html[data-skin] .mod-btn.upd,
+.mod-btn.upd {
+  background: var(--accent, #3390ec) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+html[data-skin] .mod-btn,
+.mod-btn { height: 32px; border-radius: 999px; font-size: var(--fs-cap); min-width: 56px; }
+
+/* 模块操作的层级：实心=该做的事（安装/更新），淡底=打开，文字=卸载 */
+html[data-skin] .mod-btn.on,
+.mod-btn.on {
+  background: color-mix(in srgb, var(--accent, #3390ec) 16%, transparent) !important;
+  border-color: transparent !important;
+  color: var(--accent, #3390ec) !important;
+  font-weight: 600;
+}
+html[data-skin] .mod-btn[data-mod-install],
+.mod-btn[data-mod-install],
+html[data-skin] .mod-btn.upd,
+.mod-btn.upd {
+  background: var(--accent, #3390ec) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+html[data-skin] .mod-btn.ghost, .mod-btn.ghost { border-color: transparent !important; }
+html[data-skin] .mod-ops { gap: 5px; }
+html[data-skin] .mod-tab.on, .mod-tab.on { border-color: transparent !important; box-shadow: none !important; }

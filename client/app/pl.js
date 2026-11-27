@@ -199,7 +199,7 @@
   PL.list = function () { return Object.keys(installed).map(function (k) { return installed[k].manifest; }); };
 
   /* ---------------- 自带确认框 ---------------- */
-  function confirmBox(text, onOk) {
+  function confirmBox(text, onOk, okText) {
     var old = document.getElementById('modConfirm');
     if (old && old.parentNode) old.parentNode.removeChild(old);
     var box = document.createElement('div');
@@ -209,7 +209,7 @@
       '<div class="mod-confirm-text">' + esc(text).replace(/\n/g, '<br>') + '</div>' +
       '<div class="mod-confirm-ops">' +
         '<button class="flat" type="button" data-mc-cancel>取消</button>' +
-        '<button class="primary" type="button" data-mc-ok>确定</button>' +
+        '<button class="primary" type="button" data-mc-ok>' + esc(okText || '确定') + '</button>' +
       '</div></div>';
     document.body.appendChild(box);
     function done(ok) {
@@ -225,6 +225,35 @@
   api.confirmBox = confirmBox;
 
   /* ---------------- 界面 ---------------- */
+  /* 版本号比较：1.2 > 1.10 这类按段比数字,非数字段按字典序兜底 */
+  function cmpVer(a, b) {
+    var pa = String(a == null ? '' : a).split(/[.\-_+\s]+/).filter(Boolean);
+    var pb = String(b == null ? '' : b).split(/[.\-_+\s]+/).filter(Boolean);
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var x = pa[i] === undefined ? '0' : pa[i], y = pb[i] === undefined ? '0' : pb[i];
+      var nx = /^\d+$/.test(x), ny = /^\d+$/.test(y);
+      if (nx && ny) {
+        var d = parseInt(x, 10) - parseInt(y, 10);
+        if (d) return d > 0 ? 1 : -1;
+      } else if (x !== y) {
+        return x > y ? 1 : -1;
+      }
+    }
+    return 0;
+  }
+  /* 已装模块的更新信息：市场里有更新版就返回那条 */
+  function updateOf(id) {
+    var rec = installed[id];
+    if (!rec) return null;
+    for (var i = 0; i < market.length; i++) {
+      if (market[i] && market[i].id === id) {
+        return cmpVer(market[i].ver, rec.manifest.ver) > 0 ? market[i] : null;
+      }
+    }
+    return null;
+  }
+  PL.cmpVer = cmpVer;
+
   function statusText(m) {
     if (m.official) return '官方';
     if (m.status === 'pending') return '待审核';
@@ -240,7 +269,8 @@
       '<div class="mod-info">' +
         '<div class="mod-name">' + esc(m.name || m.id) +
           (st ? '<span class="mod-badge">' + esc(st) + '</span>' : '') +
-          '<span class="mod-ver">v' + esc(m.ver || '1.0') + '</span></div>' +
+          '<span class="mod-ver">v' + esc(m.ver || '1.0') + '</span>' +
+          (got && updateOf(m.id) ? '<span class="mod-badge new">有新版</span>' : '') + '</div>' +
         '<div class="mod-desc">' + esc(m.desc || '没有写简介') + '</div>' +
         '<div class="mod-meta">' + esc(m.author || '匿名') + ' · ' + esc((m.perms || []).join('/') || '无权限') +
           (m.size ? ' · ' + Math.round(m.size / 1024) + 'KB' : '') + '</div>' +
@@ -248,6 +278,7 @@
       '<div class="mod-ops">' +
         (got ? '<button class="mod-btn on" data-mod-open="' + esc(m.id) + '">打开</button>'
              : '<button class="mod-btn" data-mod-install="' + esc(m.id) + '">安装</button>') +
+        (got && updateOf(m.id) ? '<button class="mod-btn upd" data-mod-update="' + esc(m.id) + '">更新</button>' : '') +
         (got ? '<button class="mod-btn ghost" data-mod-remove="' + esc(m.id) + '">卸载</button>' : '') +
         (api.isDev && api.isDev() ? '<button class="mod-btn ghost" data-mod-review="' + esc(m.id) + '">审核</button>' : '') +
       '</div></li>';
@@ -259,12 +290,14 @@
     return '<li class="mod-item" data-mod-id="' + esc(m.id) + '">' +
       '<div class="mod-ico">' + esc(m.icon || String(m.name || '?').slice(0, 1)) + '</div>' +
       '<div class="mod-info">' +
-        '<div class="mod-name">' + esc(m.name || m.id) + '<span class="mod-ver">v' + esc(m.ver || '1.0') + '</span></div>' +
+        '<div class="mod-name">' + esc(m.name || m.id) + '<span class="mod-ver">v' + esc(m.ver || '1.0') + '</span>' +
+          (updateOf(m.id) ? '<span class="mod-badge new">v' + esc(updateOf(m.id).ver) + ' 可更新</span>' : '') + '</div>' +
         '<div class="mod-desc">' + esc(m.desc || '没有写简介') + '</div>' +
         '<div class="mod-meta">' + esc(m.author || '匿名') + ' · ' + esc((m.perms || []).join('/') || '无权限') + '</div>' +
       '</div>' +
       '<div class="mod-ops">' +
         '<button class="mod-btn on" data-mod-open="' + esc(m.id) + '">打开</button>' +
+        (updateOf(m.id) ? '<button class="mod-btn upd" data-mod-update="' + esc(m.id) + '">更新</button>' : '') +
         '<button class="mod-btn ghost" data-mod-remove="' + esc(m.id) + '">卸载</button>' +
       '</div></li>';
   }
@@ -280,6 +313,8 @@
     }
     var items = [];
     if (tab === 'mine') {
+      // 为了在「我的模块」里标出「有新版」，市场列表没拉过就悄悄拉一次（不打扰）
+      if (!market.length && !PL._loading && PL._open) { try { PL.loadMarket(); } catch (e) {} }
       var ids = Object.keys(installed);
       items = ids.map(myCard);
       if (!items.length) {
@@ -660,13 +695,27 @@
         api.toast('这个模块要 App ' + need + ' 以上，先更新');
         return;
       }
+      var prev = installed[man.id];
       var perms = man.perms || [];
-      var msg = '安装「' + (man.name || man.id) + '」？' +
-        (perms.length ? '\n它要用：' + perms.join(' / ') + '\n模块代码会跑在你手机上，只装你信任的。' : '');
+      var msg, okText;
+      if (prev) {
+        var from = prev.manifest.ver || '1.0', to = man.ver || '1.0';
+        var c = cmpVer(to, from);
+        if (c > 0) { msg = '把「' + (man.name || man.id) + '」从 v' + from + ' 更新到 v' + to + '？'; okText = '更新'; }
+        else if (c < 0) { msg = '服务器上的版本(v' + to + ')比本地(v' + from + ')旧，要降级吗？'; okText = '降级'; }
+        else { msg = '「' + (man.name || man.id) + '」已经是最新的 v' + to + '，重新装一遍？'; okText = '重装'; }
+        if (perms.length) msg += '\n它要用：' + perms.join(' / ');
+      } else {
+        msg = '安装「' + (man.name || man.id) + '」？' +
+          (perms.length ? '\n它要用：' + perms.join(' / ') + '\n模块代码会跑在你手机上，只装你信任的。' : '');
+        okText = '安装';
+      }
       (api.confirmBox || confirmBox)(msg, function () {
+        var wasRunning = !!running[man.id];
         doInstall(man, code);
-        api.toast('已安装，去「模块」里打开');
-      });
+        if (wasRunning) { try { stop(man.id); runModule(man.id); } catch (e) {} }
+        api.toast(prev ? ('已更新到 v' + (man.ver || '1.0')) : '已安装，去「模块」里打开');
+      }, okText);
       return;
     }
     if (d.t === 'mod_upload_ok') {
@@ -747,8 +796,13 @@
         if (t.closest('#modUploadBtn')) { openUpload(); return; }
         var op = t.closest('[data-mod-open]');
         if (op) { openRun(op.getAttribute('data-mod-open')); return; }
-        var ins = t.closest('[data-mod-install]');
-        if (ins) { PL.install(ins.getAttribute('data-mod-install')); return; }
+        var ins = t.closest('[data-mod-install]') || t.closest('[data-mod-update]');
+        if (ins) {
+          var mid = ins.getAttribute('data-mod-install') || ins.getAttribute('data-mod-update');
+          step((t.closest('[data-mod-update]') ? '更新模块 ' : '安装模块 ') + mid);
+          PL.install(mid);
+          return;
+        }
         var rem = t.closest('[data-mod-remove]');
         if (rem) {
           var id = rem.getAttribute('data-mod-remove');
